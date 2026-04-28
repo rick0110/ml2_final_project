@@ -19,6 +19,8 @@ import tarfile
 import shutil
 import subprocess
 from typing import List
+import concurrent.futures
+from concurrent.futures import ProcessPoolExecutor
 
 
 URL = "https://dl.fbaipublicfiles.com/mls/mls_portuguese_opus.tar.gz"
@@ -64,20 +66,31 @@ def check_ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
+def _convert_one_opus(src: str) -> tuple:
+    dst = os.path.splitext(src)[0] + ".wav"
+    cmd = ["ffmpeg", "-loglevel", "error", "-y", "-i", src, dst]
+    try:
+        subprocess.run(cmd, check=True)
+        return (src, True)
+    except subprocess.CalledProcessError:
+        return (src, False)
+
+
 def convert_opus_to_wav(opus_paths: List[str]) -> int:
     if not check_ffmpeg_available():
         print("Error: ffmpeg not found. Please install ffmpeg to enable audio conversion.", file=sys.stderr)
         return 1
 
+    workers = os.cpu_count() or 1
+    print(f"Starting parallel conversion with {workers} workers...")
     failures = 0
-    for src in opus_paths:
-        dst = os.path.splitext(src)[0] + ".wav"
-        cmd = ["ffmpeg", "-loglevel", "error", "-y", "-i", src, dst]
-        try:
-            subprocess.run(cmd, check=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to convert {src}: {e}", file=sys.stderr)
-            failures += 1
+
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        for src, ok in ex.map(_convert_one_opus, opus_paths):
+            if not ok:
+                print(f"Failed to convert {src}", file=sys.stderr)
+                failures += 1
+
     if failures:
         print(f"Conversion finished with {failures} failures.")
     else:
