@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+DATASET_URL="https://www.dropbox.com/s/ohpc7epowv9ct7o/TTS-Portuguese-Corpus.zip?dl=1"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+TARGET_DIR="${PROJECT_ROOT}/data/raw/tts-portuguese-Corpora"
+ZIP_FILE="$(mktemp /tmp/tts-portuguese-corpus.XXXXXX.zip)"
+
+cleanup() {
+	if [[ -f "${ZIP_FILE}" ]]; then
+		rm -f "${ZIP_FILE}"
+	fi
+}
+
+trap cleanup EXIT
+
+if ! command -v wget >/dev/null 2>&1; then
+	echo "Error: wget not found. Please install wget to continue." >&2
+	exit 1
+fi
+
+if ! command -v unzip >/dev/null 2>&1; then
+	echo "Error: unzip not found. Please install unzip to continue." >&2
+	exit 1
+fi
+
+mkdir -p "${TARGET_DIR}"
+
+echo "Downloading dataset to a temporary file..."
+wget -O "${ZIP_FILE}" "${DATASET_URL}"
+
+echo "Extracting to: ${TARGET_DIR}"
+unzip -o "${ZIP_FILE}" -d "${TARGET_DIR}"
+
+echo "Done: data available at ${TARGET_DIR}"
