@@ -1,0 +1,89 @@
+# Configuration for Prosody and Style Transfer (Portuguese)
+# ============================================================
+
+# ---------------------------------------------------------------------------
+# Audio / Feature extraction
+# ---------------------------------------------------------------------------
+audio:
+  sample_rate: 22050
+  n_mels: 80
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+  f_min: 0.0
+  f_max_mel: 8000.0
+  f_min_pitch: 50.0
+  f_max_pitch: 600.0
+
+# ---------------------------------------------------------------------------
+# Model architecture
+# ---------------------------------------------------------------------------
+model:
+  # HuBERT content encoder
+  hubert_model_name: "facebook/hubert-base-ls960"
+  freeze_hubert: true
+
+  # Feature dimensions
+  d_model: 256
+  style_dim: 128
+
+  # Mapping network
+  mapping_hidden_dim: 512
+  mapping_num_layers: 4
+
+  # Global Style Tokens
+  gst_num_tokens: 10
+  gst_token_dim: 256
+  gst_num_heads: 8
+
+  # Variance adaptor
+  variance_num_conv: 2
+
+  # Decoder (HiFi-GAN vocoder)
+  decoder_upsample_rates: [8, 8, 2, 2]
+  decoder_initial_channels: 512
+
+# ---------------------------------------------------------------------------
+# Data
+# ---------------------------------------------------------------------------
+data:
+  # TTS-Portuguese Corpus (base mapping training)
+  tts_portuguese_root: "data/tts_portuguese"
+
+  # LibriVox PT-BR (unsupervised prosody learning)
+  librivox_ptbr_root: "data/librivox_ptbr"
+
+  # VERBO (style / emotion reference during inference)
+  verbo_root: "data/verbo"
+
+  # DataLoader settings
+  batch_size: 16
+  num_workers: 4
+  max_duration_s: 10.0
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+training:
+  lr: 1.0e-4
+  weight_decay: 1.0e-2
+  max_epochs: 100
+  grad_clip: 1.0
+  log_every: 50
+  save_every: 5
+  output_dir: "checkpoints"
+  use_amp: true
+
+  # Loss weights
+  mel_weight: 1.0
+  duration_weight: 1.0
+  pitch_weight: 1.0
+  energy_weight: 1.0
+
+# ---------------------------------------------------------------------------
+# Inference
+# ---------------------------------------------------------------------------
+inference:
+  checkpoint: "checkpoints/best.pt"
+  output_dir: "outputs"
+  sample_rate: 22050
