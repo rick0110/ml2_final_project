@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""
+Download and extract the MLS Portuguese corpus.
+
+Usage:
+  python3 scripts/download_datasets/libriSpeech-pt
+
+This script downloads the tar.gz archive and extracts it into
+`data/raw/libriSpeech-pt/` under the project root.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+import urllib.request
+import tarfile
+import shutil
+import subprocess
+from typing import List
+
+
+URL = "https://dl.fbaipublicfiles.com/mls/mls_portuguese_opus.tar.gz"
+
+
+def project_root() -> str:
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def target_dir() -> str:
+    return os.path.join(project_root(), "data", "raw", "libriSpeech-pt")
+
+
+def download_to_temp(url: str) -> str:
+    tmp = tempfile.NamedTemporaryFile(prefix="mls_portuguese_", suffix=".tar.gz", delete=False)
+    tmp_name = tmp.name
+    tmp.close()
+    try:
+        with urllib.request.urlopen(url) as resp, open(tmp_name, "wb") as out:
+            shutil.copyfileobj(resp, out)
+    except Exception:
+        if os.path.exists(tmp_name):
+            os.remove(tmp_name)
+        raise
+    return tmp_name
+
+
+def extract_tar_gz(path: str, dest: str) -> None:
+    with tarfile.open(path, "r:gz") as tar:
+        tar.extractall(path=dest)
+
+
+def find_opus_files(root: str) -> List[str]:
+    matches: List[str] = []
+    for dirpath, _, files in os.walk(root):
+        for fn in files:
+            if fn.lower().endswith(".opus"):
+                matches.append(os.path.join(dirpath, fn))
+    return matches
+
+
+def check_ffmpeg_available() -> bool:
+    return shutil.which("ffmpeg") is not None
+
+
+def convert_opus_to_wav(opus_paths: List[str]) -> int:
+    if not check_ffmpeg_available():
+        print("Error: ffmpeg not found. Please install ffmpeg to enable audio conversion.", file=sys.stderr)
+        return 1
+
+    failures = 0
+    for src in opus_paths:
+        dst = os.path.splitext(src)[0] + ".wav"
+        cmd = ["ffmpeg", "-loglevel", "error", "-y", "-i", src, dst]
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to convert {src}: {e}", file=sys.stderr)
+            failures += 1
+    if failures:
+        print(f"Conversion finished with {failures} failures.")
+    else:
+        print(f"Conversion finished: {len(opus_paths)} files converted.")
+    return 0 if failures == 0 else 2
+
+
+def main() -> int:
+    dest = target_dir()
+    os.makedirs(dest, exist_ok=True)
+
+    print(f"Downloading {URL}...")
+    try:
+        tmp_path = download_to_temp(URL)
+    except Exception as e:
+        print(f"Error while downloading: {e}", file=sys.stderr)
+        return 2
+
+    try:
+        print(f"Extracting archive to {dest}...")
+        extract_tar_gz(tmp_path, dest)
+        # Convert .opus files to .wav inside the extracted dataset
+        print("Scanning for .opus files to convert to .wav...")
+        opus_files = find_opus_files(dest)
+        if opus_files:
+            print(f"Found {len(opus_files)} .opus files. Converting to .wav (requires ffmpeg)...")
+            conv_rc = convert_opus_to_wav(opus_files)
+            if conv_rc != 0:
+                print("Warning: some conversions may have failed. See messages above.")
+        else:
+            print("No .opus files found; skipping conversion.")
+    except Exception as e:
+        print(f"Error while extracting: {e}", file=sys.stderr)
+        return 3
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+
+    print(f"Done: data available at {dest}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
