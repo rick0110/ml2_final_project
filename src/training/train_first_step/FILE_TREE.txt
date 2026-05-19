@@ -1,0 +1,284 @@
+================================================================================
+                    📦 TRAINING SYSTEM FILE TREE
+================================================================================
+
+/home/richard/project/ml2_final_project/
+└── src/training/train_first_step/                    ← ALL FILES HERE
+    │
+    ├─── 📚 DOCUMENTATION (10 files)
+    │   ├─ INDEX.md                  (250 lines) Navigation guide
+    │   ├─ QUICKSTART.md             (250 lines) Quick start ⭐
+    │   ├─ README.md                 (350 lines) Full technical docs
+    │   ├─ TRAINING_GUIDE.md         (550 lines) Detailed reference
+    │   ├─ CHECKLIST.md              (200 lines) Pre-training checklist
+    │   ├─ STRUCTURE.md              (400 lines) Implementation overview
+    │   ├─ README_PT.md              (300 lines) Portuguese summary
+    │   ├─ SUMMARY.txt               (400 lines) Visual summary
+    │   ├─ DELIVERY.txt              (300 lines) Delivery summary
+    │   └─ QUICK_REFERENCE.sh        (300 lines) Quick commands
+    │
+    ├─── 🚀 MAIN TRAINING SCRIPT (1 file)
+    │   └─ train.py                  (400 lines) MAIN SCRIPT! ⭐⭐⭐
+    │
+    ├─── 🧠 CORE MODULES (4 files)
+    │   ├─ losses.py                 (150 lines) Loss functions
+    │   │   ├─ L1ReconstructionLoss
+    │   │   ├─ StyleDiversityLoss
+    │   │   └─ CombinedTTSLoss
+    │   │
+    │   ├─ model_loader.py           (200 lines) Model initialization
+    │   │   ├─ FirstStepTTSModel
+    │   │   ├─ load_tts_models()
+    │   │   └─ get_model_size_info()
+    │   │
+    │   ├─ train_utils.py            (350 lines) Training utilities
+    │   │   ├─ train_epoch()
+    │   │   ├─ validate_epoch()
+    │   │   ├─ save_checkpoint()
+    │   │   ├─ load_checkpoint()
+    │   │   ├─ TensorBoardLogger
+    │   │   └─ MetricsTracker
+    │   │
+    │   └─ text_processing.py        (150 lines) Text tokenization
+    │       ├─ SimpleTextTokenizer
+    │       └─ BatchTextTokenizer
+    │
+    ├─── 🛠️ UTILITIES (5 executables)
+    │   ├─ test_setup.py             (200 lines) Verify setup ⭐
+    │   │   ├─ test_device()
+    │   │   ├─ test_model_loading()
+    │   │   ├─ test_forward_pass()
+    │   │   ├─ test_loss_functions()
+    │   │   └─ test_experiment_structure()
+    │   │
+    │   ├─ configs.py                (250 lines) Training presets
+    │   │   ├─ QUICK_TEST
+    │   │   ├─ BALANCED ← RECOMMENDED
+    │   │   ├─ PRODUCTION
+    │   │   ├─ HIGH_DIVERSITY
+    │   │   └─ LIGHTWEIGHT
+    │   │
+    │   ├─ run_training.py           (150 lines) Easy training launcher
+    │   │   └─ Runs pre-configured training
+    │   │
+    │   ├─ checkpoint_utils.py       (350 lines) Inspect results
+    │   │   ├─ list_experiments()
+    │   │   ├─ list_checkpoints()
+    │   │   ├─ inspect_checkpoint()
+    │   │   ├─ compare_checkpoints()
+    │   │   └─ extract_metrics()
+    │   │
+    │   └─ tts_training.sh           (300 lines) Bash helper script
+    │       └─ Shell commands for all tasks
+    │
+    └─── 🐍 PACKAGE
+        └─ __init__.py               (30 lines) Module initialization
+
+================================================================================
+                         USAGE QUICK START
+================================================================================
+
+Step 1: Verify everything works
+────────────────────────────────
+$ python src/training/train_first_step/test_setup.py
+
+Step 2: Start training (choose one)
+────────────────────────────────────
+$ python src/training/train_first_step/run_training.py quick_test
+$ python src/training/train_first_step/run_training.py balanced     ← RECOMMENDED
+$ python src/training/train_first_step/run_training.py production
+$ python src/training/train_first_step/train.py [your options]
+
+Step 3: Monitor (in another terminal)
+─────────────────────────────────────
+$ tensorboard --logdir experiments/step_1/*/tensorboard
+Visit: http://localhost:6006
+
+Step 4: Results appear in
+─────────────────────────
+experiments/step_1/attempt_YYYYMMDD_HHMMSS/
+├── config.json          (your hyperparameters)
+├── checkpoints/         (model files)
+│   ├── epoch_0001.pt
+│   ├── epoch_0002.pt
+│   └── best.pt          (BEST MODEL)
+└── tensorboard/         (training logs)
+
+================================================================================
+                        DOCUMENTATION MAP
+================================================================================
+
+START HERE:
+  ├─ THIS FILE (30 sec) ← You are here
+  └─ QUICKSTART.md (5 min) ← Read next
+
+THEN READ:
+  ├─ README.md (15 min) - Full technical reference
+  ├─ TRAINING_GUIDE.md (20 min) - Detailed architecture
+  └─ INDEX.md - Navigation guide
+
+BEFORE TRAINING:
+  └─ CHECKLIST.md - Pre-training verification
+
+FOR REFERENCE:
+  ├─ QUICK_REFERENCE.sh - Quick commands
+  ├─ STRUCTURE.md - Implementation details
+  └─ SUMMARY.txt - Visual summary
+
+PORTUGUÊS:
+  └─ README_PT.md - Portuguese summary
+
+================================================================================
+                           COMMANDS AT A GLANCE
+================================================================================
+
+VERIFY
+  python test_setup.py
+
+TRAIN (choose one)
+  python run_training.py quick_test      # 5 min test
+  python run_training.py balanced        # 2-4 hours (RECOMMENDED)
+  python run_training.py production      # 8-12 hours (best)
+
+CUSTOM
+  python train.py --num-epochs 100 --batch-size 32 --learning-rate 1e-3
+
+RESUME
+  python train.py --resume experiments/step_1/attempt_X/checkpoints/best.pt
+
+MONITOR
+  tensorboard --logdir experiments/step_1/*/tensorboard
+
+INSPECT
+  python checkpoint_utils.py list-experiments
+  python checkpoint_utils.py list my_experiment
+  python checkpoint_utils.py inspect path/to/checkpoint.pt
+
+BASH HELPER
+  ./tts_training.sh help
+  ./tts_training.sh balanced
+  ./tts_training.sh tensorboard
+
+================================================================================
+                         FILE ORGANIZATION
+================================================================================
+
+By Function:
+
+TRAINING
+  ├─ train.py .......................... Main script ⭐⭐⭐
+  ├─ losses.py ......................... Loss definitions
+  ├─ model_loader.py ................... Model setup
+  └─ train_utils.py .................... Training helpers
+
+CONFIGURATION
+  ├─ configs.py ........................ Presets
+  └─ run_training.py ................... Easy launcher
+
+UTILITIES
+  ├─ test_setup.py ..................... Verify
+  ├─ checkpoint_utils.py ............... Inspect
+  └─ tts_training.sh ................... Shell helper
+
+DOCUMENTATION
+  ├─ QUICKSTART.md ..................... Start here ⭐
+  ├─ README.md ......................... Full docs
+  ├─ TRAINING_GUIDE.md ................. Deep dive
+  ├─ INDEX.md .......................... Navigation
+  ├─ CHECKLIST.md ...................... Pre-flight
+  └─ [Other guides]
+
+================================================================================
+                        TYPICAL WORKFLOW
+================================================================================
+
+FIRST TIME:
+  1. Read QUICKSTART.md (5 min)
+  2. Run test_setup.py (2 min)
+  3. Read CHECKLIST.md
+  4. Choose training option
+  5. Start training!
+
+DAILY WORKFLOW:
+  1. Run test_setup.py (verify setup)
+  2. python run_training.py balanced (start training)
+  3. tensorboard (monitor in another terminal)
+  4. Wait for completion
+  5. Check results in experiments/step_1/
+
+MONITORING:
+  • Console: real-time progress + losses
+  • TensorBoard: training curves + visualizations
+  • checkpoint_utils.py: inspect results after training
+
+================================================================================
+                          PERFORMANCE STATS
+================================================================================
+
+QUICK_TEST:
+  • Time: 5-10 minutes
+  • GPU Memory: 4GB+
+  • Epochs: 5
+  • Batch Size: 8
+
+BALANCED (RECOMMENDED):
+  • Time: 2-4 hours
+  • GPU Memory: 8GB+
+  • Epochs: 100
+  • Batch Size: 32
+
+PRODUCTION:
+  • Time: 8-12 hours
+  • GPU Memory: 16GB+
+  • Epochs: 200
+  • Batch Size: 64
+
+With --use-amp: ~30% faster in all cases
+
+================================================================================
+                           KEY FEATURES
+================================================================================
+
+✅ COMPLETE PIPELINE
+   • Text encoding (FastPitch)
+   • Style extraction (GST)
+   • Acoustic decoding (LSTM)
+   • Vocoding (HiFi-GAN)
+
+✅ ADVANCED TRAINING
+   • Multi-dataset support
+   • Train/val split
+   • Mixed Precision (AMP)
+   • Multi-worker data loading
+   • Checkpoint management
+
+✅ MONITORING
+   • Real-time progress (tqdm)
+   • TensorBoard integration
+   • Per-epoch metrics
+   • Loss breakdowns
+
+✅ DOCUMENTATION
+   • 1500+ lines docs
+   • Multiple guides
+   • Quick reference
+   • Portuguese support
+
+================================================================================
+                         YOU'RE ALL SET!
+================================================================================
+
+Everything is ready to use. Just:
+
+1. python test_setup.py
+2. python run_training.py balanced
+3. tensorboard --logdir experiments/step_1/*/tensorboard
+
+Your training will appear in experiments/step_1/ with checkpoints, logs, and
+TensorBoard visualization.
+
+For questions, see INDEX.md or QUICKSTART.md
+
+Good luck! 🚀
+
+================================================================================
