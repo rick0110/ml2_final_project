@@ -46,6 +46,7 @@ from training.train_first_step.train_utils import (
     save_checkpoint,
     load_checkpoint,
     TensorBoardLogger,
+    log_validation_audio_examples,
 )
 
 
@@ -258,12 +259,14 @@ def create_datasets(
         time length or use non-resizable storages.
         """
         mels = []
+        waveforms = []
         mel_lengths = []
         texts = []
         durations = []
         utt_ids = []
         mel_paths = []
         sources = []
+        sample_rates = []
 
         for sample in batch:
             mel = sample["mel"]
@@ -272,6 +275,16 @@ def create_datasets(
 
             mel = mel.detach().clone().to(dtype=torch.float32).contiguous()
 
+            waveform = sample.get("waveform")
+            if waveform is not None:
+                if not isinstance(waveform, torch.Tensor):
+                    waveform = torch.as_tensor(waveform)
+                waveform = waveform.detach().clone().to(dtype=torch.float32).contiguous()
+                if waveform.dim() == 1:
+                    waveform = waveform.unsqueeze(0)
+            else:
+                waveform = torch.zeros(1, 1, dtype=torch.float32)
+
             # Normalize common mel shapes to (n_mels, time_steps)
             if mel.dim() == 3 and mel.size(0) == 1:
                 mel = mel.squeeze(0)
@@ -279,12 +292,14 @@ def create_datasets(
                 raise ValueError(f"Expected mel with 2 dims, got shape {tuple(mel.shape)}")
 
             mels.append(mel)
+            waveforms.append(waveform)
             mel_lengths.append(mel.size(1))
             texts.append(sample.get("text", ""))
             durations.append(float(sample.get("duration", 0.0)))
             utt_ids.append(str(sample.get("utt_id", "")))
             mel_paths.append(str(sample.get("mel_path", "")))
             sources.append(str(sample.get("source", "")))
+            sample_rates.append(int(sample.get("sr") or 22050))
 
         max_time = max(mel_lengths)
         padded_mels = []
@@ -294,9 +309,19 @@ def create_datasets(
                 mel = F.pad(mel, (0, pad_time), mode="constant", value=0.0)
             padded_mels.append(mel)
 
+        max_wave_time = max(waveform.size(-1) for waveform in waveforms)
+        padded_waveforms = []
+        for waveform in waveforms:
+            pad_time = max_wave_time - waveform.size(-1)
+            if pad_time > 0:
+                waveform = F.pad(waveform, (0, pad_time), mode="constant", value=0.0)
+            padded_waveforms.append(waveform)
+
         return {
             "mel": torch.stack(padded_mels, dim=0),
+            "waveform": torch.stack(padded_waveforms, dim=0),
             "mel_lengths": torch.tensor(mel_lengths, dtype=torch.long),
+            "sr": torch.tensor(sample_rates, dtype=torch.long),
             "text": texts,
             "duration": torch.tensor(durations, dtype=torch.float32),
             "utt_id": utt_ids,
@@ -444,6 +469,16 @@ def main():
             epoch=epoch,
             max_epochs=args.num_epochs,
         )
+
+        if epoch == 0 or (epoch + 1) % 1 == 0:
+            example_batch = next(iter(val_loader))
+            log_validation_audio_examples(
+                model=model,
+                batch=example_batch,
+                device=device,
+                logger=tb_logger,
+                step=epoch,
+            )
         
         # Log metrics
         tb_logger.log_metrics(train_metrics, epoch, prefix="train/")

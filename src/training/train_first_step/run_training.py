@@ -2,7 +2,7 @@
 """Convenience script to run training with pre-configured settings.
 
 Usage:
-    python run_training.py quick_test      # Quick test
+    python run_training.py quick_test      # test
     python run_training.py balanced        # Balanced training
     python run_training.py production      # Production training
     python run_training.py --list          # List all configs
@@ -13,7 +13,6 @@ import argparse
 import subprocess
 from pathlib import Path
 
-# Add src to path
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
@@ -45,7 +44,6 @@ def main():
     
     args = parser.parse_args()
     
-    # Handle --list
     if args.list:
         list_configs()
         return
@@ -56,7 +54,6 @@ def main():
         print("\nUse --list to see available configurations")
         return
     
-    # Get configuration
     try:
         config = get_config(args.config)
     except ValueError as e:
@@ -64,10 +61,8 @@ def main():
         list_configs()
         return
     
-    # Print configuration
     config.print_summary()
     
-    # Build command
     train_script = PROJECT_ROOT / "src" / "training" / "train_first_step" / "train.py"
     
     cmd = [
@@ -97,7 +92,6 @@ def main():
     print(" ".join(cmd))
     print()
     
-    # Execute or dry-run
     if args.dry_run:
         print("[DRY RUN] Command not executed")
         return

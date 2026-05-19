@@ -311,29 +311,114 @@ class TensorBoardLogger:
         for key, value in metrics.items():
             tag = f"{prefix}{key}" if prefix else key
             self.writer.add_scalar(tag, value, step)
-    
+
+    def _normalize_image_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Scale a tensor to [0, 1] for TensorBoard image logging."""
+        tensor = tensor.detach().float().cpu()
+        min_value = tensor.min()
+        max_value = tensor.max()
+        if torch.isclose(max_value, min_value):
+            return torch.zeros_like(tensor)
+        return (tensor - min_value) / (max_value - min_value)
+
+    def log_audio_examples(
+        self,
+        step: int,
+        sample_rate: int,
+        original_audio: torch.Tensor,
+        original_mel: torch.Tensor,
+        reconstructed_audio: torch.Tensor,
+        predicted_audio: torch.Tensor,
+        predicted_mel: torch.Tensor,
+        prefix: str = "examples/",
+    ):
+        """Log audio and mel comparisons for a single validation example."""
+        self.writer.add_audio(f"{prefix}original_audio", original_audio.detach().cpu(), step, sample_rate=sample_rate)
+        self.writer.add_audio(f"{prefix}reconstructed_from_original_mel", reconstructed_audio.detach().cpu(), step, sample_rate=sample_rate)
+        self.writer.add_audio(f"{prefix}predicted_from_model_mel", predicted_audio.detach().cpu(), step, sample_rate=sample_rate)
+
+        original_mel_img = self._normalize_image_tensor(original_mel)
+        predicted_mel_img = self._normalize_image_tensor(predicted_mel)
+        self.writer.add_image(f"{prefix}original_mel", original_mel_img.unsqueeze(0), step)
+        self.writer.add_image(f"{prefix}predicted_mel", predicted_mel_img.unsqueeze(0), step)
+
     def log_model_info(self, model: FirstStepTTSModel):
         """Log model information.
-        
+
         Args:
             model: Model to log info for
         """
         trainable = sum(p.numel() for p in model.get_trainable_parameters())
         total = sum(p.numel() for p in model.parameters())
-        
+
         self.writer.add_text(
             "model/info",
             f"Trainable: {trainable:,} | Total: {total:,}",
         )
-    
+
     def log_hyperparameters(self, hparams: Dict[str, Any], metrics: Dict[str, float]):
         """Log hyperparameters.
-        
+
         Args:
             hparams: Hyperparameters dictionary
             metrics: Final metrics dictionary
         """
         self.writer.add_hparams(hparams, metrics)
+
+
+def log_validation_audio_examples(
+    model: FirstStepTTSModel,
+    batch: Dict[str, Any],
+    device: torch.device,
+    logger: TensorBoardLogger,
+    step: int,
+):
+    """Log a representative validation example to TensorBoard."""
+    if "waveform" not in batch or batch["waveform"] is None:
+        return
+
+    mels = batch["mel"].to(device)
+    waveforms = batch["waveform"].to(device)
+    sr_value = batch.get("sr", 22050)
+    if isinstance(sr_value, torch.Tensor):
+        sample_rate = int(sr_value[0].item())
+    elif isinstance(sr_value, (list, tuple)):
+        sample_rate = int(sr_value[0])
+    else:
+        sample_rate = int(sr_value)
+
+    original_audio = waveforms[0].squeeze().float().clamp(-1.0, 1.0)
+    original_mel = mels[0:1]
+
+    batch_size = mels.shape[0]
+    text_ids = torch.randint(0, 1000, (batch_size, 256), device=device)
+
+    with torch.no_grad():
+        predicted_mel, _ = model(
+            text_ids=text_ids,
+            target_mel=mels,
+            use_vocoder=False,
+        )
+        if predicted_mel.dim() == 3:
+            predicted_mel = predicted_mel.transpose(1, 2)
+        predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
+
+        reconstructed_audio = model.vocoder(spec=original_mel)
+        predicted_audio = model.vocoder(spec=predicted_mel[0:1])
+
+    def _to_audio_1d(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor.detach().float().cpu().squeeze().clamp(-1.0, 1.0)
+
+    logger.log_audio_examples(
+        step=step,
+        sample_rate=sample_rate,
+        original_audio=_to_audio_1d(original_audio),
+        original_mel=original_mel.detach().float().cpu().squeeze(0),
+        reconstructed_audio=_to_audio_1d(reconstructed_audio),
+        predicted_audio=_to_audio_1d(predicted_audio),
+        predicted_mel=predicted_mel[0].detach().float().cpu(),
+        prefix="examples/",
+    )
     
     def flush(self):
         """Flush TensorBoard logs."""

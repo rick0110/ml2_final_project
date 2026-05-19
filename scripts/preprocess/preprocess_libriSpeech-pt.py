@@ -27,6 +27,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
+from concurrent.futures import ProcessPoolExecutor
+from logging import warning
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,6 +48,13 @@ except Exception:
 	plt = None
 
 
+_WORKER_INPUT_ROOT: Optional[Path] = None
+_WORKER_OUT_ROOT: Optional[Path] = None
+_WORKER_TARGET_SR: Optional[int] = None
+_WORKER_OVERWRITE: bool = False
+_WORKER_MEL_TRANSFORM: Optional[torch.nn.Module] = None
+
+
 @dataclass
 class Example:
 	audio_path: str
@@ -57,6 +67,7 @@ def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="Prepare 80-band mel spectrograms and dataset for LibriSpeech")
 	parser.add_argument("--input-dir", type=Path, default=Path("data/raw/LibriSpeech"))
 	parser.add_argument("--out-dir", type=Path, default=Path("data/processed/LibriSpeech/mels"))
+	parser.add_argument("--num-workers", type=int, default=max(1, (os.cpu_count() or 1) - 1), help="Number of worker processes for preprocessing (1 disables multiprocessing)")
 	parser.add_argument("--target-sr", type=int, default=22050)
 	parser.add_argument("--n-mels", type=int, default=80)
 	parser.add_argument("--n-fft", type=int, default=1024)
@@ -91,6 +102,7 @@ def find_audio_file(transcript_path: Path, utt_id: str) -> Optional[Path]:
 		if candidate.exists():
 			return candidate
 
+	warning(f"Audio file not found for {utt_id} in {transcript_path.parent}")	
 	return None
 
 
@@ -105,7 +117,7 @@ def discover_examples(input_root: Path) -> List[Example]:
 			if not line:
 				continue
 			line = line.strip()
-			match = re.match(r"^([^a-zA-Z]*)([a-zA-Z].*)", line)
+			match = re.match(r"^(\S+)\s+(.*)$", line)
 			utt_id = match.group(1).strip() if match else None
 			text = match.group(2).strip() if match else None
 			
@@ -125,6 +137,7 @@ def discover_examples(input_root: Path) -> List[Example]:
 					utt_id=utt_id,
 				)
 			)
+	print(f"Discovered {len(examples)} examples from {transcript_file}")
 
 	return examples
 
@@ -182,6 +195,42 @@ def process_example(
 	}
 
 
+def _init_worker(
+	input_root: Path,
+	out_root: Path,
+	target_sr: int,
+	n_fft: int,
+	hop_length: int,
+	win_length: int,
+	n_mels: int,
+	overwrite: bool,
+) -> None:
+	global _WORKER_INPUT_ROOT, _WORKER_OUT_ROOT, _WORKER_TARGET_SR, _WORKER_OVERWRITE, _WORKER_MEL_TRANSFORM
+	_WORKER_INPUT_ROOT = input_root
+	_WORKER_OUT_ROOT = out_root
+	_WORKER_TARGET_SR = target_sr
+	_WORKER_OVERWRITE = overwrite
+	_WORKER_MEL_TRANSFORM = make_mel_transform(target_sr, n_fft, hop_length, win_length, n_mels)
+	try:
+		torch.set_num_threads(1)
+		torch.set_num_interop_threads(1)
+	except Exception:
+		pass
+
+
+def _process_example_worker(ex: Example) -> Optional[Dict[str, Any]]:
+	if _WORKER_INPUT_ROOT is None or _WORKER_OUT_ROOT is None or _WORKER_TARGET_SR is None or _WORKER_MEL_TRANSFORM is None:
+		raise RuntimeError("Worker was not initialized correctly")
+	return process_example(
+		ex,
+		_WORKER_INPUT_ROOT,
+		_WORKER_OUT_ROOT,
+		_WORKER_MEL_TRANSFORM,
+		_WORKER_TARGET_SR,
+		overwrite=_WORKER_OVERWRITE,
+	)
+
+
 def plot_mels(manifest: List[Dict[str, Any]], out_dir: Path, n: int = 5, seed: int = 42) -> None:
 	if plt is None:
 		print("matplotlib not available; skipping plots")
@@ -218,17 +267,45 @@ def main() -> None:
 	out_root = args.out_dir
 	out_root.mkdir(parents=True, exist_ok=True)
 
-	mel_transform = make_mel_transform(args.target_sr, args.n_fft, args.hop_length, args.win_length, args.n_mels)
 	examples = discover_examples(input_root)
 
 	manifest: List[Dict[str, Any]] = []
-	for ex in tqdm.tqdm(examples, desc="Processing examples"):
-		res = process_example(ex, input_root, out_root, mel_transform, args.target_sr, overwrite=args.overwrite)
-		if res is None:
-			continue
-		if res["duration"] < args.min_duration or res["duration"] > args.max_duration:
-			continue
-		manifest.append(res)
+	if args.num_workers <= 1:
+		mel_transform = make_mel_transform(args.target_sr, args.n_fft, args.hop_length, args.win_length, args.n_mels)
+		for ex in tqdm.tqdm(examples, desc="Processing examples"):
+			res = process_example(ex, input_root, out_root, mel_transform, args.target_sr, overwrite=args.overwrite)
+			if res is None:
+				warning(f"Failed to process example {ex.utt_id}; skipping")
+				continue
+			
+			if res["duration"] < args.min_duration or res["duration"] > args.max_duration:
+				warning(f"Example {ex.utt_id} duration {res['duration']:.2f}s out of bounds; skipping")
+				continue
+			manifest.append(res)
+	else:
+		with ProcessPoolExecutor(
+			max_workers=args.num_workers,
+			initializer=_init_worker,
+			initargs=(
+				input_root,
+				out_root,
+				args.target_sr,
+				args.n_fft,
+				args.hop_length,
+				args.win_length,
+				args.n_mels,
+				args.overwrite,
+			),
+		) as executor:
+			chunksize = max(1, len(examples) // max(args.num_workers * 8, 1))
+			for ex, res in zip(examples, tqdm.tqdm(executor.map(_process_example_worker, examples, chunksize=chunksize), total=len(examples), desc="Processing examples")):
+				if res is None:
+					warning(f"Failed to process example {ex.utt_id}; skipping")
+					continue
+				if res["duration"] < args.min_duration or res["duration"] > args.max_duration:
+					warning(f"Example {ex.utt_id} duration {res['duration']:.2f}s out of bounds; skipping")
+					continue
+				manifest.append(res)
 
 	manifest_csv = out_root.parent / "librispeech_mels_metadata.csv"
 	with manifest_csv.open("w", encoding="utf-8", newline="") as fh:
