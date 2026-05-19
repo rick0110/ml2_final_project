@@ -8,3 +8,4 @@ tqdm
 transformers
 nemo_toolkit
 nemo_toolkit[all]
+tensorboard
