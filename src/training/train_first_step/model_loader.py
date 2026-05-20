@@ -21,6 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from models.AcousticDecoder import LSTM_AcousticDecoder
 from models.GST import GST
+from models.TextEncoder import TextEncoder
 
 
 def _load_hifigan_model_loader():
@@ -57,9 +58,7 @@ class FirstStepTTSModel(nn.Module):
         text_encoder: nn.Module,
         acoustic_decoder: nn.Module,
         style_extractor: nn.Module,
-        vocoder: nn.Module,
-        text_encoder_frozen: bool = True,
-        vocoder_frozen: bool = True,
+        text_encoder_frozen: bool = False,
     ):
         """Initialize the complete TTS model.
         
@@ -67,17 +66,13 @@ class FirstStepTTSModel(nn.Module):
             text_encoder: FastPitch text encoder
             acoustic_decoder: LSTM-based acoustic decoder
             style_extractor: GST-based style extractor
-            vocoder: HiFi-GAN vocoder
             text_encoder_frozen: Whether to freeze text encoder
-            vocoder_frozen: Whether to freeze vocoder
         """
         super().__init__()
         
         self.text_encoder = text_encoder
         self.acoustic_decoder = acoustic_decoder
         self.style_extractor = style_extractor
-        self.vocoder = vocoder
-        # Fallback representation used only if the external text encoder call fails.
         self.text_fallback_embedding = nn.Embedding(num_embeddings=4096, embedding_dim=384)
         self._warned_text_fallback = False
         
@@ -85,90 +80,37 @@ class FirstStepTTSModel(nn.Module):
             for param in self.text_encoder.parameters():
                 param.requires_grad = False
         
-        if vocoder_frozen:
-            for param in self.vocoder.parameters():
-                param.requires_grad = False
     
     def forward(
         self,
         text_ids: torch.Tensor,
         target_mel: torch.Tensor,
-        use_vocoder: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass through the model.
         
         Args:
             text_ids: Token IDs from text, shape (batch_size, max_text_length)
             target_mel: Target mel spectrogram, shape (batch_size, n_mels, time_steps)
-            use_vocoder: Whether to apply vocoder (generates audio)
         
         Returns:
-            Tuple of (predicted_mel, style_embeddings) if not use_vocoder
-            Tuple of (predicted_audio, style_embeddings) if use_vocoder
+            Tuple of (predicted_mel, style_embeddings)
         """
         # Step 1: Text → Text Encoder → h_text
         with torch.no_grad() if self.text_encoder.training is False else torch.enable_grad():
-            try:
-                h_text = self.text_encoder(text=text_ids)
-                # h_text shape: (batch_size, seq_len, hidden_size)
-                if isinstance(h_text, tuple):
-                    h_text = h_text[0]  # Some encoders return tuples
-            except Exception as exc:
-                if not self._warned_text_fallback:
-                    print(
-                        "Warning: text encoder forward call failed; using fallback embedding. "
-                        f"Original error: {exc}"
-                    )
-                    self._warned_text_fallback = True
-                safe_ids = text_ids.clamp(min=0, max=self.text_fallback_embedding.num_embeddings - 1)
-                h_text = self.text_fallback_embedding(safe_ids)
+            h_text = self.text_encoder(text_ids) # [batch_size, seq_len, text_hidden_size]
         
-        # Step 2: Mel → GST → z_style
-        # Ensure target_mel has channel dimension: (batch_size, 1, n_mels, time_steps)
-        if target_mel.dim() == 3:
-            target_mel_gst = target_mel.unsqueeze(1)
-        else:
-            target_mel_gst = target_mel
-        
-        style_output = self.style_extractor(target_mel_gst)
-        z_style = style_output[0] if isinstance(style_output, tuple) else style_output
-        # Normalize style shape to (batch_size, style_embedding_dim)
-        if z_style.dim() == 3 and z_style.size(1) == 1:
-            z_style = z_style.squeeze(1)
-        elif z_style.dim() > 2:
-            z_style = z_style.reshape(z_style.size(0), -1)
-        
-        # Step 3: Concatenate h_text and z_style
-        # First, we need to repeat z_style to match temporal dimension of h_text
-        batch_size, seq_len, text_hidden = h_text.shape
-        style_dim = z_style.shape[-1]
-        
-        # Repeat z_style for each time step
-        z_style_expanded = z_style.unsqueeze(1).expand(-1, seq_len, -1)
-        # z_style_expanded shape: (batch_size, seq_len, style_dim)
-        
-        # Concatenate along feature dimension
-        combined_features = torch.cat([h_text, z_style_expanded], dim=-1)
-        # combined_features shape: (batch_size, seq_len, text_hidden + style_dim)
-        
-        # Step 4: [h_text, z_style] → Acoustic Decoder → M_hat
-        predicted_mel = self.acoustic_decoder(combined_features)
-        # predicted_mel shape: (batch_size, seq_len, n_mels)
-        
-        # Step 5 (optional): M_hat → HiFi-GAN → x_hat
-        if use_vocoder:
-            # Vocoder expects (batch_size, n_mels, time_steps)
-            if predicted_mel.dim() == 3:
-                predicted_mel_vocoder = predicted_mel.transpose(1, 2)
-            else:
-                predicted_mel_vocoder = predicted_mel
-            
-            with torch.no_grad() if self.vocoder.training is False else torch.enable_grad():
-                predicted_audio = self.vocoder(predicted_mel_vocoder)
-            
-            return predicted_audio, z_style
-        
-        return predicted_mel, z_style
+        # Step 2: Mel → GST → z_style (GST expects input shape: batch, 1, n_mels, time)
+        z_style_vec = self.style_extractor(target_mel.unsqueeze(1))  # [batch_size, style_embedding_dim]
+
+        # Step 3: Concatenate h_text and an expanded z_style for decoder input
+        z_style_exp = z_style_vec.unsqueeze(1).expand(-1, h_text.size(1), -1)  # [batch_size, seq_len, style_embedding_dim]
+        concat_z_h = torch.cat([h_text, z_style_exp], dim=-1)  # [batch_size, seq_len, text_hidden_size + style_embedding_dim]
+
+        # Step 4: [h_text, z_style] → Acoustic Decoder → M_hat (predicted mel)
+        predicted_mel = self.acoustic_decoder(concat_z_h)  # [batch_size, seq_len, n_mels]
+
+        # Return predicted mel and the original 2D style embedding (batch_size, style_embedding_dim)
+        return predicted_mel, z_style_vec
     
     def get_trainable_parameters(self):
         """Get only trainable parameters."""
@@ -177,9 +119,11 @@ class FirstStepTTSModel(nn.Module):
 
 def load_tts_models(
     device: torch.device,
+    vocab_size: int,
     acoustic_decoder_hidden_size: int = 256,
     acoustic_decoder_num_layers: int = 1,
     style_embedding_dim: int = 128,
+    text_encoder_hidden_size: int = 256
 ) -> FirstStepTTSModel:
     """Load and initialize all TTS components.
     
@@ -192,16 +136,9 @@ def load_tts_models(
     Returns:
         FirstStepTTSModel with all components initialized
     """
-    print("Loading HiFi-GAN and FastPitch models...")
-    load_hifigan_model = _load_hifigan_model_loader()
-    text_encoder, vocoder = load_hifigan_model(freeze=True)
-    text_encoder = text_encoder.to(device)
-    vocoder = vocoder.to(device)
-    print(f"  ✓ Text Encoder (FastPitch) loaded and frozen")
-    print(f"  ✓ Vocoder (HiFi-GAN) loaded and frozen")
     
     # Get text encoder output size
-    text_hidden_size = 384  # FastPitch default hidden size
+    text_hidden_size = text_encoder_hidden_size
     
     print("Initializing Acoustic Decoder...")
     acoustic_decoder = LSTM_AcousticDecoder(
@@ -221,15 +158,17 @@ def load_tts_models(
         n_heads=4,
     ).to(device)
     print(f"  ✓ GST initialized (trainable)")
+
+    print("Loading (Text Encoder)...")
+    text_encoder = TextEncoder(vocab_size, embedding_dim=text_hidden_size, n_time_steps=7).to(device)
+
     
     # Create complete model
     model = FirstStepTTSModel(
         text_encoder=text_encoder,
         acoustic_decoder=acoustic_decoder,
         style_extractor=style_extractor,
-        vocoder=vocoder,
-        text_encoder_frozen=True,
-        vocoder_frozen=True,
+        text_encoder_frozen=False,
     )
     
     print("\nModel summary:")
@@ -254,7 +193,6 @@ def get_model_size_info(model: FirstStepTTSModel) -> dict:
         "text_encoder": sum(p.numel() for p in model.text_encoder.parameters()),
         "acoustic_decoder": sum(p.numel() for p in model.acoustic_decoder.parameters()),
         "style_extractor": sum(p.numel() for p in model.style_extractor.parameters()),
-        "vocoder": sum(p.numel() for p in model.vocoder.parameters()),
     }
     info["trainable"] = sum(p.numel() for p in model.get_trainable_parameters())
     info["total"] = sum(p.numel() for p in model.parameters())

@@ -1,0 +1,87 @@
+{
+  "found_cfg": "<class 'omegaconf.dictconfig.DictConfig'>",
+  "cfg_path_model.n_mels": null,
+  "cfg_path_n_mels": null,
+  "cfg_path_train.dataset.n_mels": null,
+  "cfg_path_preprocessor.n_mels": null,
+  "found__cfg": "<class 'omegaconf.dictconfig.DictConfig'>",
+  "spec_gen_type": "<class 'nemo.collections.tts.models.fastpitch.FastPitchModel'>",
+  "spec_gen_attrs": [
+    "mel_loss_fn"
+  ],
+  "conv_candidates": [
+    [
+      "aligner.key_proj.0.conv.weight",
+      [
+        768,
+        384,
+        3
+      ]
+    ],
+    [
+      "aligner.key_proj.2.conv.weight",
+      [
+        80,
+        768,
+        1
+      ]
+    ],
+    [
+      "aligner.query_proj.0.conv.weight",
+      [
+        160,
+        80,
+        3
+      ]
+    ],
+    [
+      "aligner.query_proj.2.conv.weight",
+      [
+        80,
+        160,
+        1
+      ]
+    ],
+    [
+      "aligner.query_proj.4.conv.weight",
+      [
+        80,
+        80,
+        1
+      ]
+    ],
+    [
+      "fastpitch.duration_predictor.layers.0.conv.weight",
+      [
+        256,
+        384,
+        3
+      ]
+    ],
+    [
+      "fastpitch.duration_predictor.layers.1.conv.weight",
+      [
+        256,
+        256,
+        3
+      ]
+    ],
+    [
+      "fastpitch.pitch_predictor.layers.0.conv.weight",
+      [
+        256,
+        384,
+        3
+      ]
+    ],
+    [
+      "fastpitch.pitch_predictor.layers.1.conv.weight",
+      [
+        256,
+        256,
+        3
+      ]
+    ]
+  ],
+  "project_default_n_mels": 80
+}

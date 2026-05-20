@@ -24,6 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from training.train_first_step.model_loader import FirstStepTTSModel
 from training.train_first_step.losses import CombinedTTSLoss
+from training.train_first_step.text_processing import BatchTextTokenizer
 
 
 class MetricsTracker:
@@ -74,14 +75,13 @@ def _align_predicted_mel_to_target(
 
 def train_epoch(
     model: FirstStepTTSModel,
+    Tokenizer: BatchTextTokenizer,
     train_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     criterion: CombinedTTSLoss,
     device: torch.device,
     epoch: int,
     max_epochs: int,
-    scaler: Optional[torch.cuda.amp.GradScaler] = None,
-    use_amp: bool = False,
 ) -> Dict[str, float]:
     """Train one epoch."""
     model.train()
@@ -96,67 +96,32 @@ def train_epoch(
 
     for batch_idx, batch in enumerate(pbar):
         mels = batch["mel"].to(device)
-        batch_size = mels.shape[0]
-        max_text_len = 256
-        text_ids = torch.randint(0, 1000, (batch_size, max_text_len)).to(device)
-
+        text_ids = Tokenizer.encode_batch(batch["text"]).to(device)
         optimizer.zero_grad()
 
-        try:
-            if use_amp:
-                with torch.cuda.amp.autocast():
-                    predicted_mel, style_embeddings = model(
-                        text_ids=text_ids,
-                        target_mel=mels,
-                        use_vocoder=False,
-                    )
+        predicted_mel, style_embeddings = model(
+            text_ids=text_ids,
+            target_mel=mels,
+        )
+        if predicted_mel.dim() == 3:
+            predicted_mel = predicted_mel.transpose(1, 2)
+        predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
+        loss, recon_loss, div_loss = criterion(
+            predicted_mel=predicted_mel,
+            target_mel=mels,
+            style_embeddings=style_embeddings,
+        )
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.get_trainable_parameters(), 5.0)
+        optimizer.step()
 
-                    if predicted_mel.dim() == 3:
-                        predicted_mel = predicted_mel.transpose(1, 2)
-                    predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
+        metrics.add(
+            loss=loss.item(),
+            recon_loss=recon_loss.item(),
+            div_loss=div_loss.item(),
+        )
 
-                    loss, recon_loss, div_loss = criterion(
-                        predicted_mel=predicted_mel,
-                        target_mel=mels,
-                        style_embeddings=style_embeddings,
-                    )
-
-                if scaler is None:
-                    raise RuntimeError("AMP enabled but GradScaler is None")
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                predicted_mel, style_embeddings = model(
-                    text_ids=text_ids,
-                    target_mel=mels,
-                    use_vocoder=False,
-                )
-
-                if predicted_mel.dim() == 3:
-                    predicted_mel = predicted_mel.transpose(1, 2)
-                predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
-
-                loss, recon_loss, div_loss = criterion(
-                    predicted_mel=predicted_mel,
-                    target_mel=mels,
-                    style_embeddings=style_embeddings,
-                )
-
-                loss.backward()
-                optimizer.step()
-
-            metrics.add(
-                loss=loss.item(),
-                recon_loss=recon_loss.item(),
-                div_loss=div_loss.item(),
-            )
-
-            pbar.set_postfix({"loss": f"{metrics.get_averages()['loss']:.4f}"}, refresh=True)
-
-        except Exception as e:
-            print(f"\nError in batch {batch_idx}: {e}")
-            continue
+        pbar.set_postfix({"loss": f"{metrics.get_averages()['loss']:.4f}"}, refresh=True)
 
     pbar.close()
     if "loss" not in metrics.metrics:
@@ -166,6 +131,7 @@ def train_epoch(
 
 def validate_epoch(
     model: FirstStepTTSModel,
+    Tokenizer: BatchTextTokenizer,
     val_loader: DataLoader,
     criterion: CombinedTTSLoss,
     device: torch.device,
@@ -187,18 +153,17 @@ def validate_epoch(
         for batch_idx, batch in enumerate(pbar):
             mels = batch["mel"].to(device)
             batch_size = mels.shape[0]
-            max_text_len = 256
-            text_ids = torch.randint(0, 1000, (batch_size, max_text_len)).to(device)
+            max_text_len = 1024
+            text = batch["text"]
+            text_ids = Tokenizer.encode_batch(text).to(device)
 
             try:
                 predicted_mel, style_embeddings = model(
                     text_ids=text_ids,
                     target_mel=mels,
-                    use_vocoder=False,
                 )
 
-                if predicted_mel.dim() == 3:
-                    predicted_mel = predicted_mel.transpose(1, 2)
+                predicted_mel = predicted_mel.transpose(1, 2)
                 predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
 
                 loss, recon_loss, div_loss = criterion(
@@ -365,9 +330,18 @@ class TensorBoardLogger:
         """
         self.writer.add_hparams(hparams, metrics)
 
+    def flush(self):
+        """Flush TensorBoard logs."""
+        self.writer.flush()
+
+    def close(self):
+        """Close TensorBoard writer."""
+        self.writer.close()
+
 
 def log_validation_audio_examples(
     model: FirstStepTTSModel,
+    vocoder: nn.Module,
     batch: Dict[str, Any],
     device: torch.device,
     logger: TensorBoardLogger,
@@ -397,14 +371,13 @@ def log_validation_audio_examples(
         predicted_mel, _ = model(
             text_ids=text_ids,
             target_mel=mels,
-            use_vocoder=False,
         )
         if predicted_mel.dim() == 3:
             predicted_mel = predicted_mel.transpose(1, 2)
         predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
 
-        reconstructed_audio = model.vocoder(spec=original_mel)
-        predicted_audio = model.vocoder(spec=predicted_mel[0:1])
+        reconstructed_audio = vocoder(spec=original_mel)
+        predicted_audio = vocoder(spec=predicted_mel[0:1])
 
     def _to_audio_1d(tensor: torch.Tensor) -> torch.Tensor:
         return tensor.detach().float().cpu().squeeze().clamp(-1.0, 1.0)
@@ -419,11 +392,3 @@ def log_validation_audio_examples(
         predicted_mel=predicted_mel[0].detach().float().cpu(),
         prefix="examples/",
     )
-    
-    def flush(self):
-        """Flush TensorBoard logs."""
-        self.writer.flush()
-    
-    def close(self):
-        """Close TensorBoard writer."""
-        self.writer.close()

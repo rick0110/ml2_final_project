@@ -58,8 +58,8 @@ class GST(nn.Module):
         query = x.unsqueeze(1) # -> [batch_size, 1, hidden_size]
         keys = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1)
         values = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1)
-        att_out, att_weights = self.multHeadAttention(query, keys, values) # -> [batch_size, hidden_size]
-        return att_out, att_weights
+        att_out, att_weights = self.multHeadAttention(query, keys, values) # -> [batch_size, 1, hidden_size]
+        return att_out.squeeze(1) # -> [batch_size, hidden_size]
     
 
 
