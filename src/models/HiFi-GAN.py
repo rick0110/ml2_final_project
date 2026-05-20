@@ -11,13 +11,16 @@ def freeze_model(model: torch.nn.Module) -> None:
 
 def load_hifigan_model(path: pathlib.Path = ROOT / "local_weight_models" / "HiFi-GAN", freeze: bool = True):
     if path.exists():
-        spec_generator = FastPitchModel.from_pretrained(str(path))
-        model = HifiGanModel.from_pretrained(str(path))
+        spec_generator = FastPitchModel.restore_from(str(path / "spec_generator.nemo"))
+        model = HifiGanModel.restore_from(str(path / "model.nemo"))
         if freeze:
+            freeze_model(spec_generator)
             freeze_model(model)
         return spec_generator, model
     spec_generator = FastPitchModel.from_pretrained("nvidia/tts_en_fastpitch")
     model = HifiGanModel.from_pretrained("nvidia/tts_hifigan")
+    spec_generator.save_to(str(ROOT / "local_weight_models" / "HiFi-GAN" / "spec_generator.nemo"))
+    model.save_to(str(ROOT / "local_weight_models" / "HiFi-GAN" / "model.nemo"))
     if freeze:
         freeze_model(model)
         freeze_model(spec_generator)

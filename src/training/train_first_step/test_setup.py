@@ -49,8 +49,9 @@ def test_model_loading(device):
         model = load_tts_models(
             device=device,
             acoustic_decoder_hidden_size=256,
-            acoustic_decoder_num_layers=3,
+            acoustic_decoder_num_layers=1,
             style_embedding_dim=128,
+            vocab_size=1000
         )
         print("✓ Model loaded successfully\n")
         
@@ -60,7 +61,6 @@ def test_model_loading(device):
         print(f"  Text Encoder: {model_info['text_encoder']:,} parameters")
         print(f"  Acoustic Decoder: {model_info['acoustic_decoder']:,} parameters")
         print(f"  Style Extractor: {model_info['style_extractor']:,} parameters")
-        print(f"  Vocoder: {model_info['vocoder']:,} parameters")
         print(f"  Trainable: {model_info['trainable']:,} parameters")
         print(f"  Total: {model_info['total']:,} parameters\n")
         
@@ -85,7 +85,6 @@ def test_forward_pass(model, device):
     try:
         model.eval()
         
-        # Create dummy inputs
         text_ids = torch.randint(0, 1000, (batch_size, max_text_len)).to(device)
         target_mel = torch.randn(batch_size, n_mels, max_mel_len).to(device)
         
@@ -97,7 +96,6 @@ def test_forward_pass(model, device):
             predicted_mel, style_embeddings = model(
                 text_ids=text_ids,
                 target_mel=target_mel,
-                use_vocoder=False,
             )
         
         print(f"\nOutput shapes:")
@@ -133,9 +131,9 @@ def test_loss_functions(model, device):
         ).to(device)
         
         # Generate dummy predictions and targets
-        predicted_mel = torch.randn(batch_size, n_mels, max_mel_len, requires_grad=True).to(device)
-        target_mel = torch.randn(batch_size, n_mels, max_mel_len).to(device)
-        style_embeddings = torch.randn(batch_size, 128, requires_grad=True).to(device)
+        predicted_mel = torch.randn(batch_size, n_mels, max_mel_len, device=device, requires_grad=True)
+        target_mel = torch.randn(batch_size, n_mels, max_mel_len, device=device)
+        style_embeddings = torch.randn(batch_size, 128, device=device, requires_grad=True)
         
         # Compute losses
         total_loss, recon_loss, div_loss = criterion(

@@ -10,4 +10,4 @@ class LSTM_AcousticDecoder(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         lstm_out, _ = self.lstm(x)
         output = self.linear(lstm_out)
-        return output
+        return output # (batch_size, seq_len, n_mels)

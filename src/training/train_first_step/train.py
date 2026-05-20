@@ -23,6 +23,7 @@ Usage:
 import sys
 import argparse
 import json
+import importlib.util
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -49,6 +50,26 @@ from training.train_first_step.train_utils import (
     log_validation_audio_examples,
 )
 
+from training.train_first_step.text_processing import BatchTextTokenizer
+
+
+def load_hifigan_vocoder(device: torch.device) -> nn.Module:
+    """Load and prepare frozen HiFi-GAN vocoder used for sample audio logging."""
+    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi-GAN.py"
+    if not hifigan_path.exists():
+        raise FileNotFoundError(f"HiFi-GAN loader not found at {hifigan_path}")
+
+    spec = importlib.util.spec_from_file_location("hifigan_module", hifigan_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not import HiFi-GAN module from {hifigan_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not hasattr(module, "load_hifigan_model"):
+        raise ImportError("`load_hifigan_model` not found in HiFi-GAN module")
+
+    _, vocoder = module.load_hifigan_model(freeze=True)
+    return vocoder.to(device).eval()
 
 def parse_arguments():
     """Parse command-line arguments."""
@@ -56,8 +77,6 @@ def parse_arguments():
         description="Train first-step TTS model",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    
-    # Training hyperparameters
     parser.add_argument(
         "--num-epochs",
         type=int,
@@ -129,12 +148,6 @@ def parse_arguments():
         help="Dimension of style embeddings",
     )
     
-    # Training configuration
-    parser.add_argument(
-        "--use-amp",
-        action="store_true",
-        help="Use automatic mixed precision",
-    )
     parser.add_argument(
         "--resume",
         type=str,
@@ -381,7 +394,6 @@ def main():
         "acoustic_decoder_hidden_size": args.acoustic_decoder_hidden_size,
         "acoustic_decoder_num_layers": args.acoustic_decoder_num_layers,
         "style_embedding_dim": args.style_embedding_dim,
-        "use_amp": args.use_amp,
         "seed": args.seed,
         "val_split": args.val_split,
     }
@@ -396,6 +408,9 @@ def main():
         num_workers=args.num_workers,
         val_split=args.val_split,
     )
+
+    # Tokenizer
+    tokenizer = BatchTextTokenizer()
     
     # Load model
     print("\nLoading TTS model...")
@@ -404,6 +419,7 @@ def main():
         acoustic_decoder_hidden_size=args.acoustic_decoder_hidden_size,
         acoustic_decoder_num_layers=args.acoustic_decoder_num_layers,
         style_embedding_dim=args.style_embedding_dim,
+        vocab_size=len(tokenizer.tokenizer)
     )
     
     # Setup optimizer
@@ -424,13 +440,17 @@ def main():
     print(f"  L1 Reconstruction weight: {args.weight_reconstruction}")
     print(f"  Style Diversity weight: {args.weight_diversity}")
     
-    # Setup GradScaler for mixed precision
-    scaler = torch.cuda.amp.GradScaler() if args.use_amp else None
+    # No mixed precision: use standard FP32 training
+    scaler = None
     
     # Setup TensorBoard
     tb_logger = TensorBoardLogger(tensorboard_dir)
     tb_logger.log_model_info(model)
     tb_logger.log_hyperparameters(hparams, {})
+
+    print("Loading HiFi-GAN vocoder for sample logging...")
+    vocoder = load_hifigan_vocoder(device)
+    print("  ✓ HiFi-GAN vocoder loaded (frozen)")
     
     # Load checkpoint if resuming
     start_epoch = 0
@@ -450,19 +470,19 @@ def main():
         # Train
         train_metrics = train_epoch(
             model=model,
+            Tokenizer=tokenizer,
             train_loader=train_loader,
             optimizer=optimizer,
             criterion=criterion,
             device=device,
             epoch=epoch,
             max_epochs=args.num_epochs,
-            scaler=scaler,
-            use_amp=args.use_amp,
         )
         
         # Validate
         val_metrics = validate_epoch(
             model=model,
+            Tokenizer=tokenizer,
             val_loader=val_loader,
             criterion=criterion,
             device=device,
@@ -474,6 +494,7 @@ def main():
             example_batch = next(iter(val_loader))
             log_validation_audio_examples(
                 model=model,
+                vocoder=vocoder,
                 batch=example_batch,
                 device=device,
                 logger=tb_logger,

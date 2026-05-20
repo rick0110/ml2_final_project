@@ -1,0 +1,18 @@
+{
+  "hubert": {
+    "error": "Can't load feature extractor for '/home/richard/project/ml2_final_project/local_weight_models/hubert/processor'. If you were trying to load it from 'https://huggingface.co/models', make sure you don't have a local directory with the same name. Otherwise, make sure '/home/richard/project/ml2_final_project/local_weight_models/hubert/processor' is the correct path to a directory containing a preprocessor_config.json file"
+  },
+  "hifigan": {
+    "mel_input_shape": [
+      2,
+      80,
+      10
+    ],
+    "audio_output_shape": [
+      2,
+      1,
+      2560
+    ],
+    "device": "cuda:0"
+  }
+}
