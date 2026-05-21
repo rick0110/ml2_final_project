@@ -21,7 +21,9 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from models.AcousticDecoder import LSTM_AcousticDecoder
 from models.GST import GST
-from models.TextEncoder import TextEncoder
+from models.TextEncoder import TextEncoder, TextEncoderMultiHeadAttention
+from models.DurationPredictor import DurationPredictor
+from models.LengthRegulator import length_regulator
 
 
 def _load_hifigan_model_loader():
@@ -54,12 +56,13 @@ class FirstStepTTSModel(nn.Module):
     """
     
     def __init__(
-        self,
-        text_encoder: nn.Module,
-        acoustic_decoder: nn.Module,
-        style_extractor: nn.Module,
-        text_encoder_frozen: bool = False,
-    ):
+            self,
+            text_encoder: nn.Module,
+            acoustic_decoder: nn.Module,
+            style_extractor: nn.Module,
+            duration_predictor: Optional[nn.Module] = None,
+            text_encoder_frozen: bool = False,
+        ):
         """Initialize the complete TTS model.
         
         Args:
@@ -73,6 +76,7 @@ class FirstStepTTSModel(nn.Module):
         self.text_encoder = text_encoder
         self.acoustic_decoder = acoustic_decoder
         self.style_extractor = style_extractor
+        self.duration_predictor = duration_predictor
         self.text_fallback_embedding = nn.Embedding(num_embeddings=4096, embedding_dim=384)
         self._warned_text_fallback = False
         
@@ -98,13 +102,24 @@ class FirstStepTTSModel(nn.Module):
         # Step 1: Text → Text Encoder → h_text
         with torch.no_grad() if self.text_encoder.training is False else torch.enable_grad():
             h_text = self.text_encoder(text_ids) # [batch_size, seq_len, text_hidden_size]
+
+        # If a duration predictor is provided, predict durations and expand text states
+        if self.duration_predictor is not None:
+            # predicted durations are positive floats; convert to integers
+            pred_durs = self.duration_predictor(h_text)  # (batch, seq_len)
+            # convert to integer durations (at least 1 frame)
+            durations_int = torch.clamp(torch.round(pred_durs), min=1).long()
+            h_aligned = length_regulator(h_text, durations_int)
+            # h_aligned: (batch, frames, text_hidden_size)
+        else:
+            h_aligned = h_text
         
         # Step 2: Mel → GST → z_style (GST expects input shape: batch, 1, n_mels, time)
         z_style_vec = self.style_extractor(target_mel.unsqueeze(1))  # [batch_size, style_embedding_dim]
 
-        # Step 3: Concatenate h_text and an expanded z_style for decoder input
-        z_style_exp = z_style_vec.unsqueeze(1).expand(-1, h_text.size(1), -1)  # [batch_size, seq_len, style_embedding_dim]
-        concat_z_h = torch.cat([h_text, z_style_exp], dim=-1)  # [batch_size, seq_len, text_hidden_size + style_embedding_dim]
+        # Step 3: Concatenate aligned text states and an expanded z_style for decoder input
+        z_style_exp = z_style_vec.unsqueeze(1).expand(-1, h_aligned.size(1), -1)  # [batch_size, frames, style_embedding_dim]
+        concat_z_h = torch.cat([h_aligned, z_style_exp], dim=-1)  # [batch_size, frames, text_hidden_size + style_embedding_dim]
 
         # Step 4: [h_text, z_style] → Acoustic Decoder → M_hat (predicted mel)
         predicted_mel = self.acoustic_decoder(concat_z_h)  # [batch_size, seq_len, n_mels]
@@ -151,23 +166,34 @@ def load_tts_models(
     
     print("Initializing GST (Style Extractor)...")
     style_extractor = GST(
-        n_conv_layers=6,
+        n_conv_layers=4,
         hidden_size=style_embedding_dim,
-        n_style_tokens=10,
+        n_style_tokens=30,
         n_mels=80,
         n_heads=4,
     ).to(device)
     print(f"  ✓ GST initialized (trainable)")
 
     print("Loading (Text Encoder)...")
-    text_encoder = TextEncoder(vocab_size, embedding_dim=text_hidden_size, n_time_steps=7).to(device)
+    text_encoder = TextEncoderMultiHeadAttention(
+        vocab_size,
+        embedding_dim=text_encoder_hidden_size,
+        n_heads=8,
+        n_steps=10,
+        ff_dim=2048,
+        dropout=0.0,
+    ).to(device)
 
+    print("Initializing Duration Predictor...")
+    duration_predictor = DurationPredictor(input_dim=text_encoder_hidden_size, conv_channels=256).to(device)
+    print("  ✓ Duration Predictor initialized (trainable)")
     
     # Create complete model
     model = FirstStepTTSModel(
         text_encoder=text_encoder,
         acoustic_decoder=acoustic_decoder,
         style_extractor=style_extractor,
+        duration_predictor=duration_predictor,
         text_encoder_frozen=False,
     )
     

@@ -112,7 +112,6 @@ def train_epoch(
             style_embeddings=style_embeddings,
         )
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.get_trainable_parameters(), 5.0)
         optimizer.step()
 
         metrics.add(
