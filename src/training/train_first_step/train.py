@@ -24,6 +24,7 @@ import sys
 import argparse
 import json
 import importlib.util
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -32,6 +33,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam, AdamW
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, ConcatDataset
 
 # Add src to path
@@ -96,6 +98,24 @@ def parse_arguments():
         help="Learning rate",
     )
     parser.add_argument(
+        "--scheduler-patience",
+        type=int,
+        default=3,
+        help="Patience for ReduceLROnPlateau scheduler",
+    )
+    parser.add_argument(
+        "--scheduler-factor",
+        type=float,
+        default=0.5,
+        help="LR decay factor for ReduceLROnPlateau scheduler",
+    )
+    parser.add_argument(
+        "--scheduler-min-lr",
+        type=float,
+        default=1e-6,
+        help="Minimum learning rate for ReduceLROnPlateau scheduler",
+    )
+    parser.add_argument(
         "--weight-decay",
         type=float,
         default=1e-5,
@@ -155,6 +175,12 @@ def parse_arguments():
         help="Path to checkpoint to resume from",
     )
     parser.add_argument(
+        "--resume-experiment",
+        type=str,
+        default=None,
+        help="Path to an experiment directory; loads config.json and the latest checkpoint",
+    )
+    parser.add_argument(
         "--val-split",
         type=float,
         default=0.1,
@@ -203,6 +229,37 @@ def create_experiment_dir(experiment_name: Optional[str] = None) -> Path:
     (experiment_dir / "logs").mkdir(exist_ok=True)
     
     return experiment_dir
+
+
+def load_experiment_config(experiment_dir: Path) -> dict:
+    """Load saved hyperparameters from an experiment directory."""
+    config_path = experiment_dir / "config.json"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+
+    with open(config_path) as f:
+        return json.load(f)
+
+
+def find_latest_checkpoint(checkpoint_dir: Path) -> Path:
+    """Find the latest epoch checkpoint in a checkpoint directory."""
+    if not checkpoint_dir.exists():
+        raise FileNotFoundError(f"Checkpoint directory not found: {checkpoint_dir}")
+
+    epoch_checkpoints = []
+    for checkpoint_path in checkpoint_dir.glob("epoch_*.pt"):
+        match = re.search(r"epoch_(\d+)\.pt$", checkpoint_path.name)
+        if match:
+            epoch_checkpoints.append((int(match.group(1)), checkpoint_path))
+
+    if epoch_checkpoints:
+        return max(epoch_checkpoints, key=lambda item: item[0])[1]
+
+    best_checkpoint = checkpoint_dir / "best.pt"
+    if best_checkpoint.exists():
+        return best_checkpoint
+
+    raise FileNotFoundError(f"No checkpoint files found in {checkpoint_dir}")
 
 
 def create_datasets(
@@ -375,18 +432,27 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    # Create experiment directory
-    experiment_dir = create_experiment_dir(args.experiment_name)
+    resume_experiment_dir = Path(args.resume_experiment) if args.resume_experiment else None
+
+    # Create or reuse experiment directory
+    if resume_experiment_dir is not None:
+        experiment_dir = resume_experiment_dir
+        if not experiment_dir.exists():
+            raise FileNotFoundError(f"Experiment directory not found: {experiment_dir}")
+    else:
+        experiment_dir = create_experiment_dir(args.experiment_name)
     print(f"\nExperiment directory: {experiment_dir}")
     
     checkpoint_dir = experiment_dir / "checkpoints"
     tensorboard_dir = experiment_dir / "tensorboard"
     
-    # Save hyperparameters
     hparams = {
         "num_epochs": args.num_epochs,
         "batch_size": args.batch_size,
         "learning_rate": args.learning_rate,
+        "scheduler_patience": args.scheduler_patience,
+        "scheduler_factor": args.scheduler_factor,
+        "scheduler_min_lr": args.scheduler_min_lr,
         "weight_decay": args.weight_decay,
         "weight_reconstruction": args.weight_reconstruction,
         "weight_diversity": args.weight_diversity,
@@ -397,10 +463,19 @@ def main():
         "seed": args.seed,
         "val_split": args.val_split,
     }
-    
-    with open(experiment_dir / "config.json", "w") as f:
-        json.dump(hparams, f, indent=2)
-    print(f"✓ Config saved to {experiment_dir / 'config.json'}")
+
+    if resume_experiment_dir is not None:
+        saved_hparams = load_experiment_config(experiment_dir)
+        for key, value in saved_hparams.items():
+            if hasattr(args, key):
+                setattr(args, key, value)
+
+        hparams.update(saved_hparams)
+        print(f"✓ Loaded config from {experiment_dir / 'config.json'}")
+    else:
+        with open(experiment_dir / "config.json", "w") as f:
+            json.dump(hparams, f, indent=2)
+        print(f"✓ Config saved to {experiment_dir / 'config.json'}")
     
     # Load datasets
     train_loader, val_loader = create_datasets(
@@ -428,8 +503,20 @@ def main():
         lr=args.learning_rate,
         weight_decay=args.weight_decay,
     )
+
+    scheduler = ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=args.scheduler_factor,
+        patience=args.scheduler_patience,
+        min_lr=args.scheduler_min_lr,
+    )
     
     print(f"\nOptimizer: Adam(lr={args.learning_rate}, weight_decay={args.weight_decay})")
+    print(
+        "Scheduler: ReduceLROnPlateau(" 
+        f"factor={args.scheduler_factor}, patience={args.scheduler_patience}, min_lr={args.scheduler_min_lr})"
+    )
     
     # Setup loss function
     criterion = CombinedTTSLoss(
@@ -451,11 +538,17 @@ def main():
     vocoder = load_hifigan_vocoder(device)
     print("  ✓ HiFi-GAN vocoder loaded (frozen)")
     
-    # Load checkpoint if resuming
     start_epoch = 0
-    if args.resume:
-        print(f"\nResuming from checkpoint: {args.resume}")
-        start_epoch, metrics = load_checkpoint(model, optimizer, Path(args.resume), device)
+    if args.resume or args.resume_experiment:
+        if args.resume_experiment:
+            checkpoint_path = find_latest_checkpoint(experiment_dir / "checkpoints")
+            print(f"\nResuming from experiment: {experiment_dir}")
+            print(f"  Latest checkpoint: {checkpoint_path}")
+        else:
+            checkpoint_path = Path(args.resume)
+            print(f"\nResuming from checkpoint: {checkpoint_path}")
+
+        start_epoch, metrics = load_checkpoint(model, optimizer, scheduler, checkpoint_path, device)
         print(f"  Loaded from epoch {start_epoch}")
     
     # Training loop
@@ -489,6 +582,8 @@ def main():
             max_epochs=args.num_epochs,
         )
 
+        scheduler.step(val_metrics["loss"])
+
         if epoch == 0 or (epoch + 1) % 1 == 0:
             example_batch = next(iter(val_loader))
             log_validation_audio_examples(
@@ -518,6 +613,7 @@ def main():
         save_checkpoint(
             model=model,
             optimizer=optimizer,
+            scheduler=scheduler,
             epoch=epoch + 1,
             metrics={**train_metrics, **{f"val_{k}": v for k, v in val_metrics.items()}},
             checkpoint_dir=checkpoint_dir,
@@ -530,6 +626,7 @@ def main():
             save_checkpoint(
                 model=model,
                 optimizer=optimizer,
+                scheduler=scheduler,
                 epoch=epoch + 1,
                 metrics={**train_metrics, **{f"val_{k}": v for k, v in val_metrics.items()}},
                 checkpoint_dir=checkpoint_dir,
