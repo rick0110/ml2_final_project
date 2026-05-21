@@ -192,6 +192,7 @@ def validate_epoch(
 def save_checkpoint(
     model: FirstStepTTSModel,
     optimizer: torch.optim.Optimizer,
+    scheduler: Optional[Any],
     epoch: int,
     metrics: Dict[str, float],
     checkpoint_dir: Path,
@@ -219,6 +220,7 @@ def save_checkpoint(
             "epoch": epoch,
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
             "metrics": metrics,
         },
         checkpoint_path,
@@ -230,6 +232,7 @@ def save_checkpoint(
 def load_checkpoint(
     model: FirstStepTTSModel,
     optimizer: torch.optim.Optimizer,
+    scheduler: Optional[Any],
     checkpoint_path: Path,
     device: torch.device,
 ) -> Tuple[int, Dict[str, float]]:
@@ -248,6 +251,9 @@ def load_checkpoint(
     
     model.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    scheduler_state_dict = checkpoint.get("scheduler_state_dict")
+    if scheduler is not None and scheduler_state_dict is not None:
+        scheduler.load_state_dict(scheduler_state_dict)
     
     return checkpoint["epoch"], checkpoint.get("metrics", {})
 

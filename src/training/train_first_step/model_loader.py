@@ -179,13 +179,13 @@ def load_tts_models(
         vocab_size,
         embedding_dim=text_encoder_hidden_size,
         n_heads=8,
-        n_steps=10,
-        ff_dim=2048,
+        n_steps=4,
+        ff_dim=256,
         dropout=0.0,
     ).to(device)
 
     print("Initializing Duration Predictor...")
-    duration_predictor = DurationPredictor(input_dim=text_encoder_hidden_size, conv_channels=256).to(device)
+    duration_predictor = None # DurationPredictor(input_dim=text_encoder_hidden_size, conv_channels=256).to(device)
     print("  ✓ Duration Predictor initialized (trainable)")
     
     # Create complete model
