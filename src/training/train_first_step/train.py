@@ -31,7 +31,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.utils.data import DataLoader, ConcatDataset
 
 # Add src to path
@@ -423,11 +423,12 @@ def main():
     )
     
     # Setup optimizer
-    optimizer = Adam(
+    optimizer = AdamW(
         model.get_trainable_parameters(),
         lr=args.learning_rate,
         weight_decay=args.weight_decay,
     )
+    
     print(f"\nOptimizer: Adam(lr={args.learning_rate}, weight_decay={args.weight_decay})")
     
     # Setup loss function
@@ -440,8 +441,6 @@ def main():
     print(f"  L1 Reconstruction weight: {args.weight_reconstruction}")
     print(f"  Style Diversity weight: {args.weight_diversity}")
     
-    # No mixed precision: use standard FP32 training
-    scaler = None
     
     # Setup TensorBoard
     tb_logger = TensorBoardLogger(tensorboard_dir)
