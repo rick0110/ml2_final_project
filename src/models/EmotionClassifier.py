@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from src.models.Hubert import load_hubert_model
+from src.models.HubertEmotionExtractor import load_hubert_emotion_model
 
 class HubertEmotionClassifier(nn.Module):
     def __init__(self, num_classes=7):
@@ -10,7 +10,7 @@ class HubertEmotionClassifier(nn.Module):
         """
         super().__init__()
         
-        self.processor, self.hubert = load_hubert_model(freeze=True)
+        self.processor, self.hubert = load_hubert_emotion_model(freeze=True)
         
         self.hidden_size = 1024 
         

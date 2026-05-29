@@ -49,6 +49,13 @@ class VerboEmotionDataset(Dataset):
         
         label = self.emotion_map.get(prefix, 3) 
         
-        inputs = self.processor(speech, sampling_rate=16000, return_tensors="pt")
-        
+        inputs = self.processor(
+        speech, 
+        sampling_rate=16000, 
+        padding="max_length", 
+        max_length=64000,  #4 seg de áudio
+        truncation=True, 
+        return_tensors="pt"
+        )
+
         return inputs.input_values.squeeze(0), label
