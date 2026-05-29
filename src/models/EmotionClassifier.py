@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from src.models.HuBERT import load_hubert_model
+from src.models.Hubert import load_hubert_model
 
 class HubertEmotionClassifier(nn.Module):
     def __init__(self, num_classes=7):
