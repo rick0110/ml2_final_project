@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--min-duration", type=float, default=1.0)
     p.add_argument("--max-duration", type=float, default=15.0)
     p.add_argument("--plot-samples", type=int, default=5, help="Number of mel images to save for validation (0 disables)")
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--seed", type=int, default=42)''
     p.add_argument("--overwrite", action="store_true")
     return p.parse_args()
 
