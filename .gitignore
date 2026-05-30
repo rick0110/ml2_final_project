@@ -1,3 +1,7 @@
+# pasta com os modelos salvos
+checkpoints/
+*.pth
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -12,7 +12,7 @@ class HubertEmotionClassifier(nn.Module):
         
         self.processor, self.hubert = load_hubert_emotion_model(freeze=True)
         
-        self.hidden_size = 1024 
+        self.hidden_size = 768 
         
         self.classifier = nn.Sequential(
             nn.Linear(self.hidden_size, 256),
