@@ -2,6 +2,7 @@ import os
 import glob
 import torchaudio
 from torch.utils.data import Dataset
+import torch
 
 class VerboEmotionDataset(Dataset):
     def __init__(self, verbo_audios_dir, processor):
@@ -41,8 +42,10 @@ class VerboEmotionDataset(Dataset):
         if sample_rate != 16000:
             resampler = torchaudio.transforms.Resample(sample_rate, 16000)
             waveform = resampler(waveform)
-            
-        
+
+        # (Audio Mono / Estéreo) - HuBERT espera mono, então se for estéreo, convertemos para mono
+        waveform = torch.mean(waveform, dim=0, keepdim=True)
+
         speech = waveform.squeeze(0).numpy()
         
         prefix = file_name.split('-')[0].lower()[:3] 
@@ -59,3 +62,4 @@ class VerboEmotionDataset(Dataset):
         )
 
         return inputs.input_values.squeeze(0), label
+    

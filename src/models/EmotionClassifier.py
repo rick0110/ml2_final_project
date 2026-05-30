@@ -30,5 +30,4 @@ class HubertEmotionClassifier(nn.Module):
         pooled_output = torch.mean(last_hidden_state, dim=1)
         
         logits = self.classifier(pooled_output)
-        
-        return logits
+        return logits   
