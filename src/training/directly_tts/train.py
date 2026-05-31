@@ -27,11 +27,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "data" / "last-model"))
 
 from models.DirectTTS import get_model_size_info, load_direct_tts_model
-from training.directly_tts.data import create_dataloaders
 from training.directly_tts.losses import DirectTTSLoss
 from training.directly_tts.tokenizer import BatchTextTokenizer
+from last_model_data import create_dataloaders
 
 
 class MetricsTracker:

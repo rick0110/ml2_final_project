@@ -22,12 +22,13 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "data" / "last-model"))
 
 from models.CrossAttentionTTS import load_cross_attention_tts_model, get_model_size_info
-from training.train_try_2.data import create_dataloaders
 from training.train_try_2.losses import CombinedTTSLoss
 from training.train_try_2.tokenizer import BatchTextTokenizer
 from training.train_try_2.train_latent_tranfer import MelFrontendTransfer
+from last_model_data import create_dataloaders
 
 
 class MetricsTracker:

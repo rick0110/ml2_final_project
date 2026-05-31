@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Download and extract the LibriSpeech English dataset.
+
+Usage:
+  python3 scripts/download_datasets/libriSpeech-en
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import sys
+import tarfile
+import tempfile
+import urllib.request
+
+
+DATASET_URL = "https://openslr.trmal.net/resources/12/train-other-500.tar.gz"
+
+
+def project_root() -> str:
+	return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def target_dir() -> str:
+	return os.path.join(project_root(), "data", "raw", "libriSpeech-en")
+
+
+def download_to_temp(url: str) -> str:
+	tmp = tempfile.NamedTemporaryFile(prefix="libriSpeech-en_", suffix=".tar.gz", delete=False)
+	tmp_name = tmp.name
+	tmp.close()
+	try:
+		with urllib.request.urlopen(url) as response, open(tmp_name, "wb") as output:
+			shutil.copyfileobj(response, output)
+	except Exception:
+		if os.path.exists(tmp_name):
+			os.remove(tmp_name)
+		raise
+	return tmp_name
+
+
+def extract_tar_gz(archive_path: str, destination: str) -> None:
+	with tarfile.open(archive_path, "r:gz") as archive:
+		archive.extractall(path=destination)
+
+
+def main() -> int:
+	destination = target_dir()
+	os.makedirs(destination, exist_ok=True)
+
+	print(f"Downloading {DATASET_URL}...")
+	try:
+		archive_path = download_to_temp(DATASET_URL)
+	except Exception as exc:
+		print(f"Error while downloading: {exc}", file=sys.stderr)
+		return 2
+
+	try:
+		print(f"Extracting archive to {destination}...")
+		extract_tar_gz(archive_path, destination)
+	except Exception as exc:
+		print(f"Error while extracting: {exc}", file=sys.stderr)
+		return 3
+	finally:
+		if os.path.exists(archive_path):
+			os.remove(archive_path)
+
+	print(f"Done: data available at {destination}")
+	return 0
+
+
+if __name__ == "__main__":
+	sys.exit(main())

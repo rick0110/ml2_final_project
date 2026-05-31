@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
 
-"""Preprocess LibriSpeech raw data into mel-spectrogram tensors.
+"""Preprocess LibriSpeech EN raw data into mel-spectrogram tensors.
 
 What this script does:
-- Scans a LibriSpeech raw root for transcript files and matching audio
+- Scans the LibriSpeech raw root for transcript files and matching audio
 - Reads utterance text from `*.trans.txt`
 - Loads audio, converts to mono, and resamples to 22050 Hz
 - Computes 80-band mel-spectrograms (log-scaled)
 - Filters examples by duration
 - Saves per-utterance `.pt` tensors and a manifest CSV
-- Provides a `MelDataset` and `collate_fn` for PyTorch DataLoader use
 - Optionally plots a few mel spectrograms for validation
 
 Expected LibriSpeech layout:
-	<input-dir>/<split>/<speaker>/<chapter>/<utt-id>.flac
-	<input-dir>/<split>/<speaker>/<chapter>/<speaker>-<chapter>.trans.txt
+	<input-dir>/LibriSpeech/<split>/<speaker>/<chapter>/<utt-id>.flac
+	<input-dir>/LibriSpeech/<split>/<speaker>/<chapter>/<speaker>-<chapter>.trans.txt
+
+The script also accepts an input directory that already points to the
+`LibriSpeech/` folder.
 
 Example:
-	python scripts/preprocess/preprocess_libriSpeech-pt.py \
-		--input-dir data/raw/LibriSpeech \
-		--out-dir data/processed/LibriSpeech/mels \
+	python scripts/preprocess/preprocess_libri-Speech-en.py \
+		--input-dir data/raw/libriSpeech-en \
+		--out-dir data/processed/libriSpeech-en/mels \
 		--plot-samples 8
 """
 
@@ -29,16 +31,14 @@ import argparse
 import csv
 import os
 from concurrent.futures import ProcessPoolExecutor
-from logging import warning
-import random
 from dataclasses import dataclass
+from logging import warning
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import re
+import random
 
 import torch
 import torchaudio
-from torch.nn.utils.rnn import pad_sequence
 
 import tqdm
 
@@ -64,9 +64,9 @@ class Example:
 
 
 def parse_args() -> argparse.Namespace:
-	parser = argparse.ArgumentParser(description="Prepare 80-band mel spectrograms and dataset for LibriSpeech")
-	parser.add_argument("--input-dir", type=Path, default=Path("data/raw/LibriSpeech"))
-	parser.add_argument("--out-dir", type=Path, default=Path("data/processed/LibriSpeech/mels"))
+	parser = argparse.ArgumentParser(description="Prepare 80-band mel spectrograms and dataset for LibriSpeech EN")
+	parser.add_argument("--input-dir", type=Path, default=Path("data/raw/libriSpeech-en"))
+	parser.add_argument("--out-dir", type=Path, default=Path("data/processed/libriSpeech-en/mels"))
 	parser.add_argument("--num-workers", type=int, default=max(1, (os.cpu_count() or 1) - 1), help="Number of worker processes for preprocessing (1 disables multiprocessing)")
 	parser.add_argument("--target-sr", type=int, default=22050)
 	parser.add_argument("--n-mels", type=int, default=80)
@@ -79,6 +79,15 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--seed", type=int, default=42)
 	parser.add_argument("--overwrite", action="store_true")
 	return parser.parse_args()
+
+
+def resolve_input_root(input_dir: Path) -> Path:
+	if input_dir.name == "LibriSpeech" and input_dir.exists():
+		return input_dir
+	candidate = input_dir / "LibriSpeech"
+	if candidate.exists():
+		return candidate
+	return input_dir
 
 
 def make_mel_transform(sr: int, n_fft: int, hop_length: int, win_length: int, n_mels: int) -> torch.nn.Module:
@@ -95,51 +104,45 @@ def make_mel_transform(sr: int, n_fft: int, hop_length: int, win_length: int, n_
 
 
 def find_audio_file(transcript_path: Path, utt_id: str) -> Optional[Path]:
-	candidate_stems = [
-		transcript_path.parent / f"{utt_id}.wav"
-	]
-	for candidate in candidate_stems:
+	for extension in (".flac", ".wav"):
+		candidate = transcript_path.parent / f"{utt_id}{extension}"
 		if candidate.exists():
 			return candidate
 
-	warning(f"Audio file not found for {utt_id} in {transcript_path.parent}")	
+	warning(f"Audio file not found for {utt_id} in {transcript_path.parent}")
 	return None
 
 
 def discover_examples(input_root: Path) -> List[Example]:
 	examples: List[Example] = []
-	transcript_file = (input_root ).glob("trans*")
-	for trans in transcript_file: 
-		transcript_file = trans
-	
+	transcript_files = sorted(input_root.rglob("*.trans.txt"))
 
-	with transcript_file.open("r", encoding="utf-8") as fh:
-		for line in fh:
-			if not line:
-				continue
-			line = line.strip()
-			match = re.match(r"^(\S+)\s+(.*)$", line)
-			utt_id = match.group(1).strip() if match else None
-			text = match.group(2).strip() if match else None
-			
-			if not utt_id or not text:
-				continue
-			split_utt_id = utt_id.split("_")
-			audio_file_root = input_root / "audio" / "/".join(split_utt_id[:-1])
-			audio_file = audio_file_root / f"{'_'.join(split_utt_id)}.wav"
+	for transcript_file in transcript_files:
+		with transcript_file.open("r", encoding="utf-8") as fh:
+			for line in fh:
+				line = line.strip()
+				if not line:
+					continue
 
-			if audio_file is None:
-				continue
-			examples.append(
-				Example(
-					audio_path=str(audio_file.relative_to(input_root)),
-					text=text.strip(),
-					duration=0.0,
-					utt_id=utt_id,
+				parts = line.split(maxsplit=1)
+				if len(parts) != 2:
+					continue
+
+				utt_id, text = parts[0].strip(), parts[1].strip()
+				audio_file = find_audio_file(transcript_file, utt_id)
+				if audio_file is None:
+					continue
+
+				examples.append(
+					Example(
+						audio_path=str(audio_file.relative_to(input_root)),
+						text=text,
+						duration=0.0,
+						utt_id=utt_id,
+					)
 				)
-			)
-	print(f"Discovered {len(examples)} examples from {transcript_file}")
 
+	print(f"Discovered {len(examples)} examples from {input_root}")
 	return examples
 
 
@@ -261,7 +264,7 @@ def main() -> None:
 	args = parse_args()
 	random.seed(args.seed)
 
-	input_root = args.input_dir
+	input_root = resolve_input_root(args.input_dir)
 	if not input_root.exists():
 		raise FileNotFoundError(f"Input directory does not exist: {input_root}")
 
@@ -278,7 +281,7 @@ def main() -> None:
 			if res is None:
 				warning(f"Failed to process example {ex.utt_id}; skipping")
 				continue
-			
+
 			if res["duration"] < args.min_duration or res["duration"] > args.max_duration:
 				warning(f"Example {ex.utt_id} duration {res['duration']:.2f}s out of bounds; skipping")
 				continue
