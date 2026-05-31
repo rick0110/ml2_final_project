@@ -87,6 +87,7 @@ class E2EFlowModel(nn.Module):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
         target_mel: torch.Tensor,
+        generate_audio: bool = True,
     ) -> Dict[str, torch.Tensor]:
         if target_mel.dim() != 3:
             raise ValueError(f"target_mel must be 3D (batch, n_mels, time), got {tuple(target_mel.shape)}")
@@ -100,7 +101,11 @@ class E2EFlowModel(nn.Module):
         cond = aligned_text + style_cond
 
         z_prior, log_det = self.flow(z_post, cond)
-        generated_audio = self.vocoder(z_post)
+        if generate_audio:
+            with torch.no_grad():
+                generated_audio = self.vocoder(z_post)
+        else:
+            generated_audio = torch.empty(0, device=z_post.device)
 
         return {
             "text_states": text_states,
@@ -130,6 +135,14 @@ class E2EFlowModel(nn.Module):
 
     def get_trainable_parameters(self) -> Tuple[nn.Parameter, ...]:
         return tuple(param for param in self.parameters() if param.requires_grad)
+
+    def initialize_identity(self) -> None:
+        """
+        Initialize only the normalizing flow close to identity so the
+        posterior encoder can keep its standard initialization and learn
+        meaningful latent representations.
+        """
+        self.flow.initialize_identity()
 
 
 def build_discriminators() -> HiFiGanDiscriminators:
