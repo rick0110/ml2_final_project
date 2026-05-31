@@ -111,6 +111,7 @@ def discover_examples(input_root: Path) -> List[Example]:
 	transcript_file = (input_root ).glob("trans*")
 	for trans in transcript_file: 
 		transcript_file = trans
+	
 
 	with transcript_file.open("r", encoding="utf-8") as fh:
 		for line in fh:

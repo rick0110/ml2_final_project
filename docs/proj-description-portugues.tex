@@ -1,0 +1,706 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[portuguese]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc, backgrounds}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  citecolor=blue!50!black,
+  pdftitle={Descrição Técnica do Projeto Final de ML2},
+  pdfauthor={GitHub Copilot}
+}
+
+\definecolor{codebg}{RGB}{247,247,247}
+\definecolor{codeframe}{RGB}{220,220,220}
+
+\lstdefinestyle{projectstyle}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=2
+}
+
+\lstset{style=projectstyle}
+
+\newcommand{\pathtt}[1]{\texttt{#1}}
+
+\title{Descrição Técnica da Arquitetura do Projeto, Pipeline de Dados e Fluxo de Treinamento}
+\author{ml2\_final\_project}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Este documento explica o projeto no nível que um novo leitor precisa inicialmente: como o repositório é organizado, como os dados transitam dos corpora brutos para os tensores processados, como o código de treinamento é dividido em módulos reutilizáveis e como as pastas de experimentos são produzidas.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Visão Geral do Repositório}
+
+O repositório é dividido em algumas responsabilidades claras: armazenamento de dados brutos, pré-processamento, código reutilizável, saídas de experimentos e documentação.
+
+\subsection{Árvore de Diretórios de Alto Nível}
+
+\begin{lstlisting}
+ml2_final_project/
+|-- data/
+|   |-- raw/
+|   |   |-- libriSpeech-pt/
+|   |   `-- tts-portuguese-Corpora/
+|   |-- processed/
+|   |   |-- libriSpeech-pt/
+|   |   |   |-- train/
+|   |   |   |   `-- librispeech_mels_metadata.csv
+|   |   |   `-- test/
+|   |   |       `-- librispeech_mels_metadata.csv
+|   |   `-- tts_portuguese/
+|   |       `-- mels_metadata.csv
+|   |-- interim/
+|   `-- external/
+|-- scripts/
+|   |-- download_datasets/
+|   `-- preprocess/
+|       |-- preprocess_libriSpeech-pt.py
+|       `-- preprocess_mels_tts_portuguese.py
+|-- src/
+|   |-- data/
+|   |   `-- first_step_data_loaders/
+|   |       `-- datasets.py
+|   |-- models/
+|   |   `-- AcousticDecoder.py
+|   |   `-- GST.py
+|   |   `-- TextEncoder.py
+|   |   `-- HiFi-GAN.py
+|   `-- training/
+|       `-- train_first_step/
+|           |-- train.py
+|           |-- model_loader.py
+|           |-- losses.py
+|           |-- train_utils.py
+|           |-- text_processing.py
+|           |-- configs.py
+|           |-- run_training.py
+|           `-- checkpoint_utils.py
+|-- experiments/
+|   `-- step_1/
+|       `-- attempt_<timestamp>/
+`-- docs/
+\end{lstlisting}
+
+\subsection{O Que Cada Pasta Principal Significa}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.23\textwidth} >{\raggedright\arraybackslash}p{0.71\textwidth}}
+\toprule
+\textbf{Pasta} & \textbf{Papel no projeto} \\
+\midrule
+\pathtt{data/raw} & Corpora originais exatamente como baixados. Nada aqui deve depender de uma versão de modelo ou de uma receita de extração de características. \\
+\pathtt{data/processed} & Artefatos processados, como arquivos \pathtt{.pt} e manifestos CSV de metadados usados pela camada de dataset. \\
+\pathtt{data/interim} & Saídas intermediárias temporárias ou arquivos de rascunho que não pertencem ao dataset processado final. \\
+\pathtt{scripts/preprocess} & Scripts de pré-processamento reprodutíveis que convertem áudio bruto em amostras de treinamento filtradas, normalizadas e indexadas. \\
+\pathtt{src/data} & Wrappers de dataset e auxiliares de batching que transformam manifestos em objetos PyTorch. \\
+\pathtt{src/models} & Componentes de redes neurais reutilizáveis. O texto de arquitetura neste documento não depende desses arquivos como sua fonte da verdade. \\
+\pathtt{src/training} & Orquestração de treinamento, funções de perda (losses), predefinições de configuração, salvamento de checkpoints e utilitários de experimentos. \\
+\pathtt{experiments} & Saídas de experimentos nomeadas ou com timestamp. Cada execução mantém sua configuração, checkpoints, logs e dados do TensorBoard juntos. \\
+\pathtt{docs} & Descrições técnicas, relatórios e os códigos-fonte em LaTeX para a documentação do projeto. \\
+\bottomrule
+\end{longtable}
+
+\section{Fluxo de Dados de Ponta a Ponta}
+
+O projeto segue um ciclo de vida simples:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Download dos corpora brutos para \pathtt{data/raw}.
+  \item Pré-processamento de áudio e transcrições em tensores padronizados.
+  \item Salvamento de artefatos por locução e manifestos de metadados em \pathtt{data/processed}.
+  \item Carregamento dos manifestos processados com as classes de dataset em \pathtt{src/data}.
+  \item Construção do experimento de treinamento a partir dos módulos em \pathtt{src/training}.
+  \item Salvamento de checkpoints, logs e gráficos em \pathtt{experiments/step\_1}.
+\end{enumerate}
+
+\subsection{Diagrama do Pipeline de Dados}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=0.95cm and 1.15cm,
+  block/.style={draw, rounded corners, thick, align=center, minimum height=0.95cm, text width=3.5cm, fill=orange!8},
+  arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+\node[block] (raw) {Corpora brutos\\\pathtt{data/raw/...}};
+\node[block, right=of raw] (discover) {Descobrir transcrições\\e áudio correspondente};
+\node[block, right=of discover] (normalize) {Converter para mono\\e reamostrar áudio};
+\node[block, below=of normalize] (extract) {Extrair onda, mel,\\duração, transcrição};
+\node[block, left=of extract] (filter) {Filtrar por regras de qual.\\e limites de duração};
+\node[block, left=of filter] (save) {Salvar arquivo \pathtt{.pt}\\+ CSV manifesto};
+\node[block, below=of save] (load) {Loader do dataset lê\\os manifestos proc.};
+
+\draw[arrow] (raw) -- (discover);
+\draw[arrow] (discover) -- (normalize);
+\draw[arrow] (normalize) -- (extract);
+\draw[arrow] (extract) -- (filter);
+\draw[arrow] (filter) -- (save);
+\draw[arrow] (save) -- (load);
+\end{tikzpicture}
+\end{center}
+
+\section{Como os Dados Devem Ser Organizados}
+
+O projeto trata os dados brutos e os dados processados como dois produtos diferentes. Dados brutos são a fonte da verdade; dados processados são um cache de treinamento reutilizável.
+
+\subsection{Layout dos Dados Brutos}
+
+Coloque cada corpus em seu próprio diretório em \pathtt{data/raw}. Um layout prático é:
+
+\begin{lstlisting}
+data/raw/
+|-- libriSpeech-pt/
+|   `-- mls_portuguese_opus/
+|       |-- train/
+|       |-- dev/
+|       `-- test/
+`-- tts-portuguese-Corpora/
+    `-- TTS-Portuguese-Corpus/
+        |-- audio/
+        |-- text/
+        `-- metadata/
+\end{lstlisting}
+
+Os nomes exatos das pastas aninhadas podem diferir dependendo de como o corpus foi baixado, mas a regra é a mesma: o conteúdo bruto permanece agrupado por dataset e não é sobrescrito pelo pré-processamento.
+
+\subsection{Layout dos Dados Processados}
+
+A área de processados deve espelhar a identidade do dataset e a divisão que foi usada durante o pré-processamento. O projeto atual espera estas saídas principais:
+
+\begin{lstlisting}
+data/processed/
+|-- libriSpeech-pt/
+|   |-- train/
+|   |   |-- <utt_id>.pt
+|   |   `-- librispeech_mels_metadata.csv
+|   `-- test/
+|       |-- <utt_id>.pt
+|       `-- librispeech_mels_metadata.csv
+`-- tts_portuguese/
+    |-- <utt_id>.pt
+    `-- mels_metadata.csv
+\end{lstlisting}
+
+As classes de dataset em \pathtt{src/data/first\_step\_data\_loaders/datasets.py} usam esses manifestos diretamente. Uma linha de exemplo no CSV seria assim:
+
+\begin{lstlisting}[language=]
+utt_id,text,duration,mel_path,audio_path
+pt_000123,ola mundo,2.83,data/processed/libriSpeech-pt/train/pt_000123.pt,data/raw/libriSpeech-pt/.../pt_000123.flac
+\end{lstlisting}
+
+\subsection{O Que Entra em um Arquivo \pathtt{.pt}}
+
+Cada amostra serializada deve manter tudo o que é necessário para treinar ou inspecionar o exemplo mais tarde:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \pathtt{waveform}: o tensor da forma de onda mono reamostrada.
+  \item \pathtt{mel}: o tensor do espectrograma log-mel, com 80 bins mel.
+  \item \pathtt{sr}: a taxa de amostragem usada pelo pré-processamento, geralmente 22050 Hz.
+  \item \pathtt{duration}: a duração da locução em segundos.
+  \item \pathtt{text}: o texto da transcrição após a normalização.
+  \item \pathtt{utt\_id}: o identificador único da locução.
+  \item \pathtt{audio\_path}: o caminho original do áudio relativo à raiz do corpus, quando disponível.
+\end{itemize}
+
+\subsection{Parâmetros de Extração de Características}
+
+A receita de pré-processamento é fixa para que cada amostra seja compatível com o formato de entrada do modelo:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Taxa de amostragem: 22050 Hz.
+  \item Bins mel: 80.
+  \item Tamanho da FFT: 1024.
+  \item Tamanho da janela (Window length): 1024.
+  \item Tamanho do salto (Hop length): 256.
+  \item Faixa de frequência mel: 0 Hz a 8000 Hz.
+\end{itemize}
+
+\subsection{Regras de Filtragem e Justificativa}
+
+Um pipeline prático de pré-processamento deve rejeitar exemplos muito curtos, muito longos ou malformados. Neste projeto, o conjunto de regras pretendido é:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Duração mínima: 1.0 segundo.
+  \item Duração máxima: 20.0 segundos.
+  \item Apenas forma de onda mono.
+  \item Reamostrado para a taxa de amostragem alvo.
+  \item A transcrição e o áudio devem estar alinhados e não vazios.
+\end{itemize}
+
+Esses limites mantêm o preenchimento (padding) sob controle, reduzem os picos de memória e tornam os formatos dos lotes (batches) mais previsíveis.
+
+\section{Pré-processamento Passo a Passo}
+
+Os scripts de pré-processamento em \pathtt{scripts/preprocess} são responsáveis por construir os manifestos usados pelo treinamento.
+
+\subsection{Fluxo de Trabalho Típico}
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Ler a raiz do corpus bruto.
+  \item Encontrar os arquivos de transcrição e enumerar as locuções.
+  \item Corresponder cada linha de transcrição ao seu arquivo de áudio correspondente.
+  \item Carregar o áudio com \pathtt{torchaudio}.
+  \item Converter o áudio multicanal para mono, se necessário.
+  \item Reamostrar para 22050 Hz.
+  \item Computar o espectrograma mel com a configuração STFT fixa.
+  \item Computar a duração e aplicar o filtro de duração.
+  \item Salvar os tensores em um arquivo \pathtt{.pt} por locução.
+  \item Escrever o manifesto de metadados em formato CSV.
+  \item Opcionalmente, gerar gráficos ou verificações de sanidade para um subconjunto de amostras.
+\end{enumerate}
+
+\subsection{Exemplo de Comando de Pré-processamento}
+
+\begin{lstlisting}[language=bash]
+python scripts/preprocess/preprocess_libriSpeech-pt.py \
+  --input-dir data/raw/libriSpeech-pt/mls_portuguese_opus \
+  --out-dir data/processed/libriSpeech-pt/train \
+  --target-sr 22050 \
+  --n-mels 80 \
+  --n-fft 1024 \
+  --hop-length 256 \
+  --win-length 1024 \
+  --min-duration 1.0 \
+  --max-duration 10.0
+\end{lstlisting}
+
+\subsection{Por Que Esta Etapa Importa}
+
+Esta etapa é onde o projeto se torna reprodutível. Se o pré-processamento for determinístico e documentado, o mesmo corpus bruto sempre produzirá os mesmos artefatos processados, e as execuções de treinamento posteriores poderão ser comparadas de forma justa.
+
+\section{Carregamento de Dataset e Batching}
+
+O módulo \pathtt{src/data/first\_step\_data\_loaders/datasets.py} transforma os manifestos processados em datasets do PyTorch.
+
+\subsection{Classes de Dataset}
+
+O design atual usa três blocos de construção úteis:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \pathtt{LibriSpeechPTDataset}: carrega uma divisão do LibriSpeech-PT, tipicamente \pathtt{train} ou \pathtt{test}.
+  \item \pathtt{TTSPortugueseDataset}: carrega o manifesto processado do TTS Portuguese.
+  \item \pathtt{CombinedFirstStepDataset}: concatena múltiplos datasets em um único conjunto de treinamento.
+\end{itemize}
+
+\subsection{Mistura de Treinamento Padrão}
+
+A memória do repositório e os auxiliares de dataset concordam com a composição padrão: LibriSpeech-PT train, LibriSpeech-PT test e TTS Portuguese são combinados para o treinamento da primeira etapa. Isso significa que o código de treinamento pode tratar as três fontes como um único pool de exemplos processados.
+
+\subsection{O Que Cada Amostra Retorna}
+
+Cada item do dataset retorna um dicionário com as informações centrais necessárias pelo loop de treinamento:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \pathtt{mel}
+  \item \pathtt{waveform}
+  \item \pathtt{sr}
+  \item \pathtt{duration}
+  \item \pathtt{text}
+  \item \pathtt{utt\_id}
+  \item \pathtt{mel\_path}
+  \item \pathtt{audio\_path}
+  \item \pathtt{source}
+\end{itemize}
+
+\subsection{Estratégia de Batching}
+
+Espectrogramas mel e formas de onda têm comprimentos variáveis, portanto a função \textit{collate} faz o preenchimento (padding) ao longo do eixo do tempo até a amostra mais longa do lote. O lote também mantém metadados como a string de texto, ID da locução, duração e o nome do corpus de origem.
+
+Isso é importante por dois motivos:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Redes neurais esperam tensores com dimensões de lote consistentes.
+  \item Metadados são necessários para depuração e para análises posteriores do experimento.
+\end{enumerate}
+
+\section{Arquitetura do Sistema: Estrutura de Treino}
+
+A fase de treinamento é projetada como uma arquitetura de caminho duplo que processa características textuais e acústicas. A rede mapeia o áudio em espectrograma mel e o texto correspondente através de mecanismos de atenção cruzada (cross-attention), enquanto simultaneamente extrai características estilísticas via um módulo compartilhado de Token de Estilo Global (GST).
+
+\begin{center}
+\begin{tikzpicture}[scale=0.8, transform shape,
+  node distance=0.8cm and 1.2cm,
+  block/.style={draw, rectangle, thick, minimum height=0.8cm, minimum width=1.5cm, align=center},
+  largeblock/.style={draw, rectangle, thick, minimum height=1.2cm, minimum width=2.5cm, align=center, text width=2.5cm},
+  arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+
+% Middle branch (GST)
+\node[largeblock, draw=purple] (gst) {GST};
+
+% Top branch
+\node[block] (mel_top) at (-1.5, 4.5) {Áudio-Mel};
+\node[block] (text_top) at (1.5, 4.5) {texto};
+\node[block] (cross_small_top) at (0, 3.25) {Atenção\\cruzada};
+\draw[arrow] (mel_top) |- (cross_small_top);
+\draw[arrow] (text_top) |- (cross_small_top);
+
+\node[largeblock, draw=purple] (cross_large_top) at (4.5, 2.5) {Atenção\\cruzada};
+\draw[arrow] (cross_small_top) |- (cross_large_top);
+\draw[arrow, purple] (gst) -- (cross_large_top);
+
+\node[largeblock, draw=purple, right=1.5cm of cross_large_top] (latent_top) {transferência\\latente};
+\draw[arrow, purple] (cross_large_top) -- node[above, font=\footnotesize, text=blue, text width=4.5cm, align=center, yshift=0.2cm] {com o atual\\pipeline de dados, a perda L1\textsubscript{Reconstrução}\\será calculada a partir deste mel} node[pos=0.5, font=\Large, text=blue] {*} (latent_top);
+
+\node[block, draw=purple, right=1cm of latent_top] (mel_out_top) {Áudio-Mel.};
+\draw[arrow, purple] (latent_top) -- (mel_out_top);
+
+% Bottom branch
+\node[block] (mel_bot) at (-1.5, -4.5) {Áudio-Mel};
+\node[block] (text_bot) at (1.5, -4.5) {texto};
+\node[block] (cross_small_bot) at (0, -3.25) {Atenção\\cruzada};
+\draw[arrow] (mel_bot) |- (cross_small_bot);
+\draw[arrow] (text_bot) |- (cross_small_bot);
+
+\node[largeblock, draw=purple] (cross_large_bot) at (4.5, -2.5) {Atenção\\cruzada};
+\draw[arrow] (cross_small_bot) |- (cross_large_bot);
+\draw[arrow, purple] (gst) -- (cross_large_bot);
+
+\node[largeblock, draw=purple, right=1.5cm of cross_large_bot] (latent_bot) {transferência\\latente};
+\draw[arrow, purple] (cross_large_bot) -- node[below, font=\footnotesize, text=blue, text width=4.5cm, align=center, yshift=-0.2cm] {com o atual\\pipeline de dados, a perda L1\textsubscript{Reconstrução}\\será calculada a partir deste mel} node[pos=0.5, font=\Large, text=blue] {*} (latent_bot);
+
+\node[block, draw=purple, right=1cm of latent_bot] (mel_out_bot) {Áudio-Mel.};
+\draw[arrow, purple] (latent_bot) -- (mel_out_bot);
+
+% Bracket for Style Token annotation
+\draw[thick] (gst.east) ++(0.1, 1.2) edge[bend left=30] node[right=0.2cm, align=left, text width=3cm] {$\rightarrow$ o mesmo\\token de estilo} ++(0, -2.4);
+
+\end{tikzpicture}
+\end{center}
+
+\subsection{Diagrama do Pipeline}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=1.5cm,
+  block/.style={draw, rectangle, thick, minimum height=1cm, minimum width=2cm, align=center},
+  trapezoid/.style={draw, isosceles triangle, thick, isosceles triangle apex angle=60, shape border rotate=0, minimum height=1.5cm, align=center},
+  arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+\node[block] (mel) {áudio-mel};
+\node[trapezoid, right=of mel] (hifi) {Hifi-\\Gan};
+\node[right=0.5cm of hifi] (audio) {áudio.};
+
+\draw[arrow] (mel) -- (hifi);
+\draw[arrow] (hifi) -- (audio);
+\end{tikzpicture}
+\end{center}
+
+Durante o treinamento, o módulo central \pathtt{GST} processa o áudio-mel para emitir "o mesmo token de estilo", que é injetado em ambos os grandes módulos superiores e inferiores de \pathtt{Atenção cruzada}. As saídas passam por um módulo de \pathtt{transferência latente} antes de gerar o \pathtt{Áudio-Mel} predito. Note que, com o pipeline de dados atual, a perda de Reconstrução L1 será calculada explicitamente a partir do mel extraído na junção marcada ($*$) antes da transferência latente.
+
+\subsection{Diagrama do Vocoder}
+Para converter os espectrogramas mel de volta em áudio de forma de onda, um vocoder HiFi-GAN é utilizado:
+
+\vspace{0.5cm}
+\begin{center}
+\begin{tikzpicture}[
+  node distance=1.5cm,
+  block/.style={draw, rectangle, thick, minimum height=1cm, minimum width=2cm, align=center},
+  trapezoid/.style={draw, isosceles triangle, thick, isosceles triangle apex angle=60, shape border rotate=0, minimum height=1.5cm, align=center},
+  arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+\node[block] (mel) {áudio-mel};
+\node[trapezoid, right=of mel] (hifi) {Hifi-\\Gan};
+\node[right=0.5cm of hifi] (audio) {áudio.};
+
+\draw[arrow] (mel) -- (hifi);
+\draw[arrow] (hifi) -- (audio);
+\end{tikzpicture}
+\end{center}
+
+\section{Funções de Perda (Loss)}
+
+O objetivo de perda combina múltiplos critérios ponderados para governar a qualidade perceptiva, a precisão da reconstrução em ambos os idiomas, a diversidade estilística e a consistência emocional. A fórmula completa é definida estritamente como:
+
+\[
+\begin{aligned}
+\text{Loss} = \;& \color{orange}w_1 \color{black}\text{Loss}_{\text{perceptual}}(\cdot) \\
+& + \color{orange}w_2 \color{black} L1_{\text{Reconstrução}}(\text{Mel-inglês-predito}, \text{alvo}) \\
+& + \color{orange}w_2 \color{black} L1_{\text{Reconstrução}}(\text{Mel-Português-predito}, \text{alvo}) \\
+& + \color{orange}w_3 \color{black} L_{\text{diversidade-estilo}}(\text{todos-os-tokens-de-estilo}) \\
+& + \color{orange}w_4 \color{black} L_{\text{compatibilidade-emocional}}(\dots)
+\end{aligned}
+\]
+
+\textbf{Notas de Implementação:}
+\begin{itemize}
+    \item $\text{Loss}_{\text{perceptual}}$: Avaliada usando a rede de classificação de emoções.
+    \item $L_{\text{diversidade-estilo}}$: Calculada com base na similaridade de cosseno de todos os tokens de estilo.
+    \item $L_{\text{compatibilidade-emocional}}$: Atualmente indefinida, mas planejada para utilizar a rede de classificação para auxiliar na imposição da consistência emocional.
+    \item Note que ambas as perdas de reconstrução (Inglês e Português) compartilham o mesmo escalar de peso $w_2$ na formulação padrão.
+\end{itemize}
+
+\section{Fluxo de Inferência}
+
+A etapa de inferência descreve como um idioma traduzido (inglês) é sintetizado usando áudio de um idioma de origem (português). A rede processa o áudio Mel e o texto em dois idiomas, isolando as características em inglês traduzido para a saída.
+
+\textit{"Para inferência, pegaremos um áudio em português e emitiremos o em inglês. Nosso modelo é treinado para receber: áudio em português e em inglês. Portanto,"}
+
+\subsection{Diagrama da Arquitetura de Inferência}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=1.5cm and 2.0cm,
+  block/.style={draw, rectangle, thick, minimum height=1.2cm, minimum width=2.5cm, align=center, text width=3.2cm},
+  smallblock/.style={draw, rectangle, thick, minimum height=0.8cm, minimum width=1.5cm, align=center},
+  modelblock/.style={draw, rectangle, thick, draw=blue, text=blue, minimum height=1.2cm, minimum width=2cm, align=center},
+  trapezoid/.style={draw, isosceles triangle, thick, draw=blue, text=blue, isosceles triangle apex angle=60, shape border rotate=0, minimum height=1.5cm, align=center},
+  arrow/.style={-{Stealth[length=3mm]}, thick},
+  bluearrow/.style={-{Stealth[length=3mm]}, thick, blue}
+]
+
+\node[block] (translator) {Modelo para traduzir Mel para outro Idioma};
+
+\node[block, right=1.5cm of translator, yshift=2.5cm] (pt_mel) {Áudio Mel\\Português};
+\node[block, right=1.5cm of translator, yshift=-2.5cm] (en_mel) {Áudio Mel\\Inglês};
+
+\draw[arrow] (translator) |- (pt_mel);
+\draw[arrow] (translator) |- (en_mel);
+
+\node[smallblock, right=2cm of pt_mel] (text_pt) {texto};
+\node[smallblock, right=2cm of en_mel] (text_en) {texto};
+
+\draw[arrow] (pt_mel) -- (text_pt);
+\draw[arrow] (en_mel) -- (text_en);
+
+\node[modelblock, right=3.5cm of translator] (our_model) {Nosso Modelo};
+
+\draw[bluearrow] (pt_mel) -- (our_model);
+\draw[bluearrow] (en_mel) -- (our_model);
+\draw[bluearrow] (text_pt) -- (our_model);
+\draw[bluearrow] (text_en) -- (our_model);
+
+\node[modelblock, right=3cm of our_model] (latent) {transferência\\latente};
+\draw[bluearrow] (our_model) -- node[above, sloped, text=blue, align=center] {pegar apenas o\\inglês} node[pos=0.5, font=\footnotesize, text=blue, yshift=0.1cm] {*} (latent);
+
+\node[trapezoid, right=1cm of latent] (hifi) {Hifi\\Gan};
+\draw[bluearrow] (latent) -- (hifi);
+
+\node[right=0.5cm of hifi, text=blue] (audio) {áudio};
+\draw[bluearrow] (hifi) -- (audio);
+
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5cm}
+\noindent \textit{* Talvez como um próximo passo possamos construir o nosso próprio}
+
+\begingroup\sloppy
+Como observado, as características do \pathtt{Áudio Mel Português} e do \pathtt{Áudio Mel Inglês}, juntamente com seus textos associados, são alimentados em \pathtt{Nosso Modelo}.
+O modelo isola a representação em inglês por meio de uma etapa de filtragem ("pegar apenas o inglês") e envia o resultado para o bloco de \pathtt{transferência latente}.
+Essa saída latente é então sintetizada na forma de onda final \pathtt{áudio} pelo vocoder \pathtt{Hifi Gan}.
+\endgroup
+
+\section{Organização do Código de Treinamento em \pathtt{src}}
+
+O pipeline de treinamento é dividido em pequenos módulos para que cada responsabilidade tenha um lugar principal na base de código.
+
+\subsection{Mapa de Módulos}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{0.23\textwidth} >{\raggedright\arraybackslash}p{0.71\textwidth}}
+\toprule
+\textbf{Módulo} & \textbf{O que faz} \\
+\midrule
+\pathtt{train.py} & Ponto de entrada principal do treinamento. Faz o parser dos argumentos, constrói os datasets, instancia o modelo, executa o treinamento e validação, e escreve as saídas. \\
+\pathtt{model\_loader.py} & Cria o modelo TTS completo da primeira etapa a partir dos submódulos em \pathtt{src/models}. \\
+\pathtt{losses.py} & Implementa os termos de objetivo usados pelo treinamento. \\
+\pathtt{train\_utils.py} & Contém os loops de época, auxiliares de checkpoint, logs do TensorBoard e utilitários de validação. \\
+\pathtt{text\_processing.py} & Converte strings de transcrição em sequências de tokens. \\
+\pathtt{configs.py} & Armazena predefinições de treinamento nomeadas, como teste rápido, balanceado, produção e execuções leves. \\
+\pathtt{run\_training.py} & Lançador de conveniência que seleciona uma predefinição e repassa seus argumentos para \pathtt{train.py}. \\
+\path{checkpoint_utils.py} & Comandos utilitários para listar, comparar e inspecionar checkpoints salvos. \\
+\pathtt{test\_setup.py} & Script de verificação de sanidade para confirmar que o ambiente e o carregamento do modelo funcionam corretamente. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Por Que Esta Modularização Ajuda}
+
+Dividir o código dessa forma torna o projeto mais fácil de manter e mais fácil de revisar.
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Se um bug de pré-processamento aparecer, você só edita os scripts em \pathtt{scripts/preprocess}.
+  \item Se o plano do modelo mudar, você atualiza a descrição da arquitetura neste documento e o código de treinamento correspondente juntos.
+  \item Se a definição de perda (loss) mudar, você mexe em \pathtt{losses.py} sem reescrever o loop de treinamento.
+  \item Se você quer uma nova configuração de experimento, você adiciona uma predefinição em \pathtt{configs.py} em vez de duplicar um comando manualmente.
+\end{itemize}
+
+\subsection{Fluxo de Experimento Recomendado}
+
+A ordem prática para uma execução é:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Verificar o ambiente com o teste de configuração.
+  \item Pré-processar os corpora brutos em \pathtt{data/processed}.
+  \item Inspecionar uma ou duas linhas do manifesto e um ou dois arquivos \pathtt{.pt}.
+  \item Lançar uma pequena predefinição como \pathtt{quick\_test}.
+  \item Verificar o diretório do experimento e os logs do TensorBoard.
+  \item Aumentar a escala para \pathtt{balanced} (balanceado) ou \pathtt{production} (produção) depois que o pipeline estiver estável.
+\end{enumerate}
+
+\section{Como Rodar os Experimentos}
+
+Os experimentos são armazenados em \pathtt{experiments/step\_1}. Cada execução cria um diretório separado, geralmente nomeado com um timestamp ou um nome de experimento customizado.
+
+\subsection{Árvore de Diretórios de Experimentos}
+
+\begin{lstlisting}
+experiments/
+`-- step_1/
+    `-- attempt_YYYYMMDD_HHMMSS/
+        |-- config.json
+        |-- checkpoints/
+        |   |-- epoch_0001.pt
+        |   |-- epoch_0002.pt
+        |   `-- best.pt
+        |-- tensorboard/
+        `-- logs/
+\end{lstlisting}
+
+\subsection{O Que Cada Saída Significa}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \pathtt{config.json}: os hiperparâmetros exatos usados na execução.
+  \item \pathtt{checkpoints/}: estados de treinamento salvos que permitem retomar ou avaliar posteriormente.
+  \item \pathtt{tensorboard/}: arquivos de eventos para curvas de perda, métricas e logs qualitativos.
+  \item \pathtt{logs/}: logs de treinamento legíveis por humanos ou saída de texto auxiliar.
+\end{itemize}
+
+\subsection{Comandos de Exemplo}
+
+\begin{lstlisting}[language=bash]
+# Teste rapido de fumaca (smoke test)
+python src/training/train_first_step/run_training.py quick_test
+
+# Execucao padrao balanceada
+python src/training/train_first_step/run_training.py balanced
+
+# Treinamento personalizado completo
+python src/training/train_first_step/train.py \
+  --num-epochs 100 \
+  --batch-size 32 \
+  --learning-rate 1e-3 \
+  --weight-reconstruction 1.0 \
+  --weight-diversity 0.5 \
+  --acoustic-decoder-hidden-size 256 \
+  --acoustic-decoder-num-layers 3 \
+  --style-embedding-dim 128 \
+  --num-workers 4 \
+  --experiment-name cross_lingual_training
+\end{lstlisting}
+
+\subsection{Monitorando uma Execução}
+
+Você pode monitorar o treinamento com o TensorBoard:
+
+\begin{lstlisting}[language=bash]
+tensorboard --logdir experiments/step_1/<experiment_name>/tensorboard
+\end{lstlisting}
+
+Curvas úteis incluem perda total, perda de reconstrução, perda de diversidade, métricas de validação e quaisquer exemplos de áudio logados a partir do vocoder.
+
+\section{Guia Passo a Passo do Download ao Treinamento}
+
+Esta seção é o caminho mais curto de um corpus novo até uma execução de modelo reprodutível.
+
+\subsection{1. Baixe os datasets}
+
+Coloque os arquivos brutos em \pathtt{data/raw}. Não faça o pré-processamento antes que a árvore de downloads esteja completa.
+
+\subsection{2. Verifique a estrutura de pastas}
+
+Certifique-se de que o layout do corpus seja legível pelos scripts de pré-processamento. Se um dataset usar nomes de pastas diferentes, adapte o caminho de entrada antes de executar o script.
+
+\subsection{3. Execute o pré-processamento}
+
+Use os scripts em \pathtt{scripts/preprocess} para criar o dataset processado. O resultado deve ser um arquivo \pathtt{.pt} por locução, mais um CSV de manifesto.
+
+\subsection{4. Inspecione algumas saídas}
+
+Abra uma linha do manifesto e uma amostra salva para confirmar que o tensor mel, a forma de onda, a duração e a transcrição pareçam corretos.
+
+\subsection{5. Confirme que o loader do dataset consegue ler os manifestos}
+
+O módulo de dataset deve resolver com sucesso as entradas \pathtt{mel\_path} e retornar dicionários com chaves consistentes.
+
+\subsection{6. Comece com um experimento pequeno}
+
+Execute \pathtt{quick\_test} primeiro. Ele é projetado para uma rápida verificação de sanidade, não para qualidade final.
+
+\subsection{7. Aumente a escala}
+
+Depois que a execução pequena funcionar, mude para \pathtt{balanced} ou para um comando de treinamento personalizado.
+
+\subsection{8. Revise os artefatos do experimento}
+
+Verifique \pathtt{config.json}, o melhor checkpoint, as curvas do TensorBoard e quaisquer logs de áudio gerados.
+
+\section{Como Modularizar o Projeto de Forma Limpa}
+
+Se você deseja estender o projeto sem criar um script monolítico, mantenha cada responsabilidade na mesma camada à qual ela já pertence.
+
+\subsection{Adicionando um Novo Dataset}
+
+Adicione um novo script de pré-processamento em \pathtt{scripts/preprocess}, grave os arquivos processados em \path{data/processed/<novo_dataset>} e crie um wrapper de dataset correspondente em \path{src/data/first_step_data_loaders}.
+
+\subsection{Adicionando um Novo Componente de Modelo}
+
+Crie o módulo neural em \pathtt{src/models}, depois conecte-o na camada de implementação que usa a arquitetura conceitual descrita acima. Se o componente alterar o comportamento da perda, atualize \pathtt{losses.py} ao mesmo tempo.
+
+\subsection{Adicionando uma Nova Variante de Experimento}
+
+Coloque os hiperparâmetros em \pathtt{configs.py}. Isso mantém as invocações de linha de comando curtas e torna os experimentos fáceis de reproduzir.
+
+\subsection{Adicionando Melhor Depuração}
+
+Gere logs de exemplos, formatos (shapes) e checkpoints a partir de \pathtt{train\_utils.py}. Mantenha a saída de depuração próxima ao loop de treinamento, não espalhada por módulos não relacionados.
+
+\section{Exemplo Prático de Todo o Fluxo de Trabalho}
+
+Uma execução mínima completa pode ser assim:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Faça o download do LibriSpeech-PT e do TTS Portuguese para \pathtt{data/raw}.
+  \item Pré-processe ambos os corpora e grave os manifestos em \pathtt{data/processed}.
+  \item Inicie \pathtt{python src/training/train\_first\_step/run\_training.py quick\_test}.
+  \item Confirme se os checkpoints são criados em \pathtt{experiments/step\_1}.
+  \item Abra o TensorBoard e verifique se as perdas diminuem conforme o esperado.
+  \item Se tudo estiver estável, execute novamente com a predefinição \pathtt{balanced}.
+\end{enumerate}
+
+\section{Resumo}
+
+O projeto é organizado em torno de uma regra simples de engenharia: dados brutos ficam em \pathtt{data/raw}, artefatos processados ficam em \pathtt{data/processed}, código reutilizável vive em \pathtt{src} e saídas de experimentos vivem em \pathtt{experiments}. A arquitetura do modelo neste documento é orientada por diagramas, não orientada por código. Isso mantém a explicação alinhada com o design conceitual que o projeto está tentando comunicar.
+
+\end{document}

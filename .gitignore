@@ -221,3 +221,4 @@ __marimo__/
 /data/
 experiments/
 local_weight_models/
+/exports/

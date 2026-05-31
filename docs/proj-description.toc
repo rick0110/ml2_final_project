@@ -1,0 +1,53 @@
+\babel@toc {english}{}\relax 
+\contentsline {section}{\numberline {1}Proposal}{3}{section.1}%
+\contentsline {section}{\numberline {2}Repository Overview}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}High-Level Directory Tree}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}What Each Major Folder Means}{4}{subsection.2.2}%
+\contentsline {section}{\numberline {3}End-to-End Data Flow}{4}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Data Pipeline Diagram}{5}{subsection.3.1}%
+\contentsline {section}{\numberline {4}How Data Should Be Organized}{5}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Raw Data Layout}{5}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Processed Data Layout}{5}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}What Goes Into a \texttt {.pt} File}{6}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Feature Extraction Parameters}{6}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Filtering Rules and Rationale}{6}{subsection.4.5}%
+\contentsline {section}{\numberline {5}Preprocessing Step by Step}{7}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Typical Workflow}{7}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Example Preprocessing Command}{7}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Why This Stage Matters}{7}{subsection.5.3}%
+\contentsline {section}{\numberline {6}Dataset Loading and Batching}{8}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Dataset Classes}{8}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Default Training Mix}{8}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}What Each Sample Returns}{8}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}Batching Strategy}{8}{subsection.6.4}%
+\contentsline {section}{\numberline {7}System Architecture: Train Structure}{9}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Pipeline Diagram}{9}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Vocoder Diagram}{9}{subsection.7.2}%
+\contentsline {section}{\numberline {8}Loss Functions}{10}{section.8}%
+\contentsline {section}{\numberline {9}Inference Workflow}{10}{section.9}%
+\contentsline {subsection}{\numberline {9.1}Inference Architecture Diagram}{10}{subsection.9.1}%
+\contentsline {section}{\numberline {10}Training Code Organization in \texttt {src}}{11}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Module Map}{11}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}Why This Modularization Helps}{11}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}Recommended Experiment Flow}{12}{subsection.10.3}%
+\contentsline {section}{\numberline {11}How to Run Experiments}{12}{section.11}%
+\contentsline {subsection}{\numberline {11.1}Experiment Directory Tree}{12}{subsection.11.1}%
+\contentsline {subsection}{\numberline {11.2}What Each Output Means}{12}{subsection.11.2}%
+\contentsline {subsection}{\numberline {11.3}Example Commands}{12}{subsection.11.3}%
+\contentsline {subsection}{\numberline {11.4}Monitoring a Run}{13}{subsection.11.4}%
+\contentsline {section}{\numberline {12}Step-by-Step Guide from Download to Training}{13}{section.12}%
+\contentsline {subsection}{\numberline {12.1}1. Download the datasets}{13}{subsection.12.1}%
+\contentsline {subsection}{\numberline {12.2}2. Verify the folder structure}{13}{subsection.12.2}%
+\contentsline {subsection}{\numberline {12.3}3. Run preprocessing}{13}{subsection.12.3}%
+\contentsline {subsection}{\numberline {12.4}4. Inspect a few outputs}{13}{subsection.12.4}%
+\contentsline {subsection}{\numberline {12.5}5. Confirm the dataset loader can read the manifests}{13}{subsection.12.5}%
+\contentsline {subsection}{\numberline {12.6}6. Start with a small experiment}{14}{subsection.12.6}%
+\contentsline {subsection}{\numberline {12.7}7. Scale up}{14}{subsection.12.7}%
+\contentsline {subsection}{\numberline {12.8}8. Review the experiment artifacts}{14}{subsection.12.8}%
+\contentsline {section}{\numberline {13}How to Modularize the Project Cleanly}{14}{section.13}%
+\contentsline {subsection}{\numberline {13.1}Adding a New Dataset}{14}{subsection.13.1}%
+\contentsline {subsection}{\numberline {13.2}Adding a New Model Component}{14}{subsection.13.2}%
+\contentsline {subsection}{\numberline {13.3}Adding a New Experiment Variant}{14}{subsection.13.3}%
+\contentsline {subsection}{\numberline {13.4}Adding Better Debugging}{14}{subsection.13.4}%
+\contentsline {section}{\numberline {14}Practical Example of the Whole Workflow}{14}{section.14}%
+\contentsline {section}{\numberline {15}Summary}{15}{section.15}%
