@@ -16,8 +16,9 @@ class HubertEmotionClassifier(nn.Module):
         
         self.classifier = nn.Sequential(
             nn.Linear(self.hidden_size, 256),
-            nn.ReLU(),
-            nn.Dropout(0.3), 
+            nn.LayerNorm(256),
+            nn.LeakyReLU(0.1),
+            nn.Dropout(0.4),
             nn.Linear(256, num_classes)
         )
         
