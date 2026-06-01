@@ -15,10 +15,10 @@ class GST(nn.Module):
         self.conv_layers = nn.ModuleList([
             nn.Sequential(*[
                 nn.Conv2d(out_channels=32*(2**i), in_channels=32*(2**(i-1)) if i > 0 else 1, kernel_size=(3, 3), stride=(2, 2), padding=1),
-                nn.ReLU(inplace=True),
+                nn.SiLU(),
                 nn.BatchNorm2d(32*(2**i)),
                 nn.Conv2d(out_channels=32*(2**i), in_channels=32*(2**i), kernel_size=(3, 3), stride=(2, 2), padding=1),
-                nn.ReLU(inplace=True),
+                nn.SiLU(),
                 nn.BatchNorm2d(32*(2**i)),
             ]) for i in range(n_conv_layers//2)
         ]) # -> [batch_size, 32*(2**(n_conv_layers//2 - 1)), n_mels/(2**(n_conv_layers//2)), time_steps/(2**(n_conv_layers//2))]
@@ -45,7 +45,7 @@ class GST(nn.Module):
         x = self.style_attention(x) # -> [1, batch_size, hidden_size]
         _, x = x # -> [1, batch_size, hidden_size]
         x = x.squeeze(0) # -> [batch_size, hidden_size]
-        x = torch.tanh(x) # -> [batch_size, hidden_size]
+        x = torch.nn.functional.silu(x) # -> [batch_size, hidden_size]
         x = self.forward_style_multihead_attention(x) # -> [batch_size, hidden_size]
         return x
 

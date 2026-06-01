@@ -201,13 +201,21 @@ class TensorBoardLogger:
         global_norm_sq = 0.0
 
         for name, parameter in model.named_parameters():
+            param = parameter.detach().float().cpu()
+            param_norm = float(param.norm().item()) if param.numel() > 0 else 0.0
+
             if parameter.grad is None:
+                # Explicitly log missing gradients as zero so it's visible in TensorBoard/exports
+                grad_norm = 0.0
+                grad_mean = 0.0
+                grad_std = 0.0
+                self.writer.add_scalar(f"{prefix}/layer_grad_norm/{name}", grad_norm, step)
+                self.writer.add_scalar(f"{prefix}/layer_param_norm/{name}", param_norm, step)
+                lines.append(f"{name}: NO_GRAD param_norm={param_norm:.6f} shape={tuple(parameter.shape)}")
                 continue
 
             grad = parameter.grad.detach().float().cpu()
-            param = parameter.detach().float().cpu()
             grad_norm = float(grad.norm().item())
-            param_norm = float(param.norm().item()) if param.numel() > 0 else 0.0
             grad_mean = float(grad.mean().item())
             grad_std = float(grad.std(unbiased=False).item()) if grad.numel() > 1 else 0.0
 
@@ -220,13 +228,22 @@ class TensorBoardLogger:
                 f"{name}: grad_norm={grad_norm:.6f} param_norm={param_norm:.6f} grad_mean={grad_mean:.6f} grad_std={grad_std:.6f} shape={tuple(parameter.shape)}"
             )
 
+        # Always write a text summary so NO_GRAD entries are visible even if no grads exist
         if gradient_norms:
             norms_tensor = torch.tensor(gradient_norms, dtype=torch.float32)
             self.writer.add_histogram(f"{prefix}/layer_grad_norm_distribution", norms_tensor, step)
             self.writer.add_scalar(f"{prefix}/global_grad_norm", global_norm_sq ** 0.5, step)
             self.writer.add_scalar(f"{prefix}/mean_layer_grad_norm", float(norms_tensor.mean().item()), step)
             self.writer.add_scalar(f"{prefix}/max_layer_grad_norm", float(norms_tensor.max().item()), step)
-            self.writer.add_text(f"{prefix}/summary", "\n".join(lines), step)
+
+        # Summary text (always present)
+        summary_text = "\n".join(lines) if lines else "(no parameters)"
+        self.writer.add_text(f"{prefix}/summary", summary_text, step)
+
+        # Also log a compact list of missing-gradient parameter names and counts
+        missing = [ln.split(":", 1)[0] for ln in lines if "NO_GRAD" in ln]
+        self.writer.add_text(f"{prefix}/no_grad_list", "\n".join(missing) if missing else "(none)", step)
+        self.writer.add_scalar(f"{prefix}/num_no_grad", len(missing), step)
 
     def log_metrics(self, metrics: Dict[str, float], step: int, prefix: str = "") -> None:
         for key, value in metrics.items():
