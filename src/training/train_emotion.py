@@ -1,5 +1,5 @@
 import torch
-import os # Adicione o 'os' para criar a pasta de salvamento, se não existir
+import os
 import torch.nn as nn
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
@@ -12,9 +12,9 @@ def train():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Rodando o treinamento no dispositivo: {device}")
 
-    epochs = 10
+    epochs = 30
     batch_size = 4
-    learning_rate = 1e-4
+    learning_rate = 3e-4
 
     print(" Carregando o modelo HuBERT para Emoções...")
     model = HubertEmotionClassifier(num_classes=7)
@@ -40,13 +40,12 @@ def train():
 
         # Distribuição estrita de locutores para evitar vazamento de características físicas da voz
         if speaker in ['f6', 'm6']:
-            test_indices.append(idx)     # 🔒 Teste Final (Cofre isolado)
+            test_indices.append(idx)    
         elif speaker in ['f5', 'm5']:
-            val_indices.append(idx)      # 📈 Validação (Acompanhamento por época)
+            val_indices.append(idx)     
         else:
-            train_indices.append(idx)    # 🏋️ Treinamento (Atores f1-f4, m1-m4)
+            train_indices.append(idx)   
 
-    print(f"✅ Separação profissional realizada:")
     print(f"   Treino (Atores f1-f4, m1-m4): {len(train_indices)} áudios")
     print(f"   Validação (Atores f5, m5):    {len(val_indices)} áudios")
     print(f"   Teste Final (Atores f6, m6):  {len(test_indices)} áudios")
@@ -145,10 +144,6 @@ def train():
             
             # Salva apenas os pesos (state_dict), que é o padrão ouro do PyTorch
             torch.save(model.state_dict(), "checkpoints/melhor_modelo_emocoes.pth")
-
-        print("\n" + "="*40)
-    print("🔒 FIM DO TREINO! Avaliando a acurácia real no conjunto de TESTE...")
-    print("=========================================")
     
     # Carrega os pesos do modelo que teve a melhor performance na validação
     model.load_state_dict(torch.load("checkpoints/melhor_modelo_emocoes.pth"))
@@ -174,11 +169,11 @@ def train():
             all_labels.extend(labels.cpu().numpy())
             
     final_test_accuracy = (test_correct / test_total) * 100
-    print(f"🎯 ACURÁCIA FINAL E CONFIÁVEL DO MODELO (Teste): {final_test_accuracy:.2f}%")
+    print(f" ACURÁCIA FINAL DO MODELO (Teste): {final_test_accuracy:.2f}%")
     print("="*40)
 
-    # 🔥 GERANDO O GRÁFICO DO TESTE FINAL (Matriz de Confusão)
-    print("\n🎨 Gerando a Matriz de Confusão do conjunto de Teste...")
+    #   (Matriz de Confusão)
+    
     
     # Nomes das classes na ordem correta do seu mapeamento (0 a 6)
     emotion_labels = ['Alegria', 'Desgosto', 'Medo', 'Neutro', 'Raiva', 'Surpresa', 'Tristeza']
@@ -198,10 +193,8 @@ def train():
     
     # Salva a imagem no seu projeto
     plt.savefig("matriz_confusao_teste.png", dpi=300)
-    print("💾 Gráfico do teste salvo com sucesso como 'matriz_confusao_teste.png'!")
-
+   
     # === Bloco para Gerar e Salvar os Gráficos ===
-    print("\n📊 Gerando gráficos de desempenho...")
     epochs_range = range(1, len(history["train_loss"]) + 1)
 
     plt.figure(figsize=(12, 5))
@@ -229,7 +222,7 @@ def train():
     # Salva a imagem na raiz do projeto
     plt.tight_layout()
     plt.savefig("historico_treinamento.png", dpi=300)
-    print("💾 Gráfico salvo com sucesso como 'historico_treinamento.png'!")
+   
 
 
 if __name__ == "__main__":
