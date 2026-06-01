@@ -13,16 +13,18 @@ class AffineCoupling(nn.Module):
         cond_channels: int,
         hidden_channels: int = 192,
         kernel_size: int = 3,
+        scale_limit: float = 1.5,
     ):
         super().__init__()
         if channels % 2 != 0:
             raise ValueError("channels must be even for coupling split")
         padding = (kernel_size - 1) // 2
+        self.scale_limit = float(scale_limit)
         self.net = nn.Sequential(
             nn.Conv1d(channels // 2 + cond_channels, hidden_channels, kernel_size=kernel_size, padding=padding),
-            nn.ReLU(inplace=True),
+            nn.SiLU(),
             nn.Conv1d(hidden_channels, hidden_channels, kernel_size=kernel_size, padding=padding),
-            nn.ReLU(inplace=True),
+            nn.SiLU(),
             nn.Conv1d(hidden_channels, channels, kernel_size=1),
         )
 
@@ -30,7 +32,7 @@ class AffineCoupling(nn.Module):
         x_a, x_b = x.chunk(2, dim=1)
         h = torch.cat([x_a, cond], dim=1)
         shift, log_scale = self.net(h).chunk(2, dim=1)
-        log_scale = torch.tanh(log_scale)
+        log_scale = self.scale_limit * torch.tanh(log_scale)
         y_b = x_b * torch.exp(log_scale) + shift
         y = torch.cat([x_a, y_b], dim=1)
         log_det = log_scale.sum(dim=(1, 2))
@@ -40,9 +42,16 @@ class AffineCoupling(nn.Module):
         y_a, y_b = y.chunk(2, dim=1)
         h = torch.cat([y_a, cond], dim=1)
         shift, log_scale = self.net(h).chunk(2, dim=1)
-        log_scale = torch.tanh(log_scale)
+        log_scale = self.scale_limit * torch.tanh(log_scale)
         x_b = (y_b - shift) * torch.exp(-log_scale)
         return torch.cat([y_a, x_b], dim=1)
+
+    def zero_initialize(self) -> None:
+        last_layer = self.net[-1]
+        if hasattr(last_layer, "weight"):
+            nn.init.normal_(last_layer.weight, mean=0.0, std=1e-3)
+        if hasattr(last_layer, "bias") and last_layer.bias is not None:
+            nn.init.zeros_(last_layer.bias)
 
 
 class ChannelFlip(nn.Module):
@@ -86,3 +95,8 @@ class NormalizingFlow(nn.Module):
             else:
                 x = flow.inverse(x)
         return x
+
+    def initialize_identity(self) -> None:
+        for flow in self.flows:
+            if isinstance(flow, AffineCoupling):
+                flow.zero_initialize()
