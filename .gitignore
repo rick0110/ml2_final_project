@@ -222,3 +222,4 @@ __marimo__/
 experiments/
 local_weight_models/
 /exports/
+.aider*
