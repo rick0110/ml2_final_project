@@ -7,6 +7,10 @@ Mel -> GST -> style token
 Text states <-> mel states -> cross attention fusion
 Fused states + style token -> temporal cross attention
 Temporal states -> mel projection
+
+Problem: This model aims to capture both the textual and acoustic information for generating high-quality speech synthesis. It uses a combination of text and audio encoders, along with global style tokens (GST) to provide stylistic control over the generated output.
+
+Usage: The CrossAttentionTTSModel class is used in training pipelines where both text and mel-spectrogram inputs are available during training. This model can be fine-tuned for different styles or speaker voices by adjusting the GST embeddings.
 """
 
 from __future__ import annotations
@@ -23,6 +27,8 @@ from models.TextEncoder import TextEncoderMultiHeadAttention
 
 
 class PositionalEncoding(nn.Module):
+    """Add positional encoding to input embeddings for transformer models."""
+    
     def __init__(self, embedding_dim: int, max_len: int = 5000):
         super().__init__()
 
@@ -41,6 +47,8 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerBlock(nn.Module):
+    """Transformer block with multi-head attention and feed-forward network."""
+    
     def __init__(
         self,
         embedding_dim: int,
@@ -73,6 +81,8 @@ class TransformerBlock(nn.Module):
 
 
 class SequenceEncoder(nn.Module):
+    """Sequence encoder for CrossAttentionTTS model."""
+    
     def __init__(
         self,
         input_dim: int,
@@ -107,6 +117,8 @@ class SequenceEncoder(nn.Module):
 
 
 class CrossAttentionBlock(nn.Module):
+    """Cross-attention block for fusing text and mel states."""
+    
     def __init__(
         self,
         hidden_dim: int,
@@ -139,6 +151,8 @@ class CrossAttentionBlock(nn.Module):
 
 
 class CrossAttentionTTSModel(nn.Module):
+    """Cross-attention TTS model that predicts mel spectrograms from text and audio."""
+    
     def __init__(
         self,
         vocab_size: int,

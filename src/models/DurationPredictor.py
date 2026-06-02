@@ -7,6 +7,18 @@ class DurationPredictor(nn.Module):
 
     Simple conv-based predictor that returns positive floats; caller should
     convert to integers (e.g. via rounding or floor) before length-regulation.
+    
+    Problem: Predicting the number of mel spectrogram frames for each token in a sequence is crucial for text-to-speech models, as it helps determine how long each phoneme should be pronounced.
+
+    Usage: This module takes encoder outputs and predicts durations for each token. It's used during inference to generate mel spectrograms without teacher forcing.
+    
+    Args:
+        input_dim (int): Dimension of the input features from the encoder.
+        conv_channels (int, optional): Number of channels in convolutional layers. Default is 256.
+        kernel_size (int, optional): Kernel size for convolutional layers. Default is 3.
+
+    Returns:
+        torch.Tensor: Predicted durations as positive floats.
     """
 
     def __init__(self, input_dim: int, conv_channels: int = 256, kernel_size: int = 3):
