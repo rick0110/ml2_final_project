@@ -99,16 +99,19 @@ def build_mel_transform(
     n_fft: int = 1024,
     hop_length: int = 256,
     win_length: int = 1024,
-) -> torchaudio.transforms.MelSpectrogram:
-    return torchaudio.transforms.MelSpectrogram(
+ ) -> torch.nn.Module:
+    mel = torchaudio.transforms.MelSpectrogram(
         sample_rate=sample_rate,
         n_fft=n_fft,
         hop_length=hop_length,
         win_length=win_length,
         n_mels=n_mels,
+        power=1.0,
         f_min=0,
         f_max=8000,
     )
+    db = torchaudio.transforms.AmplitudeToDB(stype="power", top_db=80.0)
+    return torch.nn.Sequential(mel, db)
 
 
 def match_length(mel: torch.Tensor, target_len: int) -> torch.Tensor:
