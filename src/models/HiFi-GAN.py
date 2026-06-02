@@ -5,11 +5,25 @@ import torch
 
 ROOT = pathlib.Path(__file__).parent.parent.parent
 
+
 def freeze_model(model: torch.nn.Module) -> None:
+    """Freeze model parameters."""
+    
     for param in model.parameters():
         param.requires_grad = False
 
+
 def load_hifigan_model(path: pathlib.Path = ROOT / "local_weight_models" / "HiFi-GAN", freeze: bool = True):
+    """Load HiFi-GAN models from local path or download them if not present.
+
+    Args:
+        path (pathlib.Path): Path to the directory containing the model files.
+        freeze (bool, optional): Whether to freeze the model parameters. Default is True.
+
+    Returns:
+        tuple[FastPitchModel, HifiGanModel]: Spec generator and HiFi-GAN vocoder models for TTS tasks.
+    """
+    
     if path.exists():
         spec_generator = FastPitchModel.restore_from(str(path / "spec_generator.nemo"))
         model = HifiGanModel.restore_from(str(path / "model.nemo"))

@@ -3,11 +3,23 @@ from torch import nn
 
 
 class GST(nn.Module):
-    '''Global Style Tokens module for TTS. Consists of a stack of convolutional layers followed by a GRU.
-    expected input shape: (batch_size, 1-> channels, n_mels, time_steps)
-    output shape: (batch_size, 128) style embedding
+    """Global Style Tokens module for TTS. Consists of a stack of convolutional layers followed by a GRU.
+    
+    Problem: This module captures global style information from mel-spectrograms and provides it as an embedding vector to the model, allowing for stylistic control over generated speech.
 
-    '''
+    Usage: The GST is used in conjunction with other TTS models (like CrossAttentionTTS) to provide stylistic variation during synthesis. It can be fine-tuned or pre-trained on specific styles or speaker voices.
+    
+    Args:
+        n_conv_layers (int, optional): Number of convolutional layers. Default is 6.
+        hidden_size (int, optional): Size of the GRU hidden state. Default is 128.
+        n_style_tokens (int, optional): Number of style tokens to generate. Default is 10.
+        n_mels (int, optional): Dimensionality of mel-spectrogram features. Default is 80.
+        n_heads (int, optional): Number of attention heads for multi-head attention mechanism. Default is 4.
+
+    Returns:
+        torch.Tensor: Style embedding vector.
+    """
+    
     def __init__(self, n_conv_layers: int = 6, hidden_size: int = 128, n_style_tokens: int = 10, n_mels: int = 80, n_heads: int = 4):
         super().__init__()
         assert n_conv_layers%2 == 0, "n_conv_layers must be even"
@@ -60,9 +72,3 @@ class GST(nn.Module):
         values = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1)
         att_out, att_weights = self.multHeadAttention(query, keys, values) # -> [batch_size, 1, hidden_size]
         return att_out.squeeze(1) # -> [batch_size, hidden_size]
-    
-
-
-        
-
-
