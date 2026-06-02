@@ -109,12 +109,12 @@ def train():
         train_accuracy = (train_correct / train_total) * 100
         
         # --- FASE DE VALIDAÇÃO ---
-        model.eval() # Desativa o Dropout para a avaliação ser consistente
+        model.eval() 
         val_loss = 0.0
         val_correct = 0
         val_total = 0 
 
-        with torch.no_grad(): # Desativa o cálculo de gradientes (economiza memória e tempo)
+        with torch.no_grad(): 
             for inputs, labels in val_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 
@@ -173,8 +173,6 @@ def train():
     print("="*40)
 
     #   (Matriz de Confusão)
-    
-    
     # Nomes das classes na ordem correta do seu mapeamento (0 a 6)
     emotion_labels = ['Alegria', 'Desgosto', 'Medo', 'Neutro', 'Raiva', 'Surpresa', 'Tristeza']
     
@@ -223,8 +221,7 @@ def train():
     plt.tight_layout()
     plt.savefig("historico_treinamento.png", dpi=300)
    
-
-
 if __name__ == "__main__":
     train()
+
 

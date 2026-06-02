@@ -19,7 +19,8 @@ class HubertEmotionClassifier(nn.Module):
         
         self.classifier = nn.Sequential(
             nn.Dropout(0.4),
-            nn.Linear(self.hidden_size, num_classes)
+            nn.Linear(self.hidden_size, 256),
+            nn.Linear(256, num_classes)
         )
         
     def forward(self, input_values):
