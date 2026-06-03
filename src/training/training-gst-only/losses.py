@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Dict
+
 
 def mel_reconstruction_loss(predicted_mel: torch.Tensor, target_mel: torch.Tensor) -> torch.Tensor:
     """L1 reconstruction loss between predicted and target mel spectrograms."""
