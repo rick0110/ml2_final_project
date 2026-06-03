@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 from src.models import FastPitchModel, GST, MelDecoder, HifiGanModel
 from src.data import build_dataset
 from src.training.train_utils import TensorBoardLogger, train_epoch, validate_epoch
-from src.training.training-gst-only.losses import total_loss,
+from src.training.training-gst-only.losses import total_loss
 from src.training.training-gst-only.configs import TrainingConfig
 
 def parse_arguments():
