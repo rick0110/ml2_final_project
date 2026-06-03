@@ -5,12 +5,12 @@ Trains a text-to-speech model with:
 - Text Encoder (FastPitch)
 - Acoustic Decoder (LSTM)
 - Style Extractor (GST)
-- Vocoder (HiFi-GAN)
+- Vocoder (HiFi_GAN)
 
 Pipeline: Text → Text Encoder → h_text
           Mel → GST → z_style
           [h_text, z_style] → Acoustic Decoder → M_hat
-          M_hat → HiFi-GAN → x_hat
+          M_hat → HiFi_GAN → x_hat
 
 Loss functions:
 - L1 Reconstruction Loss
@@ -56,19 +56,19 @@ from training.train_first_step.text_processing import BatchTextTokenizer
 
 
 def load_hifigan_vocoder(device: torch.device) -> nn.Module:
-    """Load and prepare frozen HiFi-GAN vocoder used for sample audio logging."""
-    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi-GAN.py"
+    """Load and prepare frozen HiFi_GAN vocoder used for sample audio logging."""
+    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi_GAN.py"
     if not hifigan_path.exists():
-        raise FileNotFoundError(f"HiFi-GAN loader not found at {hifigan_path}")
+        raise FileNotFoundError(f"HiFi_GAN loader not found at {hifigan_path}")
 
     spec = importlib.util.spec_from_file_location("hifigan_module", hifigan_path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"Could not import HiFi-GAN module from {hifigan_path}")
+        raise ImportError(f"Could not import HiFi_GAN module from {hifigan_path}")
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     if not hasattr(module, "load_hifigan_model"):
-        raise ImportError("`load_hifigan_model` not found in HiFi-GAN module")
+        raise ImportError("`load_hifigan_model` not found in HiFi_GAN module")
 
     _, vocoder = module.load_hifigan_model(freeze=True)
     return vocoder.to(device).eval()
@@ -534,9 +534,9 @@ def main():
     tb_logger.log_model_info(model)
     tb_logger.log_hyperparameters(hparams, {})
 
-    print("Loading HiFi-GAN vocoder for sample logging...")
+    print("Loading HiFi_GAN vocoder for sample logging...")
     vocoder = load_hifigan_vocoder(device)
-    print("  ✓ HiFi-GAN vocoder loaded (frozen)")
+    print("  ✓ HiFi_GAN vocoder loaded (frozen)")
     
     start_epoch = 0
     if args.resume or args.resume_experiment:

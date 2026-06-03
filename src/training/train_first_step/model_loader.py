@@ -1,10 +1,10 @@
 """Model loading and preparation for first-step TTS training.
 
 Handles loading:
-- Text Encoder (FastSpeech from HiFi-GAN)
+- Text Encoder (FastSpeech from HiFi_GAN)
 - Acoustic Decoder (LSTM-based)
 - Style Extractor (GST)
-- Vocoder (HiFi-GAN)
+- Vocoder (HiFi_GAN)
 """
 
 import sys
@@ -28,7 +28,7 @@ from models.LengthRegulator import length_regulator
 
 def _load_hifigan_model_loader():
     """Load `load_hifigan_model` from src/models supporting hyphenated filenames."""
-    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi-GAN.py"
+    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi_GAN.py"
     if hifigan_path.exists():
         spec = importlib.util.spec_from_file_location("hifigan_module", hifigan_path)
         if spec is None or spec.loader is None:
@@ -52,7 +52,7 @@ class FirstStepTTSModel(nn.Module):
     1. Text → Text Encoder (FastPitch) → h_text
     2. Mel → GST → z_style
     3. [h_text, z_style] → Acoustic Decoder → M_hat (predicted mel)
-    4. M_hat → HiFi-GAN → x_hat (predicted audio)
+    4. M_hat → HiFi_GAN → x_hat (predicted audio)
     """
     
     def __init__(

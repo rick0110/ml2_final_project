@@ -35,7 +35,7 @@ Mel Spectrogram (target)
     ↓ M_hat (predicted mel)
 
 ┌───────────────────────────────────────────────────┐
-│   HiFi-GAN Vocoder                                │ ← frozen
+│   HiFi_GAN Vocoder                                │ ← frozen
 │   "convert mel to waveform"                       │
 └───────────────────────────────────────────────────┘
     ↓
@@ -337,7 +337,7 @@ This will:
 - Outputs 64-256 dimensional embeddings
 
 ### Vocoder (Frozen)
-- HiFi-GAN from NeMo
+- HiFi_GAN from NeMo
 - Converts mel spectrogram to waveform
 - Pre-trained on high-quality audio
 - Frozen during training
@@ -404,7 +404,7 @@ python src/training/train_first_step/train.py \
 
 ### Architectures
 - **FastPitch**: [arXiv:2106.00606](https://arxiv.org/abs/2106.00606)
-- **HiFi-GAN**: [arXiv:2010.05646](https://arxiv.org/abs/2010.05646)
+- **HiFi_GAN**: [arXiv:2010.05646](https://arxiv.org/abs/2010.05646)
 - **GST**: [arXiv:1803.10135](https://arxiv.org/abs/1803.10135)
 
 ### Frameworks

@@ -25,7 +25,7 @@ Pipeline TTS completo:
 Texto → FastPitch (congelado) → h_text
 Mel → GST (treinavél) → z_style
 [h_text, z_style] → Decoder LSTM (treinavél) → M_hat
-M_hat → HiFi-GAN (congelado) → Áudio
+M_hat → HiFi_GAN (congelado) → Áudio
 ```
 
 ### 4. **Utilitários de Treinamento** (`train_utils.py`)
@@ -158,7 +158,7 @@ Mel Alvo → GST (Global Style Tokens) → z_style (128 dims)
 [h_text, z_style] → Decoder LSTM (256-512 hidden) → M_hat (80 bins de mel)
 
 ### Vocoder
-M_hat → HiFi-GAN → Forma de onda x_hat(t)
+M_hat → HiFi_GAN → Forma de onda x_hat(t)
 
 ## 🎓 Detalhes de Treinamento
 

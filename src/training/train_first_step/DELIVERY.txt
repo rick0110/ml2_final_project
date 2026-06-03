@@ -206,7 +206,7 @@ For first-time users:
     ↑                                   ↓ M_hat (80 mels)
     TARGET MEL                          
                             ┌──────────────────────┐
-                            │ HiFi-GAN Vocoder     │ ← FROZEN
+                            │ HiFi_GAN Vocoder     │ ← FROZEN
                             │ (Vocoding)           │
                             └──────────────────────┘
                                     ↓ x_hat(t)

@@ -112,7 +112,7 @@ FirstStepTTSModel:
     - Text Encoder (FastPitch) - frozen
     - Acoustic Decoder (LSTM) - trainable
     - Style Extractor (GST) - trainable  
-    - Vocoder (HiFi-GAN) - frozen
+    - Vocoder (HiFi_GAN) - frozen
 
 Pipeline: Text → h_text
           Mel → z_style

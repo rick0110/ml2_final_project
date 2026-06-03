@@ -97,7 +97,7 @@ MEL     │                                         │
         │         ↓                              │
         │   M_hat (80 mel bins)                  │
         │         ↓                              │
-        │   HiFi-GAN Vocoder   ← frozen          │
+        │   HiFi_GAN Vocoder   ← frozen          │
         │         ↓                              │
 OUTPUT  │   x_hat(t) Audio                       │
         │                                         │
@@ -207,7 +207,7 @@ Each checkpoint contains:
    • Text Encoder (FastPitch) - frozen
    • Acoustic Decoder (LSTM) - trainable
    • Style Extractor (GST) - trainable
-   • Vocoder (HiFi-GAN) - frozen
+   • Vocoder (HiFi_GAN) - frozen
 
 ✅ TRAINING CAPABILITIES
    • Multi-dataset support (LibriSpeech-PT + TTS-Portuguese)

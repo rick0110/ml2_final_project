@@ -13,15 +13,15 @@ def freeze_model(model: torch.nn.Module) -> None:
         param.requires_grad = False
 
 
-def load_hifigan_model(path: pathlib.Path = ROOT / "local_weight_models" / "HiFi-GAN", freeze: bool = True):
-    """Load HiFi-GAN models from local path or download them if not present.
+def load_hifigan_model(path: pathlib.Path = ROOT / "local_weight_models" / "HiFi_GAN", freeze: bool = True):
+    """Load HiFi_GAN models from local path or download them if not present.
 
     Args:
         path (pathlib.Path): Path to the directory containing the model files.
         freeze (bool, optional): Whether to freeze the model parameters. Default is True.
 
     Returns:
-        tuple[FastPitchModel, HifiGanModel]: Spec generator and HiFi-GAN vocoder models for TTS tasks.
+        tuple[FastPitchModel, HifiGanModel]: Spec generator and HiFi_GAN vocoder models for TTS tasks.
     """
     
     if path.exists():
@@ -33,8 +33,8 @@ def load_hifigan_model(path: pathlib.Path = ROOT / "local_weight_models" / "HiFi
         return spec_generator, model
     spec_generator = FastPitchModel.from_pretrained("nvidia/tts_en_fastpitch")
     model = HifiGanModel.from_pretrained("nvidia/tts_hifigan")
-    spec_generator.save_to(str(ROOT / "local_weight_models" / "HiFi-GAN" / "spec_generator.nemo"))
-    model.save_to(str(ROOT / "local_weight_models" / "HiFi-GAN" / "model.nemo"))
+    spec_generator.save_to(str(ROOT / "local_weight_models" / "HiFi_GAN" / "spec_generator.nemo"))
+    model.save_to(str(ROOT / "local_weight_models" / "HiFi_GAN" / "model.nemo"))
     if freeze:
         freeze_model(model)
         freeze_model(spec_generator)
