@@ -28,24 +28,14 @@ import torchaudio
 from torch.nn.utils.rnn import pad_sequence
 
 import tqdm
+import matplotlib.pyplot as plt
 
-try:
-    import matplotlib.pyplot as plt
-except Exception:
-    plt = None
-
-
-@dataclass
-class Example:
-    audio_path: str
-    text: str
-    duration: float
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Prepare 80-band mel spectrograms and dataset for TTS-PT corpus")
-    p.add_argument("--input-dir", type=Path, default=Path("data/processed/tts-portuguese-Corpora/wavs"))
-    p.add_argument("--out-dir", type=Path, default=Path("data/processed/tts-portuguese-Corpora/pt_tensors"))
+    p.add_argument("--input-dir", type=Path, default=Path("data/raw/tts-portuguese-Corpora/TTS-Portuguese-Corpus/"))
+    p.add_argument("--out-dir", type=Path, default=Path("data/processed/tts-portuguese-Corpora/"))
     p.add_argument("--target-sr", type=int, default=22050)
     p.add_argument("--n-mels", type=int, default=80)
     p.add_argument("--n-fft", type=int, default=1024)
@@ -55,7 +45,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-duration", type=float, default=15.0)
     p.add_argument("--plot-samples", type=int, default=5, help="Number of mel images to save for validation (0 disables)")
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--overwrite", action="store_true")
     return p.parse_args()
 
 
@@ -67,87 +56,91 @@ def make_mel_transform(sr: int, n_fft: int, hop_length: int, win_length: int, n_
         hop_length=hop_length,
         win_length=win_length,
         n_mels=n_mels,
-        power=1.0,
+        power=2.0,
     )
     db = torchaudio.transforms.AmplitudeToDB(stype="power", top_db=80.0)
     return torch.nn.Sequential(mel, db)
 
 
 def process_example(
-    ex: Example,
-    input_root: Path,
+    ex: List[Path],
     out_root: Path,
     mel_transform: torch.nn.Module,
     target_sr: int,
-    overwrite: bool = False,
+    hash_paths: Dict[Path, str],
 ) -> Optional[Dict[str, Any]]:
-    audio_p = Path(ex.audio_path)
-    if audio_p.is_absolute():
-        src = audio_p
-    else:
-        candidate = input_root / audio_p
-        if candidate.exists():
-            src = candidate
-        else:
-            candidate2 = input_root / audio_p.name
-            if candidate2.exists():
-                src = candidate2
-            else:
-                matches = list(input_root.rglob(audio_p.name))
-                if matches:
-                    src = matches[0]
-                else:
-                    return None
-    stem = Path(ex.audio_path).stem
-    out_path = out_root / f"{stem}.pt"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    if out_path.exists() and not overwrite:
-        data = torch.load(out_path)
-        return {"mel_path": str(out_path), "duration": data.get("duration", 0.0), "text": data.get("text", "")}
-
-    waveform, sr = torchaudio.load(str(src))
-    if waveform.ndim > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
+    waveform, sr = torchaudio.load(ex)
     if sr != target_sr:
-        waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=target_sr)
+        resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=target_sr)
+        waveform = resampler(waveform)
         sr = target_sr
+    
+    log_mel = mel_transform(waveform)
+    duration = waveform.shape[1] / sr
+    text = text_from_path(ex, hash_paths)
+    out_path_wav = out_root / "mels"
+    out_path_wav.mkdir(parents=True, exist_ok=True)
+    out_path = out_path_wav / f"{ex.stem}.pt"
+    torch.save({"waveform": waveform, "mel": log_mel, "sr": sr, "duration": duration, "text": text}, str(out_path))
+    return {"mel_path": str(out_path), "duration": duration, "text": text}
 
-    duration = waveform.shape[-1] / sr
-    mel = mel_transform(waveform)  
-    mel = mel.squeeze(0)
 
-    torch.save({"waveform": waveform, "mel": mel, "sr": sr, "duration": duration, "text": ex.text}, str(out_path))
-    return {"mel_path": str(out_path), "duration": duration, "text": ex.text}
-
-
-def plot_mels(manifest: List[Dict[str, Any]], out_dir: Path, n: int = 5, seed: int = 42) -> None:
-    if plt is None:
-        print("matplotlib not available; skipping plots")
-        return
+def plot_mels(manifest, out_dir, n=5, seed=42):
     rnd = random.Random(seed)
     samples = rnd.sample(manifest, min(n, len(manifest)))
+
     for i, row in enumerate(samples, start=1):
-        data = torch.load(row["mel_path"]) if isinstance(row["mel_path"], str) else row["mel_path"]
-        mel = data["mel"].numpy()
+        data = torch.load(row["mel_path"])
+
+        mel = data["mel"].squeeze(0).numpy()
+
         fig, ax = plt.subplots(figsize=(8, 3))
-        im = ax.imshow(mel, origin="lower", aspect="auto", interpolation="nearest")
-        ax.set_title(f"{Path(row['mel_path']).stem} | {row.get('text','')[:60]}")
+        im = ax.imshow(
+            mel,
+            origin="lower",
+            aspect="auto",
+            interpolation="nearest",
+        )
+
+        ax.set_title(f"{Path(row['mel_path']).stem}")
         ax.set_ylabel("Mel bin")
         ax.set_xlabel("Frame")
+
         fig.colorbar(im, ax=ax)
+
         out_path = out_dir / f"mel_{i:02d}_{Path(row['mel_path']).stem}.png"
         fig.tight_layout()
         fig.savefig(out_path)
         plt.close(fig)
 
 
+def find_examples(input_dir: Path) -> List[Path]:
+    wav_paths = list(input_dir.rglob("*.wav"))
+    return wav_paths
+
+def text_from_path(wav_path: Path, hash_paths: Dict[Path, str]) -> str:
+    return hash_paths.get(wav_path, "")
+
+def create_hash_paths(input_dir: Path) -> Dict[Path, str]:
+    with open(input_dir / "texts.csv", "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    
+    lines = map(lambda x: list(x.strip().split("==", maxsplit=1)), lines)
+    hash_paths = {}
+    for (path, text) in lines:
+        wav_path = input_dir / path
+        text = text.strip()
+        hash_paths[wav_path] = text
+    return hash_paths
+
 def main() -> None:
     args = parse_args()
     random.seed(args.seed)
+    args.input_dir = args.input_dir.resolve()
 
-    examples: List[Example]
-    wav_paths = sorted(Path(args.input_dir).rglob("*.wav"))
-    examples = [Example(audio_path=str(p.relative_to(args.input_dir)), text="", duration=0.0) for p in wav_paths]
+
+    examples = find_examples(Path(args.input_dir))
+    hash_paths = create_hash_paths(Path(args.input_dir))
 
     out_root = args.out_dir
     out_root.mkdir(parents=True, exist_ok=True)
@@ -156,14 +149,14 @@ def main() -> None:
 
     manifest: List[Dict[str, Any]] = []
     for ex in tqdm.tqdm(examples, desc="Processing examples"):
-        res = process_example(ex, Path(args.input_dir), out_root, mel_transform, args.target_sr, overwrite=args.overwrite)
+        res = process_example(ex, out_root, mel_transform, args.target_sr, hash_paths)
         if res is None:
             continue
         if res["duration"] < args.min_duration or res["duration"] > args.max_duration:
             continue
         manifest.append(res)
 
-    manifest_csv = out_root.parent / "mels_metadata.csv"
+    manifest_csv = out_root / "mels_metadata.csv"
     with manifest_csv.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(["mel_path", "duration", "text"])
@@ -171,7 +164,7 @@ def main() -> None:
             writer.writerow([row["mel_path"], f"{row['duration']:.6f}", row.get("text", "")])
 
     if args.plot_samples > 0:
-        figs_dir = out_root.parent / "figures"
+        figs_dir = out_root / "figures"
         figs_dir.mkdir(parents=True, exist_ok=True)
         plot_mels(manifest, figs_dir, n=args.plot_samples, seed=args.seed)
 

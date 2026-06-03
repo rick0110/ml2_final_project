@@ -97,7 +97,7 @@ def make_mel_transform(sr: int, n_fft: int, hop_length: int, win_length: int, n_
 		hop_length=hop_length,
 		win_length=win_length,
 		n_mels=n_mels,
-		power=1.0,
+		power=2.0,
 	)
 	db = torchaudio.transforms.AmplitudeToDB(stype="power", top_db=80.0)
 	return torch.nn.Sequential(mel, db)
