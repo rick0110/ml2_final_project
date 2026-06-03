@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Train a mel frontend transfer model for HiFi-GAN compatibility.
+"""Train a mel frontend transfer model for HiFi_GAN compatibility.
 
 This script learns a lightweight adapter that maps the project's current
-stored mel frontend to the mel frontend expected by the bundled HiFi-GAN.
+stored mel frontend to the mel frontend expected by the bundled HiFi_GAN.
 
 The model is trained on paired data:
 - input: mel spectrogram already stored in the dataset
 - target: mel spectrogram computed from the paired waveform using the
-  HiFi-GAN frontend (trg_melspec_fn)
+  HiFi_GAN frontend (trg_melspec_fn)
 
 The resulting adapter can be inserted before the vocoder to remove the
 frontend mismatch that causes noisy reconstructions.
@@ -178,7 +178,7 @@ class MelFrontendTransfer(nn.Module):
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Train a mel frontend transfer model for HiFi-GAN compatibility",
+        description="Train a mel frontend transfer model for HiFi_GAN compatibility",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--num-epochs", type=int, default=80)
@@ -285,18 +285,18 @@ def load_checkpoint(model, optimizer, scheduler, checkpoint_path: Path, device: 
 
 
 def load_hifigan_vocoder(device: torch.device):
-    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi-GAN.py"
+    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi_GAN.py"
     if not hifigan_path.exists():
-        raise FileNotFoundError(f"HiFi-GAN loader not found at {hifigan_path}")
+        raise FileNotFoundError(f"HiFi_GAN loader not found at {hifigan_path}")
 
     spec = importlib.util.spec_from_file_location("hifigan_module", hifigan_path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"Could not import HiFi-GAN module from {hifigan_path}")
+        raise ImportError(f"Could not import HiFi_GAN module from {hifigan_path}")
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     if not hasattr(module, "load_hifigan_model"):
-        raise ImportError("load_hifigan_model not found in HiFi-GAN module")
+        raise ImportError("load_hifigan_model not found in HiFi_GAN module")
 
     _, vocoder = module.load_hifigan_model(freeze=True)
     return vocoder.to(device).eval()

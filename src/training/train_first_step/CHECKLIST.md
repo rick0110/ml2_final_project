@@ -27,7 +27,7 @@ Use this checklist to ensure everything is ready before starting training.
 
 - [ ] Pre-trained models can be downloaded:
   - [ ] FastPitch (for text encoding)
-  - [ ] HiFi-GAN (for vocoding)
+  - [ ] HiFi_GAN (for vocoding)
   - [ ] Check `local_weight_models/` folder (optional)
 
 ## Training Scripts

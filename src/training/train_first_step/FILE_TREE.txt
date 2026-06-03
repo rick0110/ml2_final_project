@@ -243,7 +243,7 @@ With --use-amp: ~30% faster in all cases
    • Text encoding (FastPitch)
    • Style extraction (GST)
    • Acoustic decoding (LSTM)
-   • Vocoding (HiFi-GAN)
+   • Vocoding (HiFi_GAN)
 
 ✅ ADVANCED TRAINING
    • Multi-dataset support

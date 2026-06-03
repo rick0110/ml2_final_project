@@ -266,18 +266,18 @@ class TensorBoardLogger:
 
 
 def load_hifigan_vocoder(device: torch.device):
-    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi-GAN.py"
+    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi_GAN.py"
     if not hifigan_path.exists():
-        raise FileNotFoundError(f"HiFi-GAN loader not found at {hifigan_path}")
+        raise FileNotFoundError(f"HiFi_GAN loader not found at {hifigan_path}")
 
     spec = importlib.util.spec_from_file_location("hifigan_module", hifigan_path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"Could not import HiFi-GAN module from {hifigan_path}")
+        raise ImportError(f"Could not import HiFi_GAN module from {hifigan_path}")
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     if not hasattr(module, "load_hifigan_model"):
-        raise ImportError("load_hifigan_model not found in HiFi-GAN module")
+        raise ImportError("load_hifigan_model not found in HiFi_GAN module")
 
     _, vocoder = module.load_hifigan_model(freeze=True)
     return vocoder.to(device).eval()
@@ -731,9 +731,9 @@ def main():
     tb_logger.log_model_info(model)
     tb_logger.log_hyperparameters(hparams, {})
 
-    print("Loading HiFi-GAN vocoder for TensorBoard sample logging...")
+    print("Loading HiFi_GAN vocoder for TensorBoard sample logging...")
     vocoder = load_hifigan_vocoder(device)
-    print("  ✓ HiFi-GAN vocoder loaded (frozen)")
+    print("  ✓ HiFi_GAN vocoder loaded (frozen)")
 
     mel_transfer_adapter = None
     if args.mel_transfer_checkpoint:

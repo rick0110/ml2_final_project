@@ -91,7 +91,7 @@ Mel Input → [GST] → z_style → [Concatenate]
                                   ↓
                             M_hat (Mel)
                                   ↓
-                        [HiFi-GAN] (frozen)
+                        [HiFi_GAN] (frozen)
                                   ↓
                            Audio Output
 ```

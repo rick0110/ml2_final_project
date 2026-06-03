@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from typing import Union, Tuple
 
 
 class GST(nn.Module):
@@ -17,7 +18,7 @@ class GST(nn.Module):
         n_heads (int, optional): Number of attention heads for multi-head attention mechanism. Default is 4.
 
     Returns:
-        torch.Tensor: Style embedding vector.
+        torch.Tensor (or Tuple[torch.Tensor, torch.Tensor]): Style embedding vector (and optionally attention weights).
     """
     
     def __init__(self, n_conv_layers: int = 6, hidden_size: int = 128, n_style_tokens: int = 10, n_mels: int = 80, n_heads: int = 4):
@@ -45,12 +46,10 @@ class GST(nn.Module):
         self.multHeadAttention = nn.MultiheadAttention(embed_dim=hidden_size, num_heads=n_heads, batch_first=True)
         self.style_tokens = nn.Parameter(torch.randn(n_style_tokens, hidden_size)) # -> [n_style_tokens, hidden_size]
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.forward_style_embedding(x)
-        
-        return x
+    def forward(self, x: torch.Tensor, return_att_weights: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        return self.forward_style_embedding(x, return_att_weights)
     
-    def forward_style_embedding(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_style_embedding(self, x: torch.Tensor, return_att_weights: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         x = self.forward_n_conv_layers(x)
         x = x.reshape(x.size(0), -1, x.size(3)) # -> [batch_size, 32*(2**(n_conv_layers//2 - 1)) * n_mels/(2**(n_conv_layers//2)), time_steps'] -> preserve time resolution
         x = x.transpose(1, 2) # -> [batch_size, time_steps', feature_dim]
@@ -58,17 +57,20 @@ class GST(nn.Module):
         _, x = x # -> [1, batch_size, hidden_size]
         x = x.squeeze(0) # -> [batch_size, hidden_size]
         x = torch.nn.functional.silu(x) # -> [batch_size, hidden_size]
-        x = self.forward_style_multihead_attention(x) # -> [batch_size, hidden_size]
-        return x
+        return self.forward_style_multihead_attention(x, return_att_weights)
 
     def forward_n_conv_layers(self, x: torch.Tensor) -> torch.Tensor:
         for conv in self.conv_layers:
             x = conv(x)
         return x
     
-    def forward_style_multihead_attention(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_style_multihead_attention(self, x: torch.Tensor, return_att_weights: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         query = x.unsqueeze(1) # -> [batch_size, 1, hidden_size]
         keys = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1)
         values = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1)
         att_out, att_weights = self.multHeadAttention(query, keys, values) # -> [batch_size, 1, hidden_size]
-        return att_out.squeeze(1) # -> [batch_size, hidden_size]
+        
+        if return_att_weights:
+            return att_out, att_weights.squeeze(1) # -> [batch_size, 1, hidden_size], [batch_size, n_style_tokens]
+        else:
+            return att_out # -> [batch_size, 1, hidden_size]

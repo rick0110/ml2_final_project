@@ -379,7 +379,6 @@ def log_validation_audio_examples(
 
     batch_size = mels.shape[0]
     
-    # Prepara um tensor simulado de IDs de texto (como fallback visual)
     text_ids = torch.randint(0, 1000, (batch_size, 256), device=device)
 
     attention_weights = None
@@ -411,7 +410,6 @@ def log_validation_audio_examples(
         prefix="examples/",
     )
 
-    # Coleta tokens diretamente do modelo
     style_tokens = None
     if hasattr(model, 'gst_module') and hasattr(model.gst_module, 'style_tokens'):
         style_tokens = model.gst_module.style_tokens

@@ -4,7 +4,7 @@ Complete training pipeline for a Text-to-Speech model combining:
 - **Text Encoder**: FastSpeech (frozen)
 - **Acoustic Decoder**: LSTM-based (trainable)
 - **Style Extractor**: Global Style Tokens (trainable)
-- **Vocoder**: HiFi-GAN (frozen)
+- **Vocoder**: HiFi_GAN (frozen)
 
 ## Architecture Overview
 
@@ -21,7 +21,7 @@ Mel Spectrogram Input
     ↓
 [Acoustic Decoder (LSTM)] → M̂ (Predicted Mel)
     ↓
-[HiFi-GAN Vocoder] → x̂(t) (Audio)
+[HiFi_GAN Vocoder] → x̂(t) (Audio)
 ```
 
 ## Loss Functions
@@ -47,7 +47,7 @@ Key dependencies:
 - `torch`: Deep learning framework
 - `tqdm`: Progress bars
 - `tensorboard`: Visualization
-- `nemo[tts]`: Text-to-speech models (FastPitch, HiFi-GAN)
+- `nemo[tts]`: Text-to-speech models (FastPitch, HiFi_GAN)
 - `transformers`: HuBERT model
 
 ## Basic Usage
@@ -230,7 +230,7 @@ tensorboard --logdir experiments/step_1/first_training/tensorboard
 
 ## Notes
 
-- **Text Encoder (FastPitch)** and **Vocoder (HiFi-GAN)** are frozen during training
+- **Text Encoder (FastPitch)** and **Vocoder (HiFi_GAN)** are frozen during training
 - **Acoustic Decoder** and **GST** are trainable
 - The script handles dataset loading from both LibriSpeech-PT and TTS Portuguese
 - Text tokenization is currently simplified (random IDs); implement proper tokenizer for production
