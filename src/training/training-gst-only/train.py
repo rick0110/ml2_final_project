@@ -61,4 +61,161 @@ def train_model(config: TrainingConfig):
     for epoch in range(config.max_epochs):
         # Training phase
         train_loss, train_metrics = train_epoch(
-            fastpitch, gst, mel_decoder, hif仁
+            fastpitch, gst, mel_decoder, hifigan,
+            train_loader, optimizer, config.loss_weights,
+            device, epoch, config.max_epochs
+        )
+        
+        # Validation phase
+        val_loss, val_metrics = validate_epoch(
+            fastpitch, gst, mel_decoder, hifigan,
+            val_loader, config.loss_weights,
+            device, epoch, config.max_epochs
+        )
+        
+        # Log metrics
+        logger.log_metrics(train_metrics, epoch, "train")
+        logger.log_metrics(val_metrics, epoch, "val")
+        
+        # Save checkpoint
+        if (epoch + 1) % 10 == 0:
+            save_checkpoint(
+                fastpitch, gst, mel_decoder, optimizer,
+                config.checkpoint_dir, epoch
+            )
+    
+    # Final save
+    save_checkpoint(
+        fastpitch, gst, mel_decoder, optimizer,
+        config.checkpoint_dir, config.max_epochs - 1
+    )
+    
+    # Close logger
+    logger.close()
+
+def train_epoch(
+    fastpitch: FastPitchModel,
+    gst: GST,
+    mel_decoder: MelDecoder,
+    hifigan: HifiGanModel,
+    train_loader: DataLoader,
+    optimizer: optim.AdamW,
+    loss_weights: Dict[str, float],
+    device: torch.device,
+    epoch: int,
+    max_epochs: int
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    """Train for one epoch."""
+    fastpitch.train()
+    gst.train()
+    mel_decoder.train()
+    
+    total_loss = 0.0
+    metrics = {}
+    
+    for batch in train_loader:
+        # Move data to device
+        text_ids = batch["text_ids"].to(device)
+        target_mel = batch["mel"].to(device)
+        reference_audio = batch["reference_audio"].to(device)
+        
+        # Forward pass
+        text_states = fastpitch(text_ids)
+        style_ref = gst(reference_audio)
+        style_gen = gst(hifigan(target_mel))
+        
+        # Generate mel spectrogram
+        mel = mel_decoder(text_states, style_gen)
+        
+        # Compute loss
+        loss, loss_components = total_loss(
+            mel, target_mel, style_gen, style_ref, style_gen,
+            loss_weights
+        )
+        
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        # Update metrics
+        total_loss += loss.item()
+        for k, v in loss_components.items():
+            metrics[k] = metrics.get(k, 0.0) + v.item()
+    
+    # Average metrics
+    for k in metrics:
+        metrics[k] /= len(train_loader)
+    
+    return total_loss / len(train_train_loader), metrics
+
+def validate_epoch(
+    fastpitch: FastPitchModel,
+    gst: GST,
+    mel_decoder: MelDecoder,
+    hifigan: HifiGanModel,
+    val_loader: DataLoader,
+    loss_weights: Dict[str, float],
+    device: torch.device,
+    epoch: int,
+    max_epochs: int
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    """Validate for one epoch."""
+    fastpitch.eval()
+    gst.eval()
+    mel_decoder.eval()
+    
+    total_loss = 0.0
+    metrics = {}
+    
+    with torch.no_grad():
+        for batch in val_loader:
+            # Move data to device
+            text_ids = batch["text_ids"].to(device)
+            target_mel = batch["mel"].to(device)
+            reference_audio = batch["reference_audio"].to(device)
+            
+            # Forward pass
+            text_states = fastpitch(text_ids)
+            style_ref = gst(reference_audio)
+            style_gen = gst(hifigan(target_mel))
+            
+            # Generate mel spectrogram
+            mel = mel_decoder(text_states, style_gen)
+            
+            # Compute loss
+            loss, loss_components = total_loss(
+                mel, target_mel, style_gen, style_ref, style_gen,
+                loss_weights
+            )
+            
+            # Update metrics
+            total_loss += loss.item()
+            for k, v in loss_components.items():
+                metrics[k] = metrics.get(k, 0.0) + v.item()
+    
+    # Average metrics
+    for k in metrics:
+        metrics[k] /= len(val_loader)
+    
+    return total_loss / len(val_loader), metrics
+
+def save_checkpoint(
+    fastpitch: FastPitchModel,
+    gst: GST,
+    mel_decoder: MelDecoder,
+    optimizer: optim.AdamW,
+    checkpoint_dir: str,
+    epoch: int
+):
+    """Save model checkpoint."""
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_path = os.path.join(checkpoint_dir, f"epoch_{epoch}.pt")
+    
+    torch.save({
+        "fastpitch": fastpitch.state_dict(),
+        "gst": gst.state_dict(),
+        "mel_decoder": mel_decoder.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "epoch": epoch
+    }, checkpoint_path)
