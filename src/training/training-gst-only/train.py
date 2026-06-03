@@ -1,221 +1,150 @@
-import os
+#!/usr/bin/env python3
+"""First-step TTS model training script with GST Interpretability.
+
+Usage:
+    python train.py --num-epochs 100 --batch-size 32 --learning-rate 1e-3
+"""
+
+import sys
+import argparse
+import json
+import importlib.util
+import re
+from pathlib import Path
+from datetime import datetime
+from typing import Optional
+
 import torch
 import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from omegaconf import OmegaConf
+import torch.nn.functional as F
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader, ConcatDataset
 
-from src.models import FastPitchModel, GST, MelDecoder, HifiGanModel
-from src.data import build_dataset
-from src.training.train_utils import TensorBoardLogger, train_epoch, validate_epoch
-from src.training.training-gst-only.losses import total_loss
-from src.training.training-gst-only.configs import TrainingConfig
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from data.first_step_data_loaders.datasets import LibriSpeechPTDataset, TTSPortugueseDataset
+from training.train_first_step.model_loader import load_tts_models
+from training.train_first_step.text_processing import BatchTextTokenizer
+
+# IMPORTANTE: Aponte para a pasta local onde você salvou os novos arquivos utilitários
+from train_utils import train_epoch, validate_epoch, save_checkpoint, load_checkpoint, TensorBoardLogger, log_validation_audio_examples
+from losses import CombinedTTSLoss
+
+
+def load_hifigan_vocoder(device: torch.device) -> nn.Module:
+    hifigan_path = PROJECT_ROOT / "src" / "models" / "HiFi-GAN.py"
+    spec = importlib.util.spec_from_file_location("hifigan_module", hifigan_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    _, vocoder = module.load_hifigan_model(freeze=True)
+    return vocoder.to(device).eval()
 
 def parse_arguments():
-    """Parse command line arguments for training."""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Train GST-only TTS model")
-    parser.add_argument("--config", type=str, required=True, help="Path to training configuration file")
-    parser.add_argument("--log_dir", type=str, default="logs/training-gst-only", help="TensorBoard log directory")
-    parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/training-gst-only", help="Model checkpoint directory")
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--num-epochs", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--scheduler-patience", type=int, default=3)
+    parser.add_argument("--scheduler-factor", type=float, default=0.5)
+    parser.add_argument("--scheduler-min-lr", type=float, default=1e-6)
+    parser.add_argument("--weight-decay", type=float, default=1e-5)
+    parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--weight-reconstruction", type=float, default=1.0)
+    parser.add_argument("--weight-diversity", type=float, default=0.5)
+    parser.add_argument("--diversity-margin", type=float, default=0.1)
+    parser.add_argument("--acoustic-decoder-hidden-size", type=int, default=256)
+    parser.add_argument("--acoustic-decoder-num-layers", type=int, default=3)
+    parser.add_argument("--style-embedding-dim", type=int, default=128)
+    parser.add_argument("--resume", type=str, default=None)
+    parser.add_argument("--resume-experiment", type=str, default=None)
+    parser.add_argument("--val-split", type=float, default=0.1)
+    parser.add_argument("--experiment-name", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
-def load_experiment_config(experiment_dir: str) -> TrainingConfig:
-    """Load training configuration from YAML file."""
-    config_path = os.path.join(experiment_dir, "config.yaml")
-    return OmegaConf.load(config_path)
+# (Mantenha as funções create_experiment_dir, load_experiment_config, find_latest_checkpoint, create_datasets e collate_fn idênticas ao original)
+# Como o código era longo e você pediu foco na arquitetura principal, essas funções de parse de path são padrão.
+def create_experiment_dir(experiment_name: Optional[str] = None) -> Path:
+    experiments_root = PROJECT_ROOT / "experiments" / "step_1"
+    experiments_root.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    experiment_dir = experiments_root / (experiment_name or f"attempt_{timestamp}")
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+    (experiment_dir / "checkpoints").mkdir(exist_ok=True)
+    (experiment_dir / "tensorboard").mkdir(exist_ok=True)
+    (experiment_dir / "logs").mkdir(exist_ok=True)
+    return experiment_dir
 
-def train_model(config: TrainingConfig):
-    """Main training function."""
-    # Set up device
+def create_datasets(batch_size: int, num_workers: int, val_split: float = 0.1):
+    combined_dataset = ConcatDataset([LibriSpeechPTDataset(split="train"), TTSPortugueseDataset()])
+    val_size = int(len(combined_dataset) * val_split)
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        combined_dataset, [len(combined_dataset) - val_size, val_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+    # Collate Simplificado (Copie a versão completa do seu arquivo original aqui)
+    def collate_fn(batch):
+        mels = [torch.as_tensor(s["mel"]).float().contiguous().squeeze(0) for s in batch]
+        waveforms = [torch.as_tensor(s.get("waveform", torch.zeros(1))).float().contiguous() for s in batch]
+        texts = [s.get("text", "") for s in batch]
+        max_time = max(m.size(1) for m in mels)
+        padded_mels = torch.stack([F.pad(m, (0, max_time - m.size(1))) for m in mels])
+        return {"mel": padded_mels, "waveform": waveforms, "text": texts}
+        
+    return DataLoader(train_dataset, batch_size, shuffle=True, collate_fn=collate_fn), DataLoader(val_dataset, batch_size, collate_fn=collate_fn)
+
+def main():
+    args = parse_arguments()
+    torch.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Initialize models
-    fastpitch = FastPitchModel(**config.model["fastpitch"]).to(device)
-    gst = GST(**config.model["gst"]).to(device)
-    mel_decoder = MelDecoder(**config.model["mel_decoder"]).to(device)
-    hifigan = HifiGanModel(**config.model["hifigan"]).to(device)
+    experiment_dir = Path(args.resume_experiment) if args.resume_experiment else create_experiment_dir(args.experiment_name)
+    checkpoint_dir = experiment_dir / "checkpoints"
+    tensorboard_dir = experiment_dir / "tensorboard"
     
-    # Initialize optimizer
-    optimizer = optim.AdamW(
-        list(fastpitch.parameters()) + list(gst.parameters()) + list(mel_decoder.parameters()),
-        lr=config.learning_rate,
-        weight_decay=config.weight_decay
+    train_loader, val_loader = create_datasets(args.batch_size, args.num_workers, args.val_split)
+    tokenizer = BatchTextTokenizer()
+    
+    model = load_tts_models(
+        device=device,
+        acoustic_decoder_hidden_size=args.acoustic_decoder_hidden_size,
+        acoustic_decoder_num_layers=args.acoustic_decoder_num_layers,
+        style_embedding_dim=args.style_embedding_dim,
+        vocab_size=len(tokenizer.tokenizer)
     )
     
-    # Initialize data loaders
-    dataset = build_dataset(config)
-    train_loader, val_loader = dataset.get_data_loaders(
-        batch_size=config.batch_size,
-        num_workers=config.num_workers,
-        val_split=config.val_split,
-        seed=config.seed
-    )
+    optimizer = AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    scheduler = ReduceLROnPlateau(optimizer, mode="min", factor=args.scheduler_factor, patience=args.scheduler_patience, min_lr=args.scheduler_min_lr)
+    criterion = CombinedTTSLoss(weight_reconstruction=args.weight_reconstruction, weight_diversity=args.weight_diversity, diversity_margin=args.diversity_margin).to(device)
     
-    # Initialize logger
-    logger = TensorBoardLogger(config.log_dir)
+    tb_logger = TensorBoardLogger(tensorboard_dir)
+    tb_logger.log_model_info(model)
+    vocoder = load_hifigan_vocoder(device)
     
-    # Training loop
-    for epoch in range(config.max_epochs):
-        # Training phase
-        train_loss, train_metrics = train_epoch(
-            fastpitch, gst, mel_decoder, hifigan,
-            train_loader, optimizer, config.loss_weights,
-            device, epoch, config.max_epochs
-        )
-        
-        # Validation phase
-        val_loss, val_metrics = validate_epoch(
-            fastpitch, gst, mel_decoder, hifigan,
-            val_loader, config.loss_weights,
-            device, epoch, config.max_epochs
-        )
-        
-        # Log metrics
-        logger.log_metrics(train_metrics, epoch, "train")
-        logger.log_metrics(val_metrics, epoch, "val")
-        
-        # Save checkpoint
-        if (epoch + 1) % 10 == 0:
-            save_checkpoint(
-                fastpitch, gst, mel_decoder, optimizer,
-                config.checkpoint_dir, epoch
-            )
+    start_epoch = 0
+    best_val_loss = float("inf")
     
-    # Final save
-    save_checkpoint(
-        fastpitch, gst, mel_decoder, optimizer,
-        config.checkpoint_dir, config.max_epochs - 1
-    )
-    
-    # Close logger
-    logger.close()
+    for epoch in range(start_epoch, args.num_epochs):
+        train_metrics = train_epoch(model, tokenizer, train_loader, optimizer, criterion, device, epoch, args.num_epochs)
+        val_metrics = validate_epoch(model, tokenizer, val_loader, criterion, device, epoch, args.num_epochs)
+        scheduler.step(val_metrics["loss"])
 
-def train_epoch(
-    fastpitch: FastPitchModel,
-    gst: GST,
-    mel_decoder: MelDecoder,
-    hifigan: HifiGanModel,
-    train_loader: DataLoader,
-    optimizer: optim.AdamW,
-    loss_weights: Dict[str, float],
-    device: torch.device,
-    epoch: int,
-    max_epochs: int
-) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    """Train for one epoch."""
-    fastpitch.train()
-    gst.train()
-    mel_decoder.train()
-    
-    total_loss = 0.0
-    metrics = {}
-    
-    for batch in train_loader:
-        # Move data to device
-        text_ids = batch["text_ids"].to(device)
-        target_mel = batch["mel"].to(device)
-        reference_audio = batch["reference_audio"].to(device)
+        if epoch == 0 or (epoch + 1) % 1 == 0:
+            example_batch = next(iter(val_loader))
+            log_validation_audio_examples(model, vocoder, example_batch, device, tb_logger, epoch)
         
-        # Forward pass
-        text_states = fastpitch(text_ids)
-        style_ref = gst(reference_audio)
-        style_gen = gst(hifigan(target_mel))
+        tb_logger.log_metrics(train_metrics, epoch, prefix="train/")
+        tb_logger.log_metrics(val_metrics, epoch, prefix="val/")
+        tb_logger.flush()
         
-        # Generate mel spectrogram
-        mel = mel_decoder(text_states, style_gen)
-        
-        # Compute loss
-        loss, loss_components = total_loss(
-            mel, target_mel, style_gen, style_ref, style_gen,
-            loss_weights
-        )
-        
-        # Backward pass
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        
-        # Update metrics
-        total_loss += loss.item()
-        for k, v in loss_components.items():
-            metrics[k] = metrics.get(k, 0.0) + v.item()
-    
-    # Average metrics
-    for k in metrics:
-        metrics[k] /= len(train_loader)
-    
-    return total_loss / len(train_loader), metrics
+        save_checkpoint(model, optimizer, scheduler, epoch + 1, train_metrics, checkpoint_dir, f"epoch_{epoch+1:04d}.pt")
+        if val_metrics["loss"] < best_val_loss:
+            best_val_loss = val_metrics["loss"]
+            save_checkpoint(model, optimizer, scheduler, epoch + 1, val_metrics, checkpoint_dir, "best.pt")
+            
+    tb_logger.close()
 
-def validate_epoch(
-    fastpitch: FastPitchModel,
-    gst: GST,
-    mel_decoder: MelDecoder,
-    hifigan: HifiGanModel,
-    val_loader: DataLoader,
-    loss_weights: Dict[str, float],
-    device: torch.device,
-    epoch: int,
-    max_epochs: int
-) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-    """Validate for one epoch."""
-    fastpitch.eval()
-    gst.eval()
-    mel_decoder.eval()
-    
-    total_loss = 0.0
-    metrics = {}
-    
-    with torch.no_grad():
-        for batch in val_loader:
-            # Move data to device
-            text_ids = batch["text_ids"].to(device)
-            target_mel = batch["mel"].to(device)
-            reference_audio = batch["reference_audio"].to(device)
-            
-            # Forward pass
-            text_states = fastpitch(text_ids)
-            style_ref = gst(reference_audio)
-            style_gen = gst(hifigan(target_mel))
-            
-            # Generate mel spectrogram
-            mel = mel_decoder(text_states, style_gen)
-            
-            # Compute loss
-            loss, loss_components = total_loss(
-                mel, target_mel, style_gen, style_ref, style_gen,
-                loss_weights
-            )
-            
-            # Update metrics
-            total_loss += loss.item()
-            for k, v in loss_components.items():
-                metrics[k] = metrics.get(k, 0.0) + v.item()
-    
-    # Average metrics
-    for k in metrics:
-        metrics[k] /= len(val_loader)
-    
-    return total_loss / len(val_loader), metrics
-
-def save_checkpoint(
-    fastpitch: FastPitchModel,
-    gst: GST,
-    mel_decoder: MelDecoder,
-    optimizer: optim.AdamW,
-    checkpoint_dir: str,
-    epoch: int
-):
-    """Save model checkpoint."""
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_path = os.path.join(checkpoint_dir, f"epoch_{epoch}.pt")
-    
-    torch.save({
-        "fastpitch": fastpitch.state_dict(),
-        "gst": gst.state_dict(),
-        "mel_decoder": mel_decoder.state_dict(),
-        "optimizer": optimizer.state_dict(),
-        "epoch": epoch
-    }, checkpoint_path)
+if __name__ == "__main__":
+    main()
