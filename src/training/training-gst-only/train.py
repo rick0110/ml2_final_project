@@ -147,7 +147,7 @@ def train_epoch(
     for k in metrics:
         metrics[k] /= len(train_loader)
     
-    return total_loss / len(train_train_loader), metrics
+    return total_loss / len(train_loader), metrics
 
 def validate_epoch(
     fastpitch: FastPitchModel,
