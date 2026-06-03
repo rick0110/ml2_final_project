@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import Dataset
+from src.training.training-gst-only.configs import TrainingConfig
+
 
 def build_dataset(config: TrainingConfig) -> Dataset:
     """Build dataset for training."""

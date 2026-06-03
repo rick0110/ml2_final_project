@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
+from typing import Dict
+
 
 class TensorBoardLogger:
     """TensorBoard logging utility for training."""
