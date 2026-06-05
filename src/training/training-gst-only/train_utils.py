@@ -25,10 +25,7 @@ from tqdm import tqdm
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from training.train_first_step.model_loader import FirstStepTTSModel
-from training.train_first_step.losses import CombinedTTSLoss
-from training.train_first_step.text_processing import BatchTextTokenizer
-
+from losses import CombinedTTSLoss
 
 class MetricsTracker:
     """Track training metrics across batches."""
@@ -54,31 +51,50 @@ def _align_predicted_mel_to_target(
     predicted_mel: torch.Tensor,
     target_mel: torch.Tensor,
 ) -> torch.Tensor:
-    """Align predicted mel time axis to the target mel time axis.
-
-    Expects tensors in (batch, n_mels, time_steps).
-    """
-    if predicted_mel.dim() != 3 or target_mel.dim() != 3:
-        raise ValueError(
-            f"Expected 3D mel tensors, got predicted={predicted_mel.shape}, target={target_mel.shape}"
-        )
-
     target_time = target_mel.size(2)
     pred_time = predicted_mel.size(2)
+
     if pred_time == target_time:
         return predicted_mel
 
-    return F.interpolate(
-        predicted_mel,
-        size=target_time,
-        mode="linear",
-        align_corners=False,
-    )
+    if pred_time > target_time:
+        return predicted_mel[:, :, :target_time]
+    else:
+        pad_amount = target_time - pred_time
+        return F.pad(predicted_mel, (0, pad_amount), value=0.0)
+    
+def _align_predicted_audio_to_target(
+    predicted_audio: torch.Tensor,
+    target_audio: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+
+    target_time = target_audio.size(-1)
+    pred_time = predicted_audio.size(-1)
+
+    if pred_time == target_time:
+        return predicted_audio
+
+    if pred_time > target_time:
+        return predicted_audio[..., :target_time]
+    else:
+        pad_amount = target_time - pred_time
+        return F.pad(predicted_audio, (0, pad_amount), value=0.0)
+
+
+def pad_sequence(sequences, padding_value):
+    sequences = [seq.squeeze(0) if seq.dim() > 1 else seq for seq in sequences]
+    
+    max_len = max(seq.size(0) for seq in sequences)
+    padded_seqs = []
+    for seq in sequences:
+        pad_amount = max_len - seq.size(0)
+        padded_seq = F.pad(seq, (0, pad_amount), value=padding_value)
+        padded_seqs.append(padded_seq)
+    return torch.stack(padded_seqs)
 
 
 def train_epoch(
     model: nn.Module,
-    Tokenizer: BatchTextTokenizer,
     train_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     criterion: CombinedTTSLoss,
@@ -99,32 +115,41 @@ def train_epoch(
 
     for batch_idx, batch in enumerate(pbar):
         mels = batch["mel"].to(device)
-        text_ids = Tokenizer.encode_batch(batch["text"]).to(device)
+        if mels.dim() == 4 and mels.size(1) == 1:
+            mels = mels.squeeze(1)
+
+        audios_target = batch.get("waveform")
+            
+        texts = batch["text"]
+        
+        was_training = model.spec_generator.training
+        model.spec_generator.eval()
+        with torch.no_grad():
+            parsed_texts = [torch.tensor(model.spec_generator.parse(t)) for t in texts]
+        if was_training:
+            model.spec_generator.train()
+            
+        padding_value = model.spec_generator.fastpitch.encoder.padding_idx
+        text_ids = pad_sequence(parsed_texts, padding_value=padding_value).to(device)
+
         optimizer.zero_grad()
 
-        # Suporta modelos que retornam (mel, style) ou (mel, style, attention_weights)
-        outputs = model(text_ids=text_ids, target_mel=mels)
-        if len(outputs) == 3:
-            predicted_mel, style_embeddings, _ = outputs
-        else:
-            predicted_mel, style_embeddings = outputs
+        audio, mel = model(text_tokens=text_ids, audio_inputs=mels, return_att_weights=False)
 
-        if predicted_mel.dim() == 3:
-            predicted_mel = predicted_mel.transpose(1, 2)
+        aligned_predicted_audio = _align_predicted_audio_to_target(audio, audios_target.to(device))
         
-        predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
-        
-        if hasattr(model, 'gst_module') and hasattr(model.gst_module, 'style_tokens'):
-            global_tokens = model.gst_module.style_tokens
-        elif hasattr(model, 'gst') and hasattr(model.gst, 'style_tokens'):
-            global_tokens = model.gst.style_tokens
-        else:
-            global_tokens = style_embeddings
+        #predicted_mel = _align_predicted_mel_to_target(mel, mels)
+        #
+        global_tokens = model.gst.style_tokens if hasattr(model, 'gst') else None
 
-        loss, recon_loss, div_loss = criterion(
-            predicted_mel=predicted_mel,
-            target_mel=mels,
-            global_style_tokens=global_tokens,
+        #loss, recon_loss, div_loss = criterion(
+        #    predicted_mel=predicted_mel,
+        #    target_mel=mels,
+        #    global_style_tokens=global_tokens,
+        #)
+        loss = criterion(
+            audio_gen=aligned_predicted_audio,
+            audio_ref=audios_target.to(device),
         )
         
         loss.backward()
@@ -132,8 +157,8 @@ def train_epoch(
 
         metrics.add(
             loss=loss.item(),
-            recon_loss=recon_loss.item(),
-            div_loss=div_loss.item(),
+            #recon_loss=recon_loss.item(),
+            #div_loss=div_loss.item(),
         )
 
         pbar.set_postfix({"loss": f"{metrics.get_averages()['loss']:.4f}"}, refresh=True)
@@ -146,7 +171,6 @@ def train_epoch(
 
 def validate_epoch(
     model: nn.Module,
-    Tokenizer: BatchTextTokenizer,
     val_loader: DataLoader,
     criterion: CombinedTTSLoss,
     device: torch.device,
@@ -167,24 +191,23 @@ def validate_epoch(
     with torch.no_grad():
         for batch_idx, batch in enumerate(pbar):
             mels = batch["mel"].to(device)
-            text_ids = Tokenizer.encode_batch(batch["text"]).to(device)
+            
+            if mels.dim() == 4 and mels.size(1) == 1:
+                mels = mels.squeeze(1)
+                
+            texts = batch["text"]
+            
+            parsed_texts = [torch.tensor(model.spec_generator.parse(t)) for t in texts]
+            padding_value = model.spec_generator.fastpitch.encoder.padding_idx
+            text_ids = pad_sequence(parsed_texts, padding_value=padding_value).to(device)
 
             try:
-                outputs = model(text_ids=text_ids, target_mel=mels)
-                if len(outputs) == 3:
-                    predicted_mel, style_embeddings, _ = outputs
-                else:
-                    predicted_mel, style_embeddings = outputs
+                outputs = model(text_tokens=text_ids, audio_inputs=mels, return_att_weights=False)
+                audio, mel = outputs
 
-                predicted_mel = predicted_mel.transpose(1, 2)
-                predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
+                predicted_mel = _align_predicted_mel_to_target(mel, mels)
 
-                if hasattr(model, 'gst_module') and hasattr(model.gst_module, 'style_tokens'):
-                    global_tokens = model.gst_module.style_tokens
-                elif hasattr(model, 'gst') and hasattr(model.gst, 'style_tokens'):
-                    global_tokens = model.gst.style_tokens
-                else:
-                    global_tokens = style_embeddings
+                global_tokens = model.gst.style_tokens if hasattr(model, 'gst') else None
 
                 loss, recon_loss, div_loss = criterion(
                     predicted_mel=predicted_mel,
@@ -256,6 +279,26 @@ def load_checkpoint(
         scheduler.load_state_dict(scheduler_state_dict)
     
     return checkpoint["epoch"], checkpoint.get("metrics", {})
+
+
+def find_last_epoch(checkpoint_dir: Path) -> Optional[str]:
+    """Find the last epoch number from checkpoint files."""
+    checkpoint_files = list(checkpoint_dir.glob("epoch_*.pt"))
+    if not checkpoint_files:
+        return None
+    
+    num_epochs = -1
+    file_path_name = None
+    for file in checkpoint_files:
+        try:
+            epoch_num = int(file.stem.split("_")[1])
+            if epoch_num > num_epochs:
+                num_epochs = epoch_num
+                file_path_name = file.name
+        except (IndexError, ValueError):
+            continue
+    
+    return file_path_name
 
 
 class TensorBoardLogger:
@@ -364,6 +407,9 @@ def log_validation_audio_examples(
         return
 
     mels = batch["mel"].to(device)
+    if mels.dim() == 4 and mels.size(1) == 1:
+        mels = mels.squeeze(1)
+        
     waveforms = batch["waveform"].to(device)
     sr_value = batch.get("sr", 22050)
     
@@ -377,26 +423,26 @@ def log_validation_audio_examples(
     original_audio = waveforms[0].squeeze().float().clamp(-1.0, 1.0)
     original_mel = mels[0:1]
 
-    batch_size = mels.shape[0]
-    
-    text_ids = torch.randint(0, 1000, (batch_size, 256), device=device)
+    texts = batch["text"]
+    parsed_texts = [torch.tensor(model.spec_generator.parse(t)) for t in texts]
+    padding_value = model.spec_generator.fastpitch.encoder.padding_idx
+    text_ids = pad_sequence(parsed_texts, padding_value=padding_value).to(device)
 
-    attention_weights = None
     with torch.no_grad():
-        outputs = model(text_ids=text_ids, target_mel=mels)
+        outputs = model(text_tokens=text_ids, audio_inputs=mels, return_att_weights=True, generate_audio=True)
+        
         if len(outputs) == 3:
-            predicted_mel, _, attention_weights = outputs
+            predicted_audio, predicted_mel, attention_weights = outputs
         else:
-            predicted_mel, _ = outputs
+            predicted_audio, predicted_mel = outputs
+            attention_weights = None
 
-        if predicted_mel.dim() == 3:
-            predicted_mel = predicted_mel.transpose(1, 2)
         predicted_mel = _align_predicted_mel_to_target(predicted_mel, mels)
-
         reconstructed_audio = vocoder(spec=original_mel)
-        predicted_audio = vocoder(spec=predicted_mel[0:1])
 
     def _to_audio_1d(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor is None:
+            return torch.zeros(1)
         return tensor.detach().float().cpu().squeeze().clamp(-1.0, 1.0)
 
     logger.log_audio_examples(
@@ -405,7 +451,11 @@ def log_validation_audio_examples(
         original_audio=_to_audio_1d(original_audio),
         original_mel=original_mel.detach().float().cpu().squeeze(0),
         reconstructed_audio=_to_audio_1d(reconstructed_audio),
-        predicted_audio=_to_audio_1d(predicted_audio),
+        
+        # 2. CORREÇÃO: Passar predicted_audio inteiro, pois o nosso modelo 
+        # já recorta para apenas 1 áudio internamente.
+        predicted_audio=_to_audio_1d(predicted_audio), 
+        
         predicted_mel=predicted_mel[0].detach().float().cpu(),
         prefix="examples/",
     )

@@ -14,25 +14,20 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT / "src"  / "models"))
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "training" / "training-gst-only"))
 
-from training.train_first_step.text_processing import BatchTextTokenizer
-from train_utils import train_epoch, validate_epoch, save_checkpoint, load_checkpoint, TensorBoardLogger, log_validation_audio_examples
-from losses import CombinedTTSLoss
+
+from train_utils import train_epoch, validate_epoch, save_checkpoint, load_checkpoint, TensorBoardLogger, log_validation_audio_examples, find_last_epoch
+from losses import CombinedTTSLoss, Loss_audio
 from models.TTS_GST import TTS_GST
 from utils import create_experiment_dir, create_dataset, create_dataloaders
 
-# Importando os novos utilitários de interpretabilidade
-from training.train_first_step.interpretability_utils import (
-    log_gst_attention_heatmap, 
-    log_style_token_similarity, 
-    log_style_token_embeddings
-)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--num-epochs", type=int, default=100)
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--scheduler-patience", type=int, default=3)
     parser.add_argument("--scheduler-factor", type=float, default=0.5)
@@ -44,7 +39,6 @@ def parse_arguments():
     parser.add_argument("--diversity-margin", type=float, default=0.1)
     parser.add_argument("--style-embedding-dim", type=int, default=384)
     parser.add_argument("--num-style-tokens", type=int, default=10)
-    parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--resume-experiment", type=str, default=None)
     parser.add_argument("--val-split", type=float, default=0.1)
     parser.add_argument("--experiment-name", type=str, default=None)
@@ -63,7 +57,6 @@ def main():
     
     dataset = create_dataset()
     train_loader, val_loader = create_dataloaders(dataset, args.batch_size, args.num_workers, args.val_split, args.seed)
-    tokenizer = BatchTextTokenizer()
     
     model = TTS_GST(
         num_gst_tokens=args.num_style_tokens,
@@ -72,69 +65,49 @@ def main():
 
     optimizer = AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, mode="min", factor=args.scheduler_factor, patience=args.scheduler_patience, min_lr=args.scheduler_min_lr)
-    criterion = CombinedTTSLoss(weight_reconstruction=args.weight_reconstruction, weight_diversity=args.weight_diversity, diversity_margin=args.diversity_margin).to(device)
-    
+    #criterion = CombinedTTSLoss(weight_reconstruction=args.weight_reconstruction, weight_diversity=args.weight_diversity, diversity_margin=args.diversity_margin).to(device)
+    criterion = Loss_audio(weight_consistency=0.1).to(device)
+
     tb_logger = TensorBoardLogger(tensorboard_dir)
     tb_logger.log_model_info(model)
     
     start_epoch = 0
     best_val_loss = float("inf")
-
-    # Tratamento para retomar treinamento
-    if args.resume:
-        checkpoint_path = checkpoint_dir / args.resume
-        if checkpoint_path.exists():
-            start_epoch, best_val_loss = load_checkpoint(model, optimizer, scheduler, checkpoint_path)
-            print(f"Resumed from checkpoint {checkpoint_path} at epoch {start_epoch} with best val loss {best_val_loss:.4f}")
-        else:
-            print(f"Checkpoint {checkpoint_path} not found. Starting from scratch.")
     
-    elif args.resume_experiment:
-        best_checkpoint = checkpoint_dir / "best.pt" # Correção do erro de sintaxe aqui
-        if best_checkpoint.exists():
-            start_epoch, best_val_loss = load_checkpoint(model, optimizer, scheduler, best_checkpoint)
-            print(f"Resumed from best checkpoint {best_checkpoint} at epoch {start_epoch} with val loss {best_val_loss:.4f}")
+    if args.resume_experiment:
+        last_ckpt_name = find_last_epoch(checkpoint_dir)
+        if last_ckpt_name:
+            last_checkpoint = checkpoint_dir / last_ckpt_name
+            start_epoch, metrics = load_checkpoint(model, optimizer, scheduler, last_checkpoint, device)
+            best_val_loss = metrics.get("loss", float("inf"))
+            print(f"Resumed from checkpoint {last_checkpoint} at epoch {start_epoch} with val loss {best_val_loss:.4f}")
         else:
-            print(f"Best checkpoint {best_checkpoint} not found. Starting from scratch.")
+            print(f"No valid checkpoints found in {checkpoint_dir}. Starting from scratch.")
 
+    print({
+        "Experiment Directory": experiment_dir,
+        "Device": device,
+        "Start Epoch": start_epoch,
+        "Trainable Parameters": sum(p.numel() for p in model.parameters() if p.requires_grad),
+        "Total Parameters": sum(p.numel() for p in model.parameters()),
+    })
 
     for epoch in range(start_epoch, args.num_epochs):
-        # ATENÇÃO: As funções train_epoch e validate_epoch precisarão ser 
-        # atualizadas no seu arquivo `train_utils.py` para esperar uma 
-        # tupla (audio_outputs, att_weights) do modelo.
-        train_metrics = train_epoch(model, tokenizer, train_loader, optimizer, criterion, device, epoch, args.num_epochs)
-        val_metrics = validate_epoch(model, tokenizer, val_loader, criterion, device, epoch, args.num_epochs)
+        train_metrics = train_epoch(model, train_loader, optimizer, criterion, device, epoch, args.num_epochs)
+        val_metrics = validate_epoch(model, val_loader, criterion, device, epoch, args.num_epochs)
         scheduler.step(val_metrics["loss"])
 
-        # Logs visuais, de áudio e interpretabilidade (ex: a cada época)
         if epoch == 0 or (epoch + 1) % 1 == 0:
             example_batch = next(iter(val_loader))
-            # Você precisará passar apenas 'model' caso o vocoder já esteja embutido (como parece ser no TTS_GST)
-            log_validation_audio_examples(model, model.vocoder, example_batch, device, tb_logger, epoch)
             
-            # --- SEÇÃO DE INTERPRETABILIDADE GST ---
-            model.eval()
-            with torch.no_grad():
-                # Assumindo que seu batch gera 'text_embed' e 'audio_inputs'
-                # Você precisará adaptar isso conforme os nomes devolvidos pelo seu DataLoader
-                text_input, audio_input = example_batch[0].to(device), example_batch[1].to(device)
-                
-                # Fazendo forward de validação para capturar pesos de atenção específicos
-                # Modifique caso seu TTS_GST precise de embeddings de texto já convertidos
-                _, att_weights = model(text_input, audio_input)
-                
-                # 1. Heatmap da Atenção (para ver se áudios diferentes ativam tokens diferentes)
-                log_gst_attention_heatmap(tb_logger, att_weights, epoch)
-                
-                # 2. Similaridade entre Tokens (para monitorar Mode Collapse)
-                log_style_token_similarity(tb_logger, model.gst, epoch)
-                
-                # 3. Log dos embeddings no Projector 3D do TensorBoard
-                log_style_token_embeddings(tb_logger, model.gst, epoch)
-            # ----------------------------------------
+            log_validation_audio_examples(model, model.vocoder, example_batch, device, tb_logger, epoch)
 
         tb_logger.log_metrics(train_metrics, epoch, prefix="train/")
         tb_logger.log_metrics(val_metrics, epoch, prefix="val/")
+        
+        current_lr = optimizer.param_groups[0]['lr']
+        tb_logger.writer.add_scalar("train/learning_rate", current_lr, epoch)
+        
         tb_logger.flush()
         
         save_checkpoint(model, optimizer, scheduler, epoch + 1, train_metrics, checkpoint_dir, f"epoch_{epoch+1:04d}.pt")

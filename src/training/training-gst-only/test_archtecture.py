@@ -11,7 +11,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 # Adicionando os caminhos como strings para garantir compatibilidade no sys.path
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "training" / "training-gst-only"))  
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "models"))
-print(sys.path)
 
 from GST import GST
 from TTS_GST import TTS_GST
@@ -114,7 +113,7 @@ class TestTTSArchitecture(unittest.TestCase):
         
         model = TTS_GST(num_gst_tokens=self.num_tokens, gst_token_dim=self.hidden_size).to(self.device)
         
-        audio_output, att_weights = model(self.dummy_text_embed, self.dummy_audio_mel, return_att_weights=True)
+        audio_output, att_weights, _ = model(self.dummy_text_embed, self.dummy_audio_mel, return_att_weights=True)
         
         self.assertTrue(mock_spec_generator.called, "Spec Generator was not called.")
         self.assertTrue(mock_vocoder.called, "Vocoder was not called.")

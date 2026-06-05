@@ -61,13 +61,29 @@ class CombinedTTSLoss(nn.Module):
         global_style_tokens: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         
-        # 1. Reconstrução do Áudio
         recon_loss = mel_reconstruction_loss(predicted_mel, target_mel)
         
-        # 2. Separação dos Tokens (Garante que os 10 tokens aprendam coisas diferentes)
         div_loss = style_separation_loss(global_style_tokens, margin=self.margin)
         
-        # 3. Soma ponderada
         total_loss = (self.weight_reconstruction * recon_loss) + (self.weight_diversity * div_loss)
         
         return total_loss, recon_loss, div_loss
+    
+
+class Loss_audio(nn.Module):
+    """Loss para o modelo de áudio (Step 2), combinando consistência de estilo e contraste."""
+    
+    def __init__(
+        self,
+        weight_consistency: float = 1.0,
+    ):
+        super().__init__()
+        self.weight_consistency = weight_consistency
+    
+    def forward(
+        self,
+        audio_gen: torch.Tensor,
+        audio_ref: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        
+        return self.weight_consistency * F.mse_loss(audio_gen, audio_ref)
