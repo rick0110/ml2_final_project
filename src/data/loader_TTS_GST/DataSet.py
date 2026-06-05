@@ -25,4 +25,5 @@ class DatasetTTSPortuguese(Dataset):
             "mel": sample["mel"],
             "text": row["text"],
             "duration": float(row["duration"]),
+            "waveform": sample["waveform"],
         }
