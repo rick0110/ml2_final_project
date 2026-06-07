@@ -88,10 +88,20 @@ def train():
     
         for batch_idx, (inputs, labels) in enumerate(train_loader):
             inputs, labels = inputs.to(device), labels.to(device)
+
+            # 🔥 MODIFICAÇÃO 1: Mapear e descobrir os caminhos originais dos arquivos de áudio do lote (batch) atual
+            # Como o DataLoader embaralha os dados (shuffle=True), nós descobrimos de onde vieram resgatando os índices originais
+            start_idx = batch_idx * batch_size
+            end_idx = start_idx + inputs.size(0)
+            
+            # Recupera a lista de paths pertencentes aos índices deste lote específico
+            batch_indices = train_indices[start_idx:end_idx]
+            file_names = [dataset.file_paths[idx] for idx in batch_indices]
         
             optimizer.zero_grad()
         
-            outputs = model(inputs)
+            # 🔥 MODIFICAÇÃO 2: Passar os caminhos e os labels numéricos para dentro do forward do seu modelo
+            outputs = model(inputs, file_names=file_names, labels=labels)
         
             loss = criterion(outputs, labels)
         
