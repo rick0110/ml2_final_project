@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""First-step TTS model training script with GST Interpretability.
-
-Usage:
-    python train.py --num-epochs 100 --batch-size 32 --learning-rate 1e-3
-"""
+"""First-step TTS model training script with GST Interpretability."""
 
 import sys
 import argparse
@@ -14,28 +10,27 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(PROJECT_ROOT / "src"  / "models"))
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "models"))
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "training" / "training-gst-only"))
 
-
 from train_utils import train_epoch, validate_epoch, save_checkpoint, load_checkpoint, TensorBoardLogger, log_validation_audio_examples, find_last_epoch
-from losses import CombinedTTSLoss, Loss_audio
+from losses import CombinedTTSLoss
 from models.TTS_GST import TTS_GST
+from models.LatentResidualMapping import LatentResidualMapping
 from utils import create_experiment_dir, create_dataset, create_dataloaders
-
 
 def parse_arguments():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--num-epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
-    parser.add_argument("--scheduler-patience", type=int, default=3)
+    parser.add_argument("--scheduler-patience", type=int, default=10)
     parser.add_argument("--scheduler-factor", type=float, default=0.5)
     parser.add_argument("--scheduler-min-lr", type=float, default=1e-6)
     parser.add_argument("--weight-decay", type=float, default=1e-5)
     parser.add_argument("--num-workers", type=int, default=4)
-    parser.add_argument("--weight-reconstruction", type=float, default=1.0)
-    parser.add_argument("--weight-diversity", type=float, default=0.5)
+    parser.add_argument("--weight-reconstruction", type=float, default=5)
+    parser.add_argument("--weight-diversity", type=float, default=0.1)
     parser.add_argument("--diversity-margin", type=float, default=0.1)
     parser.add_argument("--style-embedding-dim", type=int, default=384)
     parser.add_argument("--num-style-tokens", type=int, default=10)
@@ -43,8 +38,8 @@ def parse_arguments():
     parser.add_argument("--val-split", type=float, default=0.1)
     parser.add_argument("--experiment-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--latent-ckpt", type=str, default=None, help="")
     return parser.parse_args()
-
 
 def main():
     args = parse_arguments()
@@ -65,8 +60,19 @@ def main():
 
     optimizer = AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, mode="min", factor=args.scheduler_factor, patience=args.scheduler_patience, min_lr=args.scheduler_min_lr)
-    #criterion = CombinedTTSLoss(weight_reconstruction=args.weight_reconstruction, weight_diversity=args.weight_diversity, diversity_margin=args.diversity_margin).to(device)
-    criterion = Loss_audio(weight_consistency=0.1).to(device)
+    
+    criterion = CombinedTTSLoss(
+        weight_reconstruction=args.weight_reconstruction, 
+        weight_diversity=args.weight_diversity, 
+        diversity_margin=args.diversity_margin
+    ).to(device)
+
+    latent_transfer_model = None
+    if args.latent_ckpt:
+        print(f"Carregando transferidor de espaço latente de: {args.latent_ckpt}")
+        latent_transfer_model = LatentResidualMapping(channels=80, hidden_dim=256).to(device)
+        latent_transfer_model.load_state_dict(torch.load(args.latent_ckpt, map_location=device))
+        latent_transfer_model.eval()
 
     tb_logger = TensorBoardLogger(tensorboard_dir)
     tb_logger.log_model_info(model)
@@ -81,8 +87,6 @@ def main():
             start_epoch, metrics = load_checkpoint(model, optimizer, scheduler, last_checkpoint, device)
             best_val_loss = metrics.get("loss", float("inf"))
             print(f"Resumed from checkpoint {last_checkpoint} at epoch {start_epoch} with val loss {best_val_loss:.4f}")
-        else:
-            print(f"No valid checkpoints found in {checkpoint_dir}. Starting from scratch.")
 
     print({
         "Experiment Directory": experiment_dir,
@@ -97,17 +101,23 @@ def main():
         val_metrics = validate_epoch(model, val_loader, criterion, device, epoch, args.num_epochs)
         scheduler.step(val_metrics["loss"])
 
-        if epoch == 0 or (epoch + 1) % 1 == 0:
+        if epoch == 0 or (epoch + 1) % 5 == 0:
             example_batch = next(iter(val_loader))
-            
-            log_validation_audio_examples(model, model.vocoder, example_batch, device, tb_logger, epoch)
+            log_validation_audio_examples(
+                model=model, 
+                vocoder=model.vocoder, 
+                latent_transfer_model=latent_transfer_model, 
+                batch=example_batch, 
+                device=device, 
+                logger=tb_logger, 
+                step=epoch
+            )
 
         tb_logger.log_metrics(train_metrics, epoch, prefix="train/")
         tb_logger.log_metrics(val_metrics, epoch, prefix="val/")
         
         current_lr = optimizer.param_groups[0]['lr']
         tb_logger.writer.add_scalar("train/learning_rate", current_lr, epoch)
-        
         tb_logger.flush()
         
         save_checkpoint(model, optimizer, scheduler, epoch + 1, train_metrics, checkpoint_dir, f"epoch_{epoch+1:04d}.pt")
