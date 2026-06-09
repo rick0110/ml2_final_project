@@ -15,6 +15,8 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "training" / "training-tacotron2-vae"))
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "data" / "loader_vae_tacotron"))
+
 
 from losses import Tacotron2LossVAE
 from models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
@@ -30,6 +32,8 @@ from train_utils import (
 )
 from utils import ARTIFACTS_DIR, TextMelCollate, create_dataset, create_dataloaders, create_experiment_dir
 
+from loader_tacotron import DatasetLibriSpeechTacotronVAE
+from torch.utils.data import random_split
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -97,8 +101,21 @@ def main():
     save_hparams(hparams, experiment_dir / "hparams.json")
     text_processor.save(experiment_dir / "symbols.json")
 
-    train_dataset = create_dataset(train_file, text_processor, hparams.n_speakers, hparams.n_emotions)
-    val_dataset = create_dataset(val_file, text_processor, hparams.n_speakers, hparams.n_emotions)
+    # 1. Instancia o dataset completo passando o text_processor
+    full_dataset = DatasetLibriSpeechTacotronVAE(
+        text_processor=text_processor, 
+        data_dir=Path("data/processed/libriSpeech-en-tacotron-vae")
+    )
+
+    # 2. Divide os dados (ex: 90% para treino, 10% para validação usando o val_split dos argumentos)
+    val_size = int(len(full_dataset) * args.val_split)
+    train_size = len(full_dataset) - val_size
+
+    train_dataset, val_dataset = random_split(
+        full_dataset,
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(args.seed)
+    )
     collate_fn = TextMelCollate(hparams.n_frames_per_step)
     train_loader, val_loader = create_dataloaders(
         train_dataset,

@@ -62,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=max(1, (os.cpu_count() or 1) - 1), help="Number of worker processes (1 disables multiprocessing)")
     
     # FastPitch Standard Parameters
-    parser.add_argument("--target-sr", type=int, default=22050)
+    parser.add_argument("--target-sr", type=int, default=16000) # 22050
     parser.add_argument("--n-mels", type=int, default=80)
     parser.add_argument("--n-fft", type=int, default=1024)
     parser.add_argument("--win-length", type=int, default=1024)
