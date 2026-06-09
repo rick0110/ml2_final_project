@@ -12,11 +12,11 @@ class AddCoords(nn.Module):
     def forward(self, input_tensor):
         if self.rank == 2:
             batch_size_shape, _, dim_y, dim_x = input_tensor.shape
-            xx_ones = torch.ones([1, 1, 1, dim_x], dtype=torch.int32, device=input_tensor.device)
-            yy_ones = torch.ones([1, 1, 1, dim_y], dtype=torch.int32, device=input_tensor.device)
+            xx_ones = torch.ones([1, 1, 1, dim_x], dtype=torch.float32, device=input_tensor.device)
+            yy_ones = torch.ones([1, 1, 1, dim_y], dtype=torch.float32, device=input_tensor.device)
 
-            xx_range = torch.arange(dim_y, dtype=torch.int32, device=input_tensor.device)
-            yy_range = torch.arange(dim_x, dtype=torch.int32, device=input_tensor.device)
+            xx_range = torch.arange(dim_y, dtype=torch.float32, device=input_tensor.device)
+            yy_range = torch.arange(dim_x, dtype=torch.float32, device=input_tensor.device)
             xx_range = xx_range[None, None, :, None]
             yy_range = yy_range[None, None, :, None]
 
