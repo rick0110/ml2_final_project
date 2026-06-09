@@ -9,3 +9,6 @@ transformers
 nemo_toolkit
 nemo_toolkit[all]
 tensorboard
+librosa
+num2words
+scipy
