@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def write_filelist(rows: List[dict], path: Path) -> None:
-    fieldnames = ["mel_path", "text", "duration", "speaker", "emotion"]
+    fieldnames = ["mel_path", "text", "duration", "emotion"]
     with open(path, "w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -67,7 +67,6 @@ def main():
                 "mel_path": metadata_row["mel_path"],
                 "text": text,
                 "duration": metadata_row["duration"],
-                "speaker": "0",
                 "emotion": "0",
             }
         )

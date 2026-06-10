@@ -126,39 +126,18 @@ def save_mel_comparison_plot(
     target_data = target_data[..., :min_time]
     generated_data = generated_data[..., :min_time]
 
-    # Use a common color scale for target and generated for fair comparison
-    try:
-        vmin = float(min(float(target_data.min().item()), float(generated_data.min().item())))
-        vmax = float(max(float(target_data.max().item()), float(generated_data.max().item())))
-    except Exception:
-        vmin, vmax = None, None
-
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5), constrained_layout=True)
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5), constrained_layout=True)
     plots = [
         (axes[0], target_data, "Target mel"),
         (axes[1], generated_data, "Generated mel"),
     ]
 
     for axis, data, title in plots:
-        if vmin is not None and vmax is not None:
-            image = axis.imshow(data.numpy(), origin="lower", aspect="auto", interpolation="nearest", vmin=vmin, vmax=vmax)
-        else:
-            image = axis.imshow(data.numpy(), origin="lower", aspect="auto", interpolation="nearest")
+        image = axis.imshow(data.numpy(), origin="lower", aspect="auto", interpolation="nearest")
         axis.set_title(title)
         axis.set_xlabel("Frame")
         axis.set_ylabel("Mel bin")
         fig.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
-
-    # Absolute difference (generated - target)
-    try:
-        diff = (generated_data - target_data).abs()
-        diff_image = axes[2].imshow(diff.numpy(), origin="lower", aspect="auto", interpolation="nearest")
-        axes[2].set_title("Absolute difference")
-        axes[2].set_xlabel("Frame")
-        axes[2].set_ylabel("Mel bin")
-        fig.colorbar(diff_image, ax=axes[2], fraction=0.046, pad=0.04)
-    except Exception:
-        axes[2].set_visible(False)
 
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -167,7 +146,7 @@ def save_mel_comparison_plot(
 
 def main() -> None:
     args = parse_args()
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     transcript = load_transcript(args)
     checkpoint_path = resolve_checkpoint_path(args.checkpoint)
