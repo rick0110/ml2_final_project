@@ -15,7 +15,6 @@ class Tacotron2VAEHparams:
     iters_per_checkpoint: int = 500
     seed: int = 1234
     dynamic_loss_scaling: bool = True
-    fp16_run: bool = False
     distributed_run: bool = False
     dist_backend: str = "nccl"
     dist_url: str = "tcp://localhost:54321"

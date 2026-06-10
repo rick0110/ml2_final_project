@@ -369,24 +369,11 @@ class Tacotron2(nn.Module):
         super().__init__()
         self.hparams = hparams
         self.mask_padding = hparams.mask_padding
-        self.fp16_run = hparams.fp16_run
         self.n_mel_channels = hparams.n_mel_channels
         self.n_frames_per_step = hparams.n_frames_per_step
 
         self.transcript_embedding = nn.Embedding(
             hparams.n_symbols, hparams.symbols_embedding_dim
-        )
-        self.speaker_embedding = LinearNorm(
-            hparams.n_speakers,
-            hparams.speaker_embedding_dim,
-            bias=True,
-            w_init_gain="tanh",
-        )
-        self.emotion_embedding = LinearNorm(
-            hparams.n_emotions,
-            hparams.emotion_embedding_dim,
-            bias=True,
-            w_init_gain="tanh",
         )
 
         std = sqrt(2.0 / (hparams.n_symbols + hparams.symbols_embedding_dim))
@@ -399,24 +386,18 @@ class Tacotron2(nn.Module):
         self.vae_gst = VAE_GST(hparams)
 
     def parse_batch(self, batch, device: torch.device):
-        text_padded, input_lengths, mel_padded, gate_padded, output_lengths, speakers, emotions = batch
+        text_padded, input_lengths, mel_padded, gate_padded, output_lengths = batch
         text_padded = to_device(text_padded, device).long()
-        speakers = to_device(speakers, device).float()
-        emotions = to_device(emotions, device).float()
         input_lengths = to_device(input_lengths, device).long()
         mel_padded = to_device(mel_padded, device).float()
         gate_padded = to_device(gate_padded, device).float()
         output_lengths = to_device(output_lengths, device).long()
-        max_len = torch.max(input_lengths).item()
 
         return (
             text_padded,
             input_lengths,
             mel_padded,
-            max_len,
             output_lengths,
-            speakers,
-            emotions,
         ), (mel_padded, gate_padded)
 
     def parse_output(self, outputs, output_lengths=None):
@@ -430,9 +411,9 @@ class Tacotron2(nn.Module):
         return outputs
 
     def forward(self, inputs):
-        inputs, input_lengths, targets, _, output_lengths, speakers, emotions = inputs
-        input_lengths = input_lengths.data
-        output_lengths = output_lengths.data
+        inputs, input_lengths, targets, output_lengths = inputs
+        input_lengths = input_lengths
+        output_lengths = output_lengths
 
         transcript_embedded_inputs = self.transcript_embedding(inputs).transpose(1, 2)
         transcript_outputs = self.encoder(transcript_embedded_inputs, input_lengths)
@@ -448,7 +429,7 @@ class Tacotron2(nn.Module):
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
 
         return self.parse_output(
-            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, mu, logvar, z, emotions],
+            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, mu, logvar, z],
             output_lengths,
         )
 
