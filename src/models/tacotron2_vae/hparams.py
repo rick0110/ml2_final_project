@@ -13,7 +13,7 @@ class Tacotron2VAEHparams:
     ################################
     epochs: int = 300
     iters_per_checkpoint: int = 500
-    seed: int = 1234
+    seed: int = 42
     dynamic_loss_scaling: bool = True
     distributed_run: bool = False
     dist_backend: str = "nccl"
@@ -52,10 +52,8 @@ class Tacotron2VAEHparams:
     encoder_n_convolutions: int = 3
     encoder_embedding_dim: int = 512
 
-    n_speakers: int = 1
-    speaker_embedding_dim: int = 16
 
-    n_emotions: int = 4
+    n_emotions: int = 1
     emotion_embedding_dim: int = 16
 
     E: int = 512

@@ -2,12 +2,12 @@ import csv
 import re
 import torch
 from pathlib import Path
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, random_split
+import copy
 
-try:
-    from num2words import num2words
-except ImportError:
-    num2words = None
+
+from num2words import num2words
+
 
 class TextNormalizerEN:
     def __init__(self):
@@ -33,12 +33,13 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         self.data_dir = Path(data_dir)
         self.metadata_path = self.data_dir / "librispeech_mels_metadata.csv"
         self.normalizer = TextNormalizerEN()
-        self.text_processor = text_processor # Processador que transforma texto em IDs
+        self.text_processor = text_processor 
         self.files = self._load_files_list()
+
 
     def _load_files_list(self):
         if not self.metadata_path.exists():
-            raise FileNotFoundError(f"Arquivo de metadados não encontrado: {self.metadata_path}")
+            raise FileNotFoundError(f"Metadata file not found: {self.metadata_path}")
         with open(self.metadata_path, "r", encoding="utf-8") as f:
             return list(csv.DictReader(f))
 
@@ -49,24 +50,27 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         row = self.files[idx]
         sample = torch.load(row["mel_path"], map_location="cpu", weights_only=False)
         
-        # Normaliza o texto e converte para sequência de IDs
         clean_text = self.normalizer.normalize(row["text"])
         sequence_list = self.text_processor.text_to_sequence(clean_text)
         
-        # IMPORTANTE: Camadas de Embedding no PyTorch exigem LongTensor (Int64)
         text_sequence = torch.LongTensor(sequence_list)
         
-        # Garante que o Mel tem 2 dimensões [80, T]
+        # ensure match dimentions [80, T]
         mel_tensor = sample["mel"].squeeze(0) if sample["mel"].dim() == 3 else sample["mel"]
-
-        # Tacotron2-VAE espera tensores one-hot para locutor e emoção.
-        # Estamos a usar 1 locutor e 4 emoções de acordo com os seus hparams padrão.
-        speaker = torch.zeros(1, dtype=torch.float32)
-        speaker[0] = 1.0  # Ativa o locutor padrão
         
         emotion = torch.zeros(4, dtype=torch.float32)
-        emotion[0] = 1.0  # Ativa a emoção 0 (Neutra)
+        emotion[0] = 1.0  # on neutral emotions: it will be used when fine-tuning on VERBO.
 
-        # Retorna exatamente a tupla que o utils.py e o TextMelCollate esperam:
-        # [0] = text, [1] = mel, [2] = speaker, [3] = emotion
-        return text_sequence, mel_tensor, speaker, emotion
+        # Return text sequence, mel spectrogram, and emotion label
+        return text_sequence, mel_tensor, emotion
+    
+def load_data(
+    text_processor,
+    data_dir=Path("data/processed/libriSpeech-en-tacotron-vae"),
+    val_split=0.1,
+    generator=None,
+):
+    Dataset = DatasetLibriSpeechTacotronVAE(text_processor=text_processor, data_dir=data_dir)
+    data_train, data_test, data_val = random_split(Dataset, [int(len(Dataset) * (1 - val_split)), int(len(Dataset) * val_split // 2), int(len(Dataset) * val_split // 2)], generator=generator)
+
+    return data_train, data_test, data_val

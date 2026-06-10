@@ -9,8 +9,10 @@ import math
 import sys
 import time
 from pathlib import Path
+import csv
 
 import torch
+from tqdm import tqdm
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -21,7 +23,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src" / "data" / "loader_vae_tacotron"))
 from losses import Tacotron2LossVAE
 from models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
 from models.tacotron2_vae.model import load_tacotron2_vae_model
-from text_processing import TextProcessor
+from text_processing import TextProcessor, build_symbols_from_texts
 from train_utils import (
     TensorBoardLogger,
     load_checkpoint,
@@ -29,11 +31,11 @@ from train_utils import (
     save_hparams,
     train_epoch,
     validate_epoch,
+    find_latest_checkpoint
 )
-from utils import ARTIFACTS_DIR, TextMelCollate, create_dataset, create_dataloaders, create_experiment_dir
+from utils import ARTIFACTS_DIR, TextMelCollate, create_dataloader, create_experiment_dir
 
-from loader_tacotron import DatasetLibriSpeechTacotronVAE
-from torch.utils.data import random_split
+from loader_tacotron import load_data
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -54,27 +56,40 @@ def parse_arguments() -> argparse.Namespace:
         "--artifacts-dir",
         type=Path,
         default=ARTIFACTS_DIR,
-        help="Directory with train.csv, val.csv and symbols.json from preprocess.py",
+        help="Path with the data, metadata.csv",
     )
     return parser.parse_args()
 
 
 def main():
+    training_metadata = {
+        "training_loss": [],
+        "test_loss": [],
+        "grad_norm": [],
+        "learning_rate": [],
+        "duration": [],
+        "recon_loss": [],
+        "kl_loss": [],
+        "kl_weight": [],
+        "singular_values_of_latent_covariance": [],
+        "target_predict_example": [],
+
+    }
     args = parse_arguments()
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     artifacts_dir = Path(args.artifacts_dir)
-    train_file = artifacts_dir / "train.csv"
-    val_file = artifacts_dir / "val.csv"
-    symbols_file = artifacts_dir / "symbols.json"
+    train_file = artifacts_dir / "mels_metadata.csv"
+    
+    with open(train_file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        texts = [row["text"] for row in reader]
 
-    if not train_file.exists() or not symbols_file.exists():
-        raise FileNotFoundError(
-            f"Missing preprocess artifacts in {artifacts_dir}. Run preprocess.py first."
-        )
+    symbols = build_symbols_from_texts(texts)
 
-    text_processor = TextProcessor.load(symbols_file)
+    text_processor = TextProcessor(symbols=symbols)
+
     hparams = create_hparams(
         {
             "epochs": args.epochs,
@@ -86,8 +101,7 @@ def main():
             "seed": args.seed,
             "anneal_function": args.anneal_function,
             "n_symbols": text_processor.n_symbols,
-            "training_files": str(train_file),
-            "validation_files": str(val_file),
+            "training_data": str(train_file),
         }
     )
 
@@ -96,34 +110,26 @@ def main():
         if args.resume_experiment
         else create_experiment_dir(args.experiment_name)
     )
-    checkpoint_dir = experiment_dir / "checkpoints"
+
+    hparams["experiment_dir"] = str(experiment_dir)
+    hparams["checkpoint_dir"] = str(experiment_dir / "checkpoints")
     tensorboard_dir = experiment_dir / "tensorboard"
     save_hparams(hparams, experiment_dir / "hparams.json")
     text_processor.save(experiment_dir / "symbols.json")
 
-    # 1. Instancia o dataset completo passando o text_processor
-    full_dataset = DatasetLibriSpeechTacotronVAE(
-        text_processor=text_processor, 
-        data_dir=Path("data/processed/libriSpeech-en-tacotron-vae")
-    )
-
-    # 2. Divide os dados (ex: 90% para treino, 10% para validação usando o val_split dos argumentos)
-    val_size = int(len(full_dataset) * args.val_split)
-    train_size = len(full_dataset) - val_size
-
-    train_dataset, val_dataset = random_split(
-        full_dataset,
-        [train_size, val_size],
+    train_dataset, test_dataset, val_dataset = load_data(
+        text_processor=text_processor,
+        data_dir=Path("data/processed/libriSpeech-en-tacotron-vae"),
+        val_split=args.val_split,
         generator=torch.Generator().manual_seed(args.seed)
     )
+
     collate_fn = TextMelCollate(hparams.n_frames_per_step)
-    train_loader, val_loader = create_dataloaders(
-        train_dataset,
-        val_dataset,
-        batch_size=hparams.batch_size,
-        num_workers=args.num_workers,
-        collate_fn=collate_fn,
-    )
+    
+    train_loader = create_dataloader(train_dataset, args.batch_size, args.num_workers, collate_fn)
+    test_loader = create_dataloader(test_dataset, args.batch_size, args.num_workers, collate_fn)
+    val_loader = create_dataloader(val_dataset, args.batch_size, args.num_workers, collate_fn)
+
 
     model = load_tacotron2_vae_model(hparams, device=device)
     optimizer = torch.optim.Adam(
@@ -132,16 +138,16 @@ def main():
         weight_decay=hparams.weight_decay,
     )
     criterion = Tacotron2LossVAE(hparams)
-    tb_logger = TensorBoardLogger(tensorboard_dir)
-    tb_logger.log_model_info(model)
+    # tb_logger = TensorBoardLogger(tensorboard_dir)
+    # tb_logger.log_model_info(model)
 
     iteration = 0
     learning_rate = hparams.learning_rate
-    if args.checkpoint_path:
-        model, optimizer, learning_rate, iteration = load_checkpoint(
-            Path(args.checkpoint_path), model, optimizer
-        )
-        iteration += 1
+
+    if args.resume_experiment:
+        checkpoint_path = find_latest_checkpoint(Path(hparams.checkpoint_dir))
+        if checkpoint_path:
+            model, optimizer, learning_rate, iteration = load_checkpoint(checkpoint_path, model)
 
     torch.backends.cudnn.enabled = hparams.cudnn_enabled
     torch.backends.cudnn.benchmark = hparams.cudnn_benchmark
@@ -149,7 +155,7 @@ def main():
     model.train()
     for epoch in range(hparams.epochs):
         print(f"Epoch: {epoch}")
-        for batch in train_loader:
+        for batch in tqdm(train_loader, desc=f"Epoch {epoch}"):
             start = time.perf_counter()
             for param_group in optimizer.param_groups:
                 param_group["lr"] = learning_rate
@@ -171,29 +177,29 @@ def main():
                     f"Train loss {iteration} {reduced_loss:.6f} "
                     f"Grad Norm {float(grad_norm):.6f} {duration:.2f}s/it"
                 )
-                tb_logger.log_training(
-                    reduced_loss,
-                    float(grad_norm),
-                    learning_rate,
-                    duration,
-                    recon_loss.item(),
-                    kl_loss.item(),
-                    float(kl_weight),
-                    iteration,
-                )
+                # tb_logger.log_training(
+                #     reduced_loss,
+                #     float(grad_norm),
+                #     learning_rate,
+                #     duration,
+                #     recon_loss.item(),
+                #    kl_loss.item(),
+                #    float(kl_weight),
+                #    iteration,
+                #)
 
             if iteration % hparams.iters_per_checkpoint == 0:
-                val_loss = validate_epoch(model, criterion, val_loader, device, iteration)
-                print(f"Validation loss {iteration}: {val_loss:9f}")
-                tb_logger.log_validation(val_loss, iteration)
-                checkpoint_path = checkpoint_dir / f"checkpoint_{iteration}"
+                # val_loss = validate_epoch(model, criterion, val_loader, device, iteration)
+                # print(f"Validation loss {iteration}: {val_loss:9f}")
+                # tb_logger.log_validation(val_loss, iteration)
+                checkpoint_path = hparams.checkpoint_dir / f"epoch_{iteration}"
                 save_checkpoint(
                     model, optimizer, learning_rate, iteration, checkpoint_path, hparams
                 )
 
             iteration += 1
 
-    tb_logger.close()
+    # tb_logger.close()
     print(f"Training finished. Experiment dir: {experiment_dir}")
 
 
