@@ -15,45 +15,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 ARTIFACTS_DIR = PROJECT_ROOT / "data" / "processed" / "tacotron2-vae"
 
 
-class Tacotron2VAEDataset(Dataset):
-    """Adapter over loader_TTS_GST for Tacotron2-VAE training."""
-
-    def __init__(
-        self,
-        filelist_path: Path,
-        text_processor: TextProcessor,
-        n_speakers: int = 1,
-        n_emotions: int = 4,
-    ):
-        self.text_processor = text_processor
-        self.n_speakers = n_speakers
-        self.n_emotions = n_emotions
-        self.samples = self._load_filelist(filelist_path)
-
-    @staticmethod
-    def _load_filelist(path: Path) -> List[Dict[str, str]]:
-        rows = []
-        with open(path, encoding="utf-8") as handle:
-            reader = csv.DictReader(handle)
-            for row in reader:
-                rows.append(row)
-        return rows
-
-    def __len__(self) -> int:
-        return len(self.samples)
-
-    def __getitem__(self, index: int):
-        row = self.samples[index]
-        sample = torch.load(row["mel_path"], weights_only=False)
-        mel = sample["mel"].squeeze(0)
-        text = torch.LongTensor(self.text_processor.text_to_sequence(row["text"]))
-        speaker = torch.zeros(self.n_speakers, dtype=torch.float32)
-        speaker[0] = 1.0
-        emotion = torch.zeros(self.n_emotions, dtype=torch.float32)
-        emotion[0] = 1.0
-        return text, mel, speaker, emotion
-
-
 class TextMelCollate:
     def __init__(self, n_frames_per_step: int = 1):
         self.n_frames_per_step = n_frames_per_step
@@ -72,10 +33,8 @@ class TextMelCollate:
             text = batch[ids_sorted_decreasing[i]][0]
             text_padded[i, : text.size(0)] = text
 
-        speakers = torch.FloatTensor(len(batch), len(batch[0][2]))
         emotions = torch.FloatTensor(len(batch), len(batch[0][3]))
         for i in range(len(ids_sorted_decreasing)):
-            speakers[i, :] = batch[ids_sorted_decreasing[i]][2]
             emotions[i, :] = batch[ids_sorted_decreasing[i]][3]
 
         num_mels = batch[0][1].size(0)
@@ -101,23 +60,8 @@ class TextMelCollate:
             mel_padded,
             gate_padded,
             output_lengths,
-            speakers,
             emotions,
         )
-
-
-def create_dataset(
-    filelist_path: Path,
-    text_processor: TextProcessor,
-    n_speakers: int = 1,
-    n_emotions: int = 4,
-) -> Tacotron2VAEDataset:
-    return Tacotron2VAEDataset(
-        filelist_path=filelist_path,
-        text_processor=text_processor,
-        n_speakers=n_speakers,
-        n_emotions=n_emotions,
-    )
 
 
 def create_dataloader(
@@ -136,21 +80,6 @@ def create_dataloader(
         drop_last=shuffle,
     )
 
-
-def create_dataloaders(
-    train_dataset: Dataset,
-    val_dataset: Dataset,
-    batch_size: int,
-    num_workers: int,
-    collate_fn: TextMelCollate,
-) -> Tuple[DataLoader, DataLoader]:
-    train_loader = create_dataloader(
-        train_dataset, batch_size, num_workers, collate_fn, shuffle=True
-    )
-    val_loader = create_dataloader(
-        val_dataset, batch_size, num_workers, collate_fn, shuffle=False
-    )
-    return train_loader, val_loader
 
 
 def create_experiment_dir(experiment_name: Optional[str] = None) -> Path:
