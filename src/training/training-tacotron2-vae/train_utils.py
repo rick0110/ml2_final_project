@@ -18,6 +18,11 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+import os
+import matplotlib
+matplotlib.use('Agg')  # Backend ultra-rápido para rodar no terminal sem abrir janelas
+import matplotlib.pyplot as plt
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "models" / "tacotron2_vae"))
@@ -192,25 +197,32 @@ def train_epoch(
 
     for batch in tqdm(train_loader, desc=f"training", leave=False):
         model.train()
-        start = time.perf_counter()
         for param_group in optimizer.param_groups:
             param_group["lr"] = learning_rate
         optimizer.zero_grad()
         x, y = model.parse_batch(batch, device)
-        y_pred = model((x[0], x[1], x[2], x[3], x[4], x[5], x[6]))
+        y_pred = model((x[0], x[1], x[2], x[3]))
         loss, recon_loss, kl_loss, kl_weight = criterion(y_pred, y, iteration)
         loss.backward()
+
+        # Captura gradientes por camada antes do otimizador atuar
+        layer_grads = []
+        layer_names = []
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                layer_grads.append(param.grad.norm().item())
+                layer_names.append(name)
+
         grad_norm = torch.nn.utils.clip_grad_norm_(
             model.parameters(), hparams.grad_clip_thresh
         )
         optimizer.step()
         reduced_loss = loss.item()
-        if not math.isnan(reduced_loss):
-            duration = time.perf_counter() - start
-            print(
-                f"Train loss {iteration} {reduced_loss:.6f} "
-                f"Grad Norm {float(grad_norm):.6f} {duration:.2f}s/it"
-            )
+        #if not math.isnan(reduced_loss):
+        #    print(
+        #        f"Train loss {iteration} {reduced_loss:.6f} "
+        #        f"Grad Norm {float(grad_norm):.6f} {duration:.2f}s/it"
+        #    )
             # tb_logger.log_training(
             #     reduced_loss,
             #     float(grad_norm),
@@ -223,7 +235,7 @@ def train_epoch(
             #)
 
         if iteration % hparams.iters_per_checkpoint == 0:
-            checkpoint_path = hparams.checkpoint_dir / f"epoch_{iteration}"
+            checkpoint_path = Path(hparams.checkpoint_dir) / f"epoch_{iteration}"
             save_checkpoint(
                 model, optimizer, learning_rate, iteration, checkpoint_path, hparams
             )
@@ -237,7 +249,7 @@ def train_epoch(
             batch = next(iter(test_loader))
             with torch.no_grad():
                 x, y = model.parse_batch(batch, device)
-                y_pred = model(x[0], x[1], x[2], x[3], x[4], x[5], x[6])
+                y_pred = model((x[0], x[1], x[2], x[3]))
             
 
 
@@ -247,7 +259,6 @@ def train_epoch(
             losses = training_metadata.get("training_loss", [])
             grad_norms = training_metadata.get("grad_norm", [])
             learning_rates = training_metadata.get("learning_rate", [])
-            durations = training_metadata.get("duration", [])
             recon_losses = training_metadata.get("recon_loss", [])
             kl_losses = training_metadata.get("kl_loss", [])
             kl_weights = training_metadata.get("kl_weight", [])
@@ -256,12 +267,74 @@ def train_epoch(
             losses.append(reduced_loss)
             grad_norms.append(float(grad_norm))
             learning_rates.append(learning_rate)
-            durations.append(duration)
             recon_losses.append(recon_loss.item())
             kl_losses.append(kl_loss.item())
             kl_weights.append(float(kl_weight))
             singular_values.append(singular_values_info)
             target_predicts.append((mel_pred, mel_target))
+
+            if iteration % 1 == 0:
+                os.makedirs("training_plots", exist_ok=True)
+                
+                fig = plt.figure(figsize=(24, 20), dpi=150)
+                fig.suptitle(f"Training Diagnostics - Iteration {iteration}", fontsize=20, fontweight='bold')
+                
+                ax1 = fig.add_subplot(4, 2, 1)
+                ax1.set_title("Total Loss Over Time", fontsize=14)
+                ax1.plot(losses, color='blue', linewidth=2)
+                ax1.set_ylabel("Loss")
+                ax1.grid(True, alpha=0.3)
+                
+                ax2 = fig.add_subplot(4, 2, 2)
+                ax2.set_title("Recon Loss Over Time", fontsize=14)
+                ax2.plot(recon_losses, color='orange', linewidth=2)
+                ax2.set_ylabel("Loss")
+                ax2.grid(True, alpha=0.3)
+                
+                ax3 = fig.add_subplot(4, 2, 3)
+                ax3.set_title("KL Loss Over Time", fontsize=14)
+                ax3.plot(kl_losses, color='red', linewidth=2)
+                ax3.set_ylabel("Loss")
+                ax3.grid(True, alpha=0.3)
+                
+                ax4 = fig.add_subplot(4, 2, 4)
+                ax4.set_title("Latent Space Singular Values (Z PCA)", fontsize=14)
+                s_vals = singular_values_info["singular_values"].tolist()
+                ax4.bar(range(len(s_vals)), s_vals, color='purple', alpha=0.7)
+                ax4.set_xlabel("Component Index")
+                ax4.set_ylabel("Magnitude")
+                
+                ax5 = fig.add_subplot(4, 2, 5)
+                ax5.set_title("Global Gradient Norm (History)", fontsize=14)
+                ax5.plot(grad_norms, color='green', label="Grad Norm")
+                ax5.set_ylabel("Norm")
+                ax5.grid(True, alpha=0.3)
+                ax5.legend()
+
+                ax6 = fig.add_subplot(4, 2, 6)
+                ax6.set_title(f"Gradient Norms per Layer (Iter {iteration})", fontsize=14)
+                # Pula rótulos no eixo X se forem muitas camadas para evitar sobreposição de texto
+                ax6.bar(range(len(layer_grads)), layer_grads, color='orange')
+                ax6.set_xlabel("Layers (Sequential)")
+                ax6.set_ylabel("Grad Norm")
+                
+                ax7 = fig.add_subplot(4, 2, 7)
+                ax7.set_title("Target Mel-Spectrogram", fontsize=14)
+                im7 = ax7.imshow(mel_target, aspect="auto", origin="lower", cmap='viridis')
+                fig.colorbar(im7, ax=ax7)
+                
+                ax8 = fig.add_subplot(4, 2, 8)
+                ax8.set_title("Generated Mel-Spectrogram", fontsize=14)
+                im8 = ax8.imshow(mel_pred, aspect="auto", origin="lower", cmap='viridis')
+                fig.colorbar(im8, ax=ax8)
+                
+                plt.tight_layout(rect=[0, 0.03, 1, 0.95]) 
+                save_path = Path(hparams.experiment_dir) / "training_plots" / f"diagnostic_iter_{iteration}.png"
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                plt.savefig(save_path, dpi=500)
+                plt.close(fig) 
+                
+                model.train()
 
     return training_metadata
 

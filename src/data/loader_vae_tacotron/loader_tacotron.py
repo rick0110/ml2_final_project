@@ -31,7 +31,7 @@ class TextNormalizerEN:
 class DatasetLibriSpeechTacotronVAE(Dataset):
     def __init__(self, text_processor, data_dir=Path("data/processed/libriSpeech-en-tacotron-vae")):
         self.data_dir = Path(data_dir)
-        self.metadata_path = self.data_dir / "librispeech_mels_metadata.csv"
+        self.metadata_path = self.data_dir / "mels_metadata.csv"
         self.normalizer = TextNormalizerEN()
         self.text_processor = text_processor 
         self.files = self._load_files_list()
@@ -71,6 +71,6 @@ def load_data(
     generator=None,
 ):
     Dataset = DatasetLibriSpeechTacotronVAE(text_processor=text_processor, data_dir=data_dir)
-    data_train, data_test, data_val = random_split(Dataset, [int(len(Dataset) * (1 - val_split)), int(len(Dataset) * val_split // 2), int(len(Dataset) * val_split // 2)], generator=generator)
+    data_train, data_test, data_val = random_split(Dataset, [len(Dataset) - 2*int(len(Dataset) * val_split // 2), int(len(Dataset) * val_split // 2), int(len(Dataset) * val_split // 2)], generator=generator)
 
     return data_train, data_test, data_val

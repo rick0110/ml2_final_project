@@ -386,7 +386,7 @@ class Tacotron2(nn.Module):
         self.vae_gst = VAE_GST(hparams)
 
     def parse_batch(self, batch, device: torch.device):
-        text_padded, input_lengths, mel_padded, gate_padded, output_lengths = batch
+        text_padded, input_lengths, mel_padded, gate_padded, output_lengths, _ = batch
         text_padded = to_device(text_padded, device).long()
         input_lengths = to_device(input_lengths, device).long()
         mel_padded = to_device(mel_padded, device).float()
