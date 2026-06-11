@@ -14,6 +14,9 @@ import csv
 import torch
 from tqdm import tqdm
 
+from utils import ARTIFACTS_DIR, EXPERIMENTS_DIR, TextMelCollate, create_dataloader, create_experiment_dir
+
+
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "training" / "training-tacotron2-vae"))
@@ -30,10 +33,8 @@ from train_utils import (
     save_checkpoint,
     save_hparams,
     train_epoch,
-    validate_epoch,
     find_latest_checkpoint
 )
-from utils import ARTIFACTS_DIR, TextMelCollate, create_dataloader, create_experiment_dir
 
 from loader_tacotron import load_data
 
@@ -111,8 +112,8 @@ def main():
         else create_experiment_dir(args.experiment_name)
     )
 
-    hparams["experiment_dir"] = str(experiment_dir)
-    hparams["checkpoint_dir"] = str(experiment_dir / "checkpoints")
+    hparams.experiment_dir = str(experiment_dir)
+    hparams.checkpoint_dir = str(experiment_dir / "checkpoints")
     tensorboard_dir = experiment_dir / "tensorboard"
     save_hparams(hparams, experiment_dir / "hparams.json")
     text_processor.save(experiment_dir / "symbols.json")
@@ -126,9 +127,9 @@ def main():
 
     collate_fn = TextMelCollate(hparams.n_frames_per_step)
     
-    train_loader = create_dataloader(train_dataset, args.batch_size, args.num_workers, collate_fn)
-    test_loader = create_dataloader(test_dataset, args.batch_size, args.num_workers, collate_fn)
-    val_loader = create_dataloader(val_dataset, args.batch_size, args.num_workers, collate_fn)
+    train_loader = create_dataloader(train_dataset, args.batch_size, args.num_workers, collate_fn, True)
+    test_loader = create_dataloader(test_dataset, args.batch_size, args.num_workers, collate_fn, False)
+    val_loader = create_dataloader(val_dataset, args.batch_size, args.num_workers, collate_fn, False)
 
 
     model = load_tacotron2_vae_model(hparams, device=device)
@@ -154,50 +155,62 @@ def main():
 
     model.train()
     for epoch in range(hparams.epochs):
-        print(f"Epoch: {epoch}")
-        for batch in tqdm(train_loader, desc=f"Epoch {epoch}"):
-            start = time.perf_counter()
-            for param_group in optimizer.param_groups:
-                param_group["lr"] = learning_rate
-
-            optimizer.zero_grad()
-            x, y = model.parse_batch(batch, device)
-            y_pred = model((x[0], x[1], x[2], x[3], x[4], x[5], x[6]))
-            loss, recon_loss, kl_loss, kl_weight = criterion(y_pred, y, iteration)
-            loss.backward()
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                model.parameters(), hparams.grad_clip_thresh
-            )
-            optimizer.step()
-
-            reduced_loss = loss.item()
-            if not math.isnan(reduced_loss):
-                duration = time.perf_counter() - start
-                print(
-                    f"Train loss {iteration} {reduced_loss:.6f} "
-                    f"Grad Norm {float(grad_norm):.6f} {duration:.2f}s/it"
-                )
-                # tb_logger.log_training(
-                #     reduced_loss,
-                #     float(grad_norm),
-                #     learning_rate,
-                #     duration,
-                #     recon_loss.item(),
-                #    kl_loss.item(),
-                #    float(kl_weight),
-                #    iteration,
-                #)
-
-            if iteration % hparams.iters_per_checkpoint == 0:
-                # val_loss = validate_epoch(model, criterion, val_loader, device, iteration)
-                # print(f"Validation loss {iteration}: {val_loss:9f}")
-                # tb_logger.log_validation(val_loss, iteration)
-                checkpoint_path = hparams.checkpoint_dir / f"epoch_{iteration}"
-                save_checkpoint(
-                    model, optimizer, learning_rate, iteration, checkpoint_path, hparams
-                )
-
-            iteration += 1
+        training_metadata = train_epoch(
+            model=model,
+            hparams=hparams,
+            train_loader=train_loader,
+            test_loader=test_loader,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=device,
+            iteration=iteration,
+            learning_rate=learning_rate,
+            training_metadata=training_metadata
+        )
+        #print(f"Epoch: {epoch}")
+        #for batch in tqdm(train_loader, desc=f"Epoch {epoch}"):
+        #    start = time.perf_counter()
+        #    for param_group in optimizer.param_groups:
+        #        param_group["lr"] = learning_rate
+#
+        #    optimizer.zero_grad()
+        #    x, y = model.parse_batch(batch, device)
+        #    y_pred = model((x[0], x[1], x[2], x[3]))
+        #    loss, recon_loss, kl_loss, kl_weight = criterion(y_pred, y, iteration)
+        #    loss.backward()
+        #    grad_norm = torch.nn.utils.clip_grad_norm_(
+        #        model.parameters(), hparams.grad_clip_thresh
+        #    )
+        #    optimizer.step()
+#
+        #    reduced_loss = loss.item()
+        #    if not math.isnan(reduced_loss):
+        #        duration = time.perf_counter() - start
+        #        print(
+        #            f"Train loss {iteration} {reduced_loss:.6f} "
+        #            f"Grad Norm {float(grad_norm):.6f} {duration:.2f}s/it"
+        #        )
+        #        # tb_logger.log_training(
+        #        #     reduced_loss,
+        #        #     float(grad_norm),
+        #        #     learning_rate,
+        #        #     duration,
+        #        #     recon_loss.item(),
+        #        #    kl_loss.item(),
+        #        #    float(kl_weight),
+        #        #    iteration,
+        #        #)
+#
+        #    if iteration % hparams.iters_per_checkpoint == 0:
+        #        # val_loss = validate_epoch(model, criterion, val_loader, device, iteration)
+        #        # print(f"Validation loss {iteration}: {val_loss:9f}")
+        #        # tb_logger.log_validation(val_loss, iteration)
+        #        checkpoint_path = Path(hparams.checkpoint_dir) / f"epoch_{iteration}"
+        #        save_checkpoint(
+        #            model, optimizer, learning_rate, iteration, checkpoint_path, hparams
+        #        )
+#
+        #    iteration += 1
 
     # tb_logger.close()
     print(f"Training finished. Experiment dir: {experiment_dir}")

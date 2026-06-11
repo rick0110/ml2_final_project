@@ -8,11 +8,9 @@ from typing import Dict, List, Optional, Tuple
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from data.loader_TTS_GST.DataSet import DatasetTTSPortuguese
-from text_processing import TextProcessor
-
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-ARTIFACTS_DIR = PROJECT_ROOT / "data" / "processed" / "tacotron2-vae"
+ARTIFACTS_DIR = PROJECT_ROOT / "data" / "processed" / "libriSpeech-en-tacotron-vae"
+EXPERIMENTS_DIR = PROJECT_ROOT / "experiments" / "tacotron2-vae"
 
 
 class TextMelCollate:
@@ -33,9 +31,12 @@ class TextMelCollate:
             text = batch[ids_sorted_decreasing[i]][0]
             text_padded[i, : text.size(0)] = text
 
-        emotions = torch.FloatTensor(len(batch), len(batch[0][3]))
-        for i in range(len(ids_sorted_decreasing)):
-            emotions[i, :] = batch[ids_sorted_decreasing[i]][3]
+        # emotions = torch.FloatTensor(len(batch), len(batch[0][3]))
+        #
+        #for i in range(len(ids_sorted_decreasing)):
+        #    emotions[i, :] = batch[ids_sorted_decreasing[i]][3]
+
+        emotions = torch.zeros(len(batch), 4, dtype=torch.float32)
 
         num_mels = batch[0][1].size(0)
         max_target_len = max(x[1].size(1) for x in batch)
