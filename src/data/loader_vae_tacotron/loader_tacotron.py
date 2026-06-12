@@ -1,12 +1,21 @@
 import csv
 import re
+import sys
 import torch
 from pathlib import Path
 from torch.utils.data import Dataset, random_split
-import copy
+
 
 
 from num2words import num2words
+
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(ROOT_DIR / "src" / "models" / "tacotron2_vae"))
+
+from layers import TacotronSTFT
+
+MAX_WAV_VALUE = 32768.0
+
 
 
 class TextNormalizerEN:
@@ -35,6 +44,11 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         self.normalizer = TextNormalizerEN()
         self.text_processor = text_processor 
         self.files = self._load_files_list()
+        self.stft = TacotronSTFT(filter_length=800,
+                                 hop_length=200,
+                                 win_length=800, 
+                                 sampling_rate=22050, 
+                                 mel_fmin=0.0, mel_fmax=8000.0)
 
 
     def _load_files_list(self):
@@ -45,6 +59,16 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
 
     def __len__(self):
         return len(self.files)
+    
+    def get_mel(self, audio):
+        audio_norm = audio / MAX_WAV_VALUE
+        audio_norm = audio_norm.unsqueeze(0)
+        audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
+        melspec = self.stft.mel_spectrogram(audio_norm)
+        melspec = torch.squeeze(melspec, 0)
+        return melspec
+
+
 
     def __getitem__(self, idx):
         row = self.files[idx]
@@ -55,8 +79,9 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         
         text_sequence = torch.LongTensor(sequence_list)
         
+        audio = sample["waveform"].squeeze(0)
         # ensure match dimentions [80, T]
-        mel_tensor = sample["mel"].squeeze(0) if sample["mel"].dim() == 3 else sample["mel"]
+        mel_tensor = self.get_mel(audio)
         
         emotion = torch.zeros(4, dtype=torch.float32)
         emotion[0] = 1.0  # on neutral emotions: it will be used when fine-tuning on VERBO.
