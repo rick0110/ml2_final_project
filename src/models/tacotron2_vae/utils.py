@@ -168,7 +168,7 @@ class TextMelCollate:
         input_lengths: List[int] = []
         output_lengths: List[int] = []
         
-        for text, mel, speaker, emotion in batch:
+        for text, mel, emotion in batch:
             text_padded.append(text)
             input_lengths.append(text.size(0))  # input_lengths: (batch_size,)
             
@@ -180,7 +180,6 @@ class TextMelCollate:
             
             mel_padded.append(mel)
             output_lengths.append(mel.size(1))  # output_lengths: (batch_size,)
-            speaker_padded.append(speaker)
             emotion_padded.append(emotion)
 
         # Padding of sequences to the maximum length within the batch.
@@ -193,6 +192,5 @@ class TextMelCollate:
             torch.IntTensor(input_lengths), 
             mel_padded, 
             torch.IntTensor(output_lengths),
-            torch.stack(speaker_padded),  # speaker_padded: (batch_size,)
             torch.stack(emotion_padded)  # emotion_padded: (batch_size,)
         )

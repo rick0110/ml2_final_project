@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import sys
 import time
 import subprocess
@@ -7,6 +8,9 @@ import argparse
 import torch
 import torch.distributed as dist
 from torch.autograd import Variable
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).parent.parent.parent
 
 def reduce_tensor(tensor, num_gpus):
     rt = tensor.clone()

@@ -1,8 +1,13 @@
 import torch
 from librosa.filters import mel as librosa_mel_fn
+from pathlib import Path
+import sys
 
-from models.tacotron2_vae.audio_processing import dynamic_range_compression, dynamic_range_decompression
-from models.tacotron2_vae.stft import STFT
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
+print(f"ROOT_DIR: {ROOT_DIR}")
+sys.path.insert(0, str(ROOT_DIR / "src" / "models" / "tacotron2_vae"))
+from audio_processing import dynamic_range_compression, dynamic_range_decompression
+from stft import STFT
 
 
 class LinearNorm(torch.nn.Module):
@@ -58,7 +63,7 @@ class TacotronSTFT(torch.nn.Module):
         hop_length=256,
         win_length=1024,
         n_mel_channels=80,
-        sampling_rate=16000,
+        sampling_rate=22050,
         mel_fmin=0.0,
         mel_fmax=8000.0,
     ):

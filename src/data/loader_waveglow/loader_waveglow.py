@@ -7,9 +7,10 @@ import torch.utils.data
 import sys
 from scipy.io.wavfile import read
 from pathlib import Path
+import csv
 
 # We're using the audio processing from TacoTron2 to make sure it matches
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src"/ "models" / "tacotron2_vae"))
 
 from layers import TacotronSTFT
@@ -41,9 +42,9 @@ class Mel2Samp(torch.utils.data.Dataset):
     """
     def __init__(self, training_files, segment_length, filter_length,
                  hop_length, win_length, sampling_rate, mel_fmin, mel_fmax):
-        self.audio_files = files_to_list(training_files)
+        self.files = self._load_files_list(str(ROOT_DIR / str(training_files)))
         random.seed(1234)
-        random.shuffle(self.audio_files)
+        random.shuffle(self.files)
         self.stft = TacotronSTFT(filter_length=filter_length,
                                  hop_length=hop_length,
                                  win_length=win_length,
@@ -59,30 +60,33 @@ class Mel2Samp(torch.utils.data.Dataset):
         melspec = self.stft.mel_spectrogram(audio_norm)
         melspec = torch.squeeze(melspec, 0)
         return melspec
+    
+    def _load_files_list(self, files_path):
+        if not os.path.isfile(files_path):
+            raise FileNotFoundError(f"File list not found: {files_path}")
+        with open(files_path, "r", encoding="utf-8") as f:
+            return list(csv.DictReader(f))
 
     def __getitem__(self, index):
         # Read audio
-        filename = self.audio_files[index]
-        audio, sampling_rate = load_wav_to_torch(filename)
-        if sampling_rate != self.sampling_rate:
-            raise ValueError("{} SR doesn't match target {} SR".format(
-                sampling_rate, self.sampling_rate))
+        row = self.files[index]
+        path = row["mel_path"]
+        data = torch.load(path, map_location="cpu")
+        mel = data["mel"]
+        audio = data["waveform"].squeeze() / MAX_WAV_VALUE
 
-        # Take segment
         if audio.size(0) >= self.segment_length:
             max_audio_start = audio.size(0) - self.segment_length
             audio_start = random.randint(0, max_audio_start)
             audio = audio[audio_start:audio_start+self.segment_length]
-        else:
+        else: 
             audio = torch.nn.functional.pad(audio, (0, self.segment_length - audio.size(0)), 'constant').data
-
+        
         mel = self.get_mel(audio)
-        audio = audio / MAX_WAV_VALUE
-
         return (mel, audio)
 
     def __len__(self):
-        return len(self.audio_files)
+        return len(self.files)
 
 # ===================================================================
 # Takes directory of clean audio and makes directory of spectrograms

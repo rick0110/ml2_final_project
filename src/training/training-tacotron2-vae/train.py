@@ -4,17 +4,14 @@
 from __future__ import annotations
 
 import argparse
-import json
-import math
 import sys
-import time
 from pathlib import Path
 import csv
 
 import torch
 from tqdm import tqdm
 
-from utils import ARTIFACTS_DIR, EXPERIMENTS_DIR, TextMelCollate, create_dataloader, create_experiment_dir
+from utils import ARTIFACTS_DIR, TextMelCollate, create_dataloader, create_experiment_dir
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -42,7 +39,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--iters-per-checkpoint", type=int, default=500)
-    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-6)
     parser.add_argument("--grad-clip-thresh", type=float, default=1.0)

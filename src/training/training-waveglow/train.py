@@ -13,7 +13,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from torch.utils.data import DataLoader
 
-ROOT_DIR = Path(__file__).parent.parent.parent
+ROOT_DIR = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src" / "models" / "waveglow"))
 sys.path.insert(0, str(ROOT_DIR / "src" / "data" / "loader_waveglow"))
 from glow import WaveGlow, WaveGlowLoss
@@ -35,6 +35,7 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, filepath):
           iteration, filepath))
     model_for_saving = WaveGlow(**waveglow_config).cuda()
     model_for_saving.load_state_dict(model.state_dict())
+    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     torch.save({'model': model_for_saving,
                 'iteration': iteration,
                 'optimizer': optimizer.state_dict(),
@@ -119,7 +120,7 @@ def train(num_gpus, rank, group_name, output_directory, epochs, learning_rate,
 
             if (iteration % iters_per_checkpoint == 0):
                 if rank == 0:
-                    checkpoint_path = args.checkpoints_dir / f"epoch_{iteration}.pt"
+                    checkpoint_path = Path(args.checkpoints_dir) / f"epoch_{iteration}.pt"
                     save_checkpoint(model, optimizer, learning_rate, iteration,
                                     str(checkpoint_path))
 
@@ -138,7 +139,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Parse configs.  Globals nicer in this case
-    with open(args.config) as f:
+    with open(str(Path(args.config).resolve())) as f:
         data = f.read()
     config = json.loads(data)
     train_config = config["train_config"]

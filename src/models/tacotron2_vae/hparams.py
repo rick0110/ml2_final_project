@@ -101,7 +101,7 @@ class Tacotron2VAEHparams:
     learning_rate: float = 1e-3
     weight_decay: float = 1e-6
     grad_clip_thresh: float = 1.0
-    batch_size: int = 64
+    batch_size: int = 32
     mask_padding: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
