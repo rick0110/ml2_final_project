@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+## Warning: these tranformed mels do not shoud be used for inference or training the model
+# All the transform should be applied by our engine to ensure compatibility
+
 """Preprocess LibriSpeech raw data into FastPitch-compatible mel-spectrogram tensors.
 
 What this script does:

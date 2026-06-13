@@ -398,7 +398,7 @@ def main() -> None:
     if not manifest:
         raise RuntimeError("No examples were kept after duration filtering.")
 
-    manifest_csv = out_root.parent / "librispeech_mels_metadata.csv"
+    manifest_csv = out_root.parent / "mels_metadata.csv"
     with manifest_csv.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(["mel_path", "duration", "text", "utt_id"])
