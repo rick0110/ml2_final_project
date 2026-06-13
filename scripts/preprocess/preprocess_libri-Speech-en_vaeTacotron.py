@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log-zero-guard-value", type=float, default=1e-5)
 
     parser.add_argument("--min-duration", type=float, default=0.3)
-    parser.add_argument("--max-duration", type=float, default=10.0) # Reduzido para 10s para evitar OOM no Tacotron
+    parser.add_argument("--max-duration", type=float, default=20) # Reduzido para 10s para evitar OOM no Tacotron
     parser.add_argument("--plot-samples", type=int, default=5, help="Number of mel images to save for validation (0 disables)")
     parser.add_argument("--seed", type=int, default=1234) # Padrão original
     parser.add_argument("--overwrite", action="store_true")
