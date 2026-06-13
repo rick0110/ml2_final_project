@@ -39,6 +39,13 @@ from models.tacotron2_vae.utils import get_mask_from_lengths, to_device
 
 DROP_RATE: float = 0.5
 
+from models.tacotron2_vae.hparams import Tacotron2VAEHparams
+from models.tacotron2_vae.layers import ConvNorm, LinearNorm
+from models.tacotron2_vae.modules import VAE_GST
+from models.tacotron2_vae.utils import get_mask_from_lengths, to_device
+
+DROP_RATE: float = 0.5
+
 
 class LocationLayer(nn.Module):
     def __init__(self, attention_n_filters, attention_kernel_size, attention_dim):
