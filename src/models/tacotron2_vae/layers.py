@@ -25,6 +25,7 @@ from librosa.filters import mel as librosa_mel_fn
 from pathlib import Path
 import sys
 from typing import Optional, Tuple
+import numpy as np
 
 # Ensure the correct path is set for local imports
 ROOT_DIR: Path = Path(__file__).parent.parent.parent.parent
