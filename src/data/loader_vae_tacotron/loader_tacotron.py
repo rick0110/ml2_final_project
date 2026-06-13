@@ -61,7 +61,7 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         return len(self.files)
     
     def get_mel(self, audio):
-        audio_norm = audio / MAX_WAV_VALUE
+        audio_norm = audio 
         audio_norm = audio_norm.unsqueeze(0)
         audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
         melspec = self.stft.mel_spectrogram(audio_norm)
@@ -88,6 +88,13 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
 
         # Return text sequence, mel spectrogram, and emotion label
         return text_sequence, mel_tensor, emotion
+    
+    def get_audio_mel(self, idx):
+        row = self.files[idx]
+        sample = torch.load(row["mel_path"], map_location="cpu", weights_only=False)
+        audio = sample["waveform"].squeeze(0)
+        mel_tensor = self.get_mel(audio)
+        return audio, mel_tensor
     
 def load_data(
     text_processor,

@@ -1,4 +1,32 @@
+"""
+Tacotron2 VAE Model implementation.
+
+This module defines the Tacotron2 VAE model, which combines a
+Tacotron 2 architecture with a Variational Autoencoder (VAE) for
+prosody modeling. It includes components for text embedding,
+an encoder, a VAE-based prosody encoder (VAE_GST), a decoder with
+attention, and a postnet.
+
+Dependencies:
+    - torch: PyTorch for neural network operations.
+    - torch.nn: PyTorch neural network modules.
+    - torch.nn.functional: PyTorch functional API.
+    - math: For mathematical operations like sqrt.
+    - models.tacotron2_vae.hparams: Hyperparameters for the model.
+    - models.tacotron2_vae.layers: Custom linear and convolutional layers.
+    - models.tacotron2_vae.modules: VAE_GST module for prosody encoding.
+    - models.tacotron2_vae.utils: Utility functions for masks and device placement.
+
+Typical Usage:
+    >>> from src.models.tacotron2_vae.hparams import create_hparams
+    >>> from src.models.tacotron2_vae.model import load_tacotron2_vae_model
+    >>> hparams = create_hparams()
+    >>> model = load_tacotron2_vae_model(hparams)
+    >>> # ... prepare inputs ...
+    >>> outputs = model(inputs)
+"""
 from math import sqrt
+from typing import Any, Dict, List, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -9,7 +37,14 @@ from models.tacotron2_vae.layers import ConvNorm, LinearNorm
 from models.tacotron2_vae.modules import VAE_GST
 from models.tacotron2_vae.utils import get_mask_from_lengths, to_device
 
-DROP_RATE = 0.5
+DROP_RATE: float = 0.5
+
+from models.tacotron2_vae.hparams import Tacotron2VAEHparams
+from models.tacotron2_vae.layers import ConvNorm, LinearNorm
+from models.tacotron2_vae.modules import VAE_GST
+from models.tacotron2_vae.utils import get_mask_from_lengths, to_device
+
+DROP_RATE: float = 0.5
 
 
 class LocationLayer(nn.Module):

@@ -196,10 +196,6 @@ def process_example(
 ) -> Optional[Dict[str, Any]]:
     waveform, sr = torchaudio.load(wav_path)
 
-    # Convert to mono
-    if waveform.shape[0] > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
-
     # Resample if needed
     if sr != target_sr:
         waveform = torchaudio.transforms.Resample(
@@ -347,6 +343,7 @@ def main() -> None:
     input_dir = args.input_dir.resolve()
     out_root = args.out_dir.resolve()
     out_root.mkdir(parents=True, exist_ok=True)
+    (out_root / "mels").mkdir(parents=True, exist_ok=True)
 
     examples = find_examples(input_dir)
     if not examples:
@@ -370,7 +367,7 @@ def main() -> None:
     for wav_path in tqdm.tqdm(examples, desc="Processing examples"):
         res = process_example(
             wav_path=wav_path,
-            out_root=out_root,
+            out_root=out_root / "mels",
             mel_transform=mel_transform,
             target_sr=args.target_sr,
             text_lookup=text_lookup,
