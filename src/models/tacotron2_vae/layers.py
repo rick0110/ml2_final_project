@@ -70,7 +70,7 @@ class LinearNorm(torch.nn.Module):
         Returns:
             torch.Tensor: Output tensor. Shape: (..., out_dim)
         """
-        return self.linear_layer(x)
+        return self.linear_layer(x)  # [..., out_dim]
 
 
 class ConvNorm(torch.nn.Module):
@@ -133,7 +133,7 @@ class ConvNorm(torch.nn.Module):
         Returns:
             torch.Tensor: Output tensor. Shape: (batch_size, out_channels, new_length)
         """
-        return self.conv(signal)
+        return self.conv(signal)  # [batch_size, out_channels, new_length]
 
 
 class TacotronSTFT(torch.nn.Module):
@@ -198,7 +198,7 @@ class TacotronSTFT(torch.nn.Module):
         Returns:
             torch.Tensor: Compressed magnitude spectrum.
         """
-        return dynamic_range_compression(magnitudes)
+        return dynamic_range_compression(magnitudes)  # [shape matches input magnitudes]
 
     def spectral_de_normalize(self, magnitudes: torch.Tensor) -> torch.Tensor:
         """
@@ -210,7 +210,7 @@ class TacotronSTFT(torch.nn.Module):
         Returns:
             torch.Tensor: Decompressed magnitude spectrum.
         """
-        return dynamic_range_decompression(magnitudes)
+        return dynamic_range_decompression(magnitudes)  # [shape matches input magnitudes]
 
     def mel_spectrogram(
         self, y: torch.Tensor, ref_level_db: float = 20, magnitude_power: float = 1.5
@@ -232,12 +232,12 @@ class TacotronSTFT(torch.nn.Module):
         assert torch.max(y.data) <= 1, "audio must be on the range [-1, 1]"
 
         # Compute STFT magnitudes and phases
-        magnitudes, _ = self.stft_fn.transform(y)
+        magnitudes, _ = self.stft_fn.transform(y)  # [batch_size, n_fft/2+1, frames]
         magnitudes = magnitudes.data  # Detach from computation graph if needed, though usually not necessary here.
 
         # Apply mel filter bank
-        mel_output: torch.Tensor = torch.matmul(self.mel_basis, magnitudes)
+        mel_output: torch.Tensor = torch.matmul(self.mel_basis, magnitudes)  # [batch_size, n_mel_channels, frames]
 
         # Normalize the mel-spectrogram
-        mel_output = self.spectral_normalize(mel_output)
-        return mel_output
+        mel_output = self.spectral_normalize(mel_output)  # [batch_size, n_mel_channels, frames]
+        return mel_output  # [batch_size, n_mel_channels, frames]
