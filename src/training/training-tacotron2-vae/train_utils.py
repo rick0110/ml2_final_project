@@ -1,16 +1,35 @@
+"""
+Training utilities for Tacotron 2 VAE.
+
+Responsibilities:
+    - Track and average training metrics using MetricsTracker.
+    - Log training progress to TensorBoard.
+    - Handle checkpoint saving and loading.
+    - Perform latent space analysis using Singular Value Decomposition (SVD).
+    - Manage the training loop for an epoch, including diagnostic plotting.
+
+Main Classes:
+    - MetricsTracker: Simple utility to accumulate and average scalars.
+    - TensorBoardLogger: Wrapper for PyTorch SummaryWriter.
+
+Main Functions:
+    - save_checkpoint: Serialize model and optimizer state.
+    - load_checkpoint: Restore model and optimizer state.
+    - get_singular_values_of_latent_covariance: Perform PCA on latent space z.
+    - train_epoch: Run a single epoch of training with monitoring.
+"""
+
 from __future__ import annotations
 
 import json
+import os
 from collections import defaultdict
 from pathlib import Path
 import sys
 import time
-from time import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Tuple
 import math
-import sys
 import numpy as np
-from torch.utils.data import DataLoader
 
 import torch
 import torch.nn as nn
@@ -18,43 +37,78 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import os
 import matplotlib
-matplotlib.use('Agg')  # Backend ultra-rápido para rodar no terminal sem abrir janelas
+matplotlib.use('Agg') # Headless backend
 import matplotlib.pyplot as plt
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "models" / "tacotron2_vae"))
 
-
-from losses import Tacotron2LossVAE
-from models.tacotron2_vae.hparams import Tacotron2VAEHparams
-from models.tacotron2_vae.model import Tacotron2, get_model_size_info
-
+try:
+    from losses import Tacotron2LossVAE
+    from models.tacotron2_vae.hparams import Tacotron2VAEHparams
+    from models.tacotron2_vae.model import Tacotron2, get_model_size_info
+except ImportError:
+    # Handle local relative imports
+    from losses import Tacotron2LossVAE
+    from hparams import Tacotron2VAEHparams
+    from model import Tacotron2, get_model_size_info
 
 
 class MetricsTracker:
-    def __init__(self):
-        self.metrics = defaultdict(list)
+    """
+    Utility for tracking multiple scalar metrics.
+    """
+    def __init__(self) -> None:
+        """Initialize the tracker."""
+        self.metrics: Dict[str, List[float]] = defaultdict(list)
 
-    def add(self, **kwargs):
+    def add(self, **kwargs: float) -> None:
+        """
+        Add new metric values.
+
+        Args:
+            **kwargs: Metric name and value pairs.
+        """
         for key, value in kwargs.items():
             self.metrics[key].append(value)
 
     def get_averages(self) -> Dict[str, float]:
+        """
+        Compute mean of all tracked metrics.
+
+        Returns:
+            Dict[str, float]: Averaged metrics.
+        """
         return {key: sum(values) / len(values) for key, values in self.metrics.items()}
 
-    def reset(self):
+    def reset(self) -> None:
+        """Clear all tracked metrics."""
         self.metrics = defaultdict(list)
 
 
 class TensorBoardLogger:
-    def __init__(self, log_dir: Path):
-        self.writer = SummaryWriter(log_dir=str(log_dir))
+    """
+    Logger for TensorBoard events.
+    """
+    def __init__(self, log_dir: Path) -> None:
+        """
+        Initialize the logger.
 
-    def log_model_info(self, model: Tacotron2):
-        info = get_model_size_info(model)
+        Args:
+            log_dir (Path): Directory for logs.
+        """
+        self.writer: SummaryWriter = SummaryWriter(log_dir=str(log_dir))
+
+    def log_model_info(self, model: Tacotron2) -> None:
+        """
+        Log model parameters to TensorBoard.
+
+        Args:
+            model (Tacotron2): The model.
+        """
+        info: Dict[str, int] = get_model_size_info(model)
         for key, value in info.items():
             self.writer.add_text("model_info", f"{key}: {value}", 0)
 
@@ -68,7 +122,20 @@ class TensorBoardLogger:
         kl_loss: float,
         kl_weight: float,
         iteration: int,
-    ):
+    ) -> None:
+        """
+        Log training step metrics.
+
+        Args:
+            loss (float): Total loss.
+            grad_norm (float): Gradient norm.
+            learning_rate (float): Current LR.
+            duration (float): Step duration.
+            recon_loss (float): Reconstruction loss.
+            kl_loss (float): KL divergence loss.
+            kl_weight (float): Annealed KL weight.
+            iteration (int): Global step.
+        """
         self.writer.add_scalar("train/loss", loss, iteration)
         self.writer.add_scalar("train/recon_loss", recon_loss, iteration)
         self.writer.add_scalar("train/kl_loss", kl_loss, iteration)
@@ -77,10 +144,18 @@ class TensorBoardLogger:
         self.writer.add_scalar("train/learning_rate", learning_rate, iteration)
         self.writer.add_scalar("train/duration", duration, iteration)
 
-    def log_validation(self, val_loss: float, iteration: int):
+    def log_validation(self, val_loss: float, iteration: int) -> None:
+        """
+        Log validation loss.
+
+        Args:
+            val_loss (float): Loss.
+            iteration (int): Step.
+        """
         self.writer.add_scalar("val/loss", val_loss, iteration)
 
-    def close(self):
+    def close(self) -> None:
+        """Close the writer."""
         self.writer.close()
 
 
@@ -91,9 +166,20 @@ def save_checkpoint(
     iteration: int,
     filepath: Path,
     hparams: Tacotron2VAEHparams,
-    **kwargs,
-):
-    payload = {
+    **kwargs: Any,
+) -> None:
+    """
+    Save model and training state.
+
+    Args:
+        model (nn.Module): The model.
+        optimizer (Optimizer): The optimizer.
+        learning_rate (float): Current LR.
+        iteration (int): Global step.
+        filepath (Path): Save path.
+        hparams (Tacotron2VAEHparams): Hyperparameters.
+    """
+    payload: Dict[str, Any] = {
         "iteration": iteration,
         "state_dict": model.state_dict(),
         "optimizer": optimizer.state_dict(),
@@ -107,70 +193,78 @@ def save_checkpoint(
 def load_checkpoint(
     checkpoint_path: Path,
     model: nn.Module,
-):
-    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    model.load_state_dict(checkpoint["state_dict"])
-    learning_rate = checkpoint.get("learning_rate", 1e-3)
-    iteration = checkpoint.get("iteration", 0)
-    optimizer = checkpoint.get("optimizer", None)
-    scheduler = checkpoint.get("scheduler", None)
+) -> Tuple[nn.Module, Optional[Dict[str, Any]], float, int]:
+    """
+    Load model and training state.
 
-    
+    Args:
+        checkpoint_path (Path): Path to .pt file.
+        model (nn.Module): Model to load into.
+
+    Returns:
+        Tuple: model, optimizer_state, learning_rate, iteration.
+    """
+    checkpoint: Dict[str, Any] = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    model.load_state_dict(checkpoint["state_dict"])
+    learning_rate: float = checkpoint.get("learning_rate", 1e-3)
+    iteration: int = checkpoint.get("iteration", 0)
+    optimizer: Optional[Dict[str, Any]] = checkpoint.get("optimizer", None)
+
     return model, optimizer, learning_rate, iteration
 
-def find_latest_checkpoint(checkpoint_dir: Path) -> Optional[Path]:
-    checkpoint_files = list(checkpoint_dir.glob("epoch_*"))
+
+def find_latest_checkpoint(checkpoint_dir: Path) -> Path:
+    """
+    Find the checkpoint with the highest iteration count.
+
+    Args:
+        checkpoint_dir (Path): Directory containing checkpoints.
+
+    Returns:
+        Path: Latest checkpoint path.
+    """
+    checkpoint_files: List[Path] = list(checkpoint_dir.glob("epoch_*"))
     if not checkpoint_files:
         raise FileNotFoundError(f"No checkpoint files found in {checkpoint_dir}")
-    latest_checkpoint = max(checkpoint_files, key=lambda f: int(f.stem.split("_")[1]))
+    latest_checkpoint: Path = max(checkpoint_files, key=lambda f: int(f.stem.split("_")[1]))
     return latest_checkpoint
 
 
-
 def get_singular_values_of_latent_covariance(
-    model,
+    model: Tacotron2,
     val_loader: DataLoader,
     device: torch.device,
-):
+) -> Dict[str, Any]:
     """
-    Coleta todos os vetores latentes z do validation set,
-    calcula PCA e retorna estatísticas do espaço latente.
-    """
+    Collect latent vectors z from validation set and perform PCA.
 
+    Args:
+        model (Tacotron2): The model.
+        val_loader (DataLoader): Validation data.
+        device (torch.device): Compute device.
+
+    Returns:
+        Dict[str, Any]: SVD statistics of latent space.
+    """
     model.eval()
-
-    latent_vectors = []
+    latent_vectors: List[np.ndarray] = []
 
     with torch.no_grad():
-        for batch in val_loader:
-
+        for i, batch in enumerate(val_loader):
+            if i >= 32:  # Limit validation batches to keep PCA fast
+                break
             x, _ = model.parse_batch(batch, device)
+            outputs: List[torch.Tensor] = model(x)
+            z: torch.Tensor = outputs[6] # (B, L)
+            latent_vectors.append(z.detach().cpu().numpy())
 
-            outputs = model(x)
+    z_numpy: np.ndarray = np.concatenate(latent_vectors, axis=0) # (N_samples, L)
+    z_centered: np.ndarray = z_numpy - np.mean(z_numpy, axis=0, keepdims=True)
 
-            z = outputs[6]
+    U, S, Vt = np.linalg.svd(z_centered, full_matrices=False)
 
-            latent_vectors.append(
-                z.detach().cpu().numpy()
-            )
-
-    z_numpy = np.concatenate(latent_vectors, axis=0)
-
-    z_centered = z_numpy - np.mean(z_numpy, axis=0, keepdims=True)
-
-    U, S, Vt = np.linalg.svd(
-        z_centered,
-        full_matrices=False
-    )
-
-    explained_variance = (
-        S**2 / (z_centered.shape[0] - 1)
-    )
-
-    explained_variance_ratio = (
-        explained_variance /
-        explained_variance.sum()
-    )
+    explained_variance: np.ndarray = S**2 / (z_centered.shape[0] - 1)
+    explained_variance_ratio: np.ndarray = explained_variance / explained_variance.sum()
 
     return {
         "latent_vectors": z_numpy,
@@ -180,165 +274,172 @@ def get_singular_values_of_latent_covariance(
         "components": Vt,
     }
 
+
 def train_epoch(
     model: Tacotron2,
     hparams: Tacotron2VAEHparams,
     train_loader: DataLoader,
     test_loader: DataLoader,
+    val_loader: DataLoader,
     optimizer: torch.optim.Optimizer,
     criterion: Tacotron2LossVAE,
     device: torch.device,
     iteration: int,
     learning_rate: float,
-    training_metadata: Dict[str, Any] = None,
+    training_metadata: Optional[Dict[str, Any]] = None,
+    tensorboard_logger: Optional[TensorBoardLogger] = None,
 ) -> Dict[str, Any]:
+    """
+    Run one training epoch.
+
+    Args:
+        model (Tacotron2): The model.
+        hparams (Tacotron2VAEHparams): Hyperparameters.
+        train_loader (DataLoader): Training data.
+        test_loader (DataLoader): Test/Validation data.
+        optimizer (Optimizer): Optimizer.
+        criterion (Tacotron2LossVAE): Loss module.
+        device (torch.device): Device.
+        iteration (int): Current global iteration.
+        learning_rate (float): Current LR.
+        training_metadata (Optional[Dict]): Tracking dict for history.
+
+    Returns:
+        Dict[str, Any]: Updated training metadata.
+    """
     model.train()
-    # metrics = MetricsTracker()
 
     for batch in tqdm(train_loader, desc=f"training", leave=False):
         model.train()
         for param_group in optimizer.param_groups:
             param_group["lr"] = learning_rate
+
         optimizer.zero_grad()
         x, y = model.parse_batch(batch, device)
-        y_pred = model((x[0], x[1], x[2], x[3]))
+        y_pred: List[torch.Tensor] = model(x) # [mel, mel_post, gate, align, mu, logvar, z]
+
         loss, recon_loss, kl_loss, kl_weight = criterion(y_pred, y, iteration)
         loss.backward()
 
-        # Captura gradientes por camada antes do otimizador atuar
-        layer_grads = []
-        layer_names = []
-        for name, param in model.named_parameters():
-            if param.grad is not None:
-                layer_grads.append(param.grad.norm().item())
-                layer_names.append(name)
+        # Capture gradient norms per layer (only when logging checkpoints/plots to save GPU-CPU sync time)
+        layer_grads: List[float] = []
+        if iteration % hparams.iters_per_checkpoint == 0 or iteration == 0:
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    layer_grads.append(param.grad.norm().item())
 
-        grad_norm = torch.nn.utils.clip_grad_norm_(
+        grad_norm: torch.Tensor = torch.nn.utils.clip_grad_norm_(
             model.parameters(), hparams.grad_clip_thresh
         )
         optimizer.step()
-        reduced_loss = loss.item()
-        #if not math.isnan(reduced_loss):
-        #    print(
-        #        f"Train loss {iteration} {reduced_loss:.6f} "
-        #        f"Grad Norm {float(grad_norm):.6f} {duration:.2f}s/it"
-        #    )
-            # tb_logger.log_training(
-            #     reduced_loss,
-            #     float(grad_norm),
-            #     learning_rate,
-            #     duration,
-            #     recon_loss.item(),
-            #    kl_loss.item(),
-            #    float(kl_weight),
-            #    iteration,
-            #)
+        reduced_loss: float = loss.item()
 
         if iteration % hparams.iters_per_checkpoint == 0:
-            checkpoint_path = Path(hparams.checkpoint_dir) / f"epoch_{iteration}"
+            checkpoint_path: Path = Path(hparams.checkpoint_dir) / f"epoch_{iteration}"
             save_checkpoint(
                 model, optimizer, learning_rate, iteration, checkpoint_path, hparams
             )
-        iteration += 1
 
-    # tb_logger.close()
-        
+        # Diagnostic analysis and plotting
         if training_metadata is not None:
-            singular_values_info = get_singular_values_of_latent_covariance(model, test_loader, device)
-            model.eval()
-            batch = next(iter(test_loader))
-            with torch.no_grad():
-                x, y = model.parse_batch(batch, device)
-                y_pred = model((x[0], x[1], x[2], x[3]))
-            
+            # 1. Update basic history every step
+            training_metadata.setdefault("training_loss", []).append(reduced_loss)
+            training_metadata.setdefault("grad_norm", []).append(float(grad_norm))
+            training_metadata.setdefault("learning_rate", []).append(learning_rate)
+            training_metadata.setdefault("recon_loss", []).append(recon_loss.item())
+            training_metadata.setdefault("kl_loss", []).append(kl_loss.item())
+            training_metadata.setdefault("kl_weight", []).append(float(kl_weight))
 
+            # 2. TensorBoard logging & Heavy validation evaluation: run only every iters_per_checkpoint steps (or step 0)
+            if iteration % hparams.iters_per_checkpoint == 0 or iteration == 0:
+                singular_values_info: Dict[str, Any] = get_singular_values_of_latent_covariance(model, test_loader, device)
 
-            mel_pred = y_pred[0][1].cpu().numpy()
-            mel_target = y[0][0].cpu().numpy()
+                model.eval()
+                test_batch: Any = next(iter(test_loader))
+                val_batch: Any = next(iter(val_loader))
+                
+                with torch.no_grad():
+                    xt, yt = model.parse_batch(test_batch, device)
+                    yt_pred: List[torch.Tensor] = model(xt)
+                    test_loss, test_recon, test_kl, _ = criterion(yt_pred, yt, iteration)
+                    
+                    xv, yv = model.parse_batch(val_batch, device)
+                    yv_pred: List[torch.Tensor] = model(xv)
+                    val_loss, val_recon, val_kl, _ = criterion(yv_pred, yv, iteration)
 
-            losses = training_metadata.get("training_loss", [])
-            grad_norms = training_metadata.get("grad_norm", [])
-            learning_rates = training_metadata.get("learning_rate", [])
-            recon_losses = training_metadata.get("recon_loss", [])
-            kl_losses = training_metadata.get("kl_loss", [])
-            kl_weights = training_metadata.get("kl_weight", [])
-            singular_values = training_metadata.get("singular_values_of_latent_covariance", [])
-            target_predicts = training_metadata.get("target_predict_example", [])
-            losses.append(reduced_loss)
-            grad_norms.append(float(grad_norm))
-            learning_rates.append(learning_rate)
-            recon_losses.append(recon_loss.item())
-            kl_losses.append(kl_loss.item())
-            kl_weights.append(float(kl_weight))
-            singular_values.append(singular_values_info)
-            target_predicts.append((mel_pred, mel_target))
+                mel_pred: np.ndarray = yt_pred[0][0].cpu().numpy() # (n_mels, T)
+                mel_target: np.ndarray = yt[0][0].cpu().numpy()   # (n_mels, T)
 
-            if iteration % 1 == 0:
-                os.makedirs("training_plots", exist_ok=True)
-                
-                fig = plt.figure(figsize=(24, 20), dpi=150)
-                fig.suptitle(f"Training Diagnostics - Iteration {iteration}", fontsize=20, fontweight='bold')
-                
-                ax1 = fig.add_subplot(4, 2, 1)
-                ax1.set_title("Total Loss Over Time", fontsize=14)
-                ax1.plot(losses, color='blue', linewidth=2)
-                ax1.set_ylabel("Loss")
-                ax1.grid(True, alpha=0.3)
-                
-                ax2 = fig.add_subplot(4, 2, 2)
-                ax2.set_title("Recon Loss Over Time", fontsize=14)
-                ax2.plot(recon_losses, color='orange', linewidth=2)
-                ax2.set_ylabel("Loss")
-                ax2.grid(True, alpha=0.3)
-                
-                ax3 = fig.add_subplot(4, 2, 3)
-                ax3.set_title("KL Loss Over Time", fontsize=14)
-                ax3.plot(kl_losses, color='red', linewidth=2)
-                ax3.set_ylabel("Loss")
-                ax3.grid(True, alpha=0.3)
-                
-                ax4 = fig.add_subplot(4, 2, 4)
-                ax4.set_title("Latent Space Singular Values (Z PCA)", fontsize=14)
-                s_vals = singular_values_info["singular_values"].tolist()
-                ax4.bar(range(len(s_vals)), s_vals, color='purple', alpha=0.7)
-                ax4.set_xlabel("Component Index")
-                ax4.set_ylabel("Magnitude")
-                
-                ax5 = fig.add_subplot(4, 2, 5)
-                ax5.set_title("Global Gradient Norm (History)", fontsize=14)
-                ax5.plot(grad_norms, color='green', label="Grad Norm")
-                ax5.set_ylabel("Norm")
-                ax5.grid(True, alpha=0.3)
-                ax5.legend()
+                training_metadata.setdefault("singular_values_of_latent_covariance", []).append(singular_values_info)
+                training_metadata.setdefault("target_predict_example", []).append((mel_pred, mel_target))
 
-                ax6 = fig.add_subplot(4, 2, 6)
-                ax6.set_title(f"Gradient Norms per Layer (Iter {iteration})", fontsize=14)
-                # Pula rótulos no eixo X se forem muitas camadas para evitar sobreposição de texto
-                ax6.bar(range(len(layer_grads)), layer_grads, color='orange')
-                ax6.set_xlabel("Layers (Sequential)")
-                ax6.set_ylabel("Grad Norm")
-                
-                ax7 = fig.add_subplot(4, 2, 7)
-                ax7.set_title("Target Mel-Spectrogram", fontsize=14)
-                im7 = ax7.imshow(mel_target, aspect="auto", origin="lower", cmap='viridis')
-                fig.colorbar(im7, ax=ax7)
-                
-                ax8 = fig.add_subplot(4, 2, 8)
-                ax8.set_title("Generated Mel-Spectrogram", fontsize=14)
-                im8 = ax8.imshow(mel_pred, aspect="auto", origin="lower", cmap='viridis')
-                fig.colorbar(im8, ax=ax8)
-                
-                plt.tight_layout(rect=[0, 0.03, 1, 0.95]) 
-                save_path = Path(hparams.experiment_dir) / "training_plots" / f"diagnostic_iter_{iteration}.png"
-                save_path.parent.mkdir(parents=True, exist_ok=True)
-                plt.savefig(save_path, dpi=500)
-                plt.close(fig) 
-                
+                if tensorboard_logger:
+                    writer = tensorboard_logger.writer
+                    
+                    # Log training scalars
+                    writer.add_scalar("Loss/Train_Total", reduced_loss, iteration)
+                    writer.add_scalar("Loss/Train_Recon", recon_loss.item(), iteration)
+                    writer.add_scalar("Loss/Train_KL", kl_loss.item(), iteration)
+                    writer.add_scalar("LearningRate", learning_rate, iteration)
+                    writer.add_scalar("Loss/Train_KL_Weight", kl_weight, iteration)
+                    writer.add_scalar("Gradients/Global_Norm", float(grad_norm), iteration)
+                    
+                    # Log individual layer gradient norms
+                    for name, param in model.named_parameters():
+                        if param.grad is not None:
+                            writer.add_scalar(f"GradientNorms_Layers/{name}", param.grad.norm().item(), iteration)
+                    
+                    # Log test/validation losses
+                    writer.add_scalar("Loss/Test_Total", test_loss.item(), iteration)
+                    writer.add_scalar("Loss/Test_Recon", test_recon.item(), iteration)
+                    writer.add_scalar("Loss/Test_KL", test_kl.item(), iteration)
+
+                    writer.add_scalar("Loss/Val_Total", val_loss.item(), iteration)
+                    writer.add_scalar("Loss/Val_Recon", val_recon.item(), iteration)
+                    writer.add_scalar("Loss/Val_KL", val_kl.item(), iteration)
+
+                    # Pair: target and predicted spectrograms
+                    fig_spec, (ax_t, ax_p) = plt.subplots(1, 2, figsize=(12, 5))
+                    ax_t.set_title("Target Spectrogram")
+                    im_t = ax_t.imshow(mel_target, aspect="auto", origin="lower")
+                    fig_spec.colorbar(im_t, ax=ax_t)
+                    ax_p.set_title("Predicted Spectrogram")
+                    im_p = ax_p.imshow(mel_pred, aspect="auto", origin="lower")
+                    fig_spec.colorbar(im_p, ax=ax_p)
+                    writer.add_figure("Spectrograms/Target_vs_Predicted", fig_spec, iteration)
+                    plt.close(fig_spec)
+
+                    # Bar graph of PCA singular values of latent variables
+                    s_vals: List[float] = singular_values_info["singular_values"].tolist()
+                    fig_pca, ax_pca = plt.subplots(figsize=(8, 4))
+                    ax_pca.set_title("Latent Space Singular Values (Z PCA)")
+                    ax_pca.bar(range(len(s_vals)), s_vals, color='purple')
+                    writer.add_figure("PCA/Singular_Values", fig_pca, iteration)
+                    plt.close(fig_pca)
+
+                    # Histogram/Bar graph of gradient norms distribution of the model layers
+                    fig_grad, ax_grad = plt.subplots(figsize=(10, 4))
+                    ax_grad.set_title("Gradient Norms Distribution")
+                    ax_grad.bar(range(len(layer_grads)), layer_grads, color='orange')
+                    writer.add_figure("Gradients/Norms_Distribution", fig_grad, iteration)
+                    plt.close(fig_grad)
+
+                # Explicitly delete GPU tensors to free VRAM immediately and prevent scoping memory leak
+                del xt, yt, yt_pred, xv, yv, yv_pred, test_loss, val_loss, test_batch, val_batch
+                torch.cuda.empty_cache()
                 model.train()
+
+        iteration += 1
 
     return training_metadata
 
 
+def save_hparams(hparams: Tacotron2VAEHparams, path: Path) -> None:
+    """
+    Save hyperparameters to a JSON file.
 
-def save_hparams(hparams: Tacotron2VAEHparams, path: Path):
+    Args:
+        hparams (Tacotron2VAEHparams): The hparams object.
+        path (Path): Destination path.
+    """
     path.write_text(json.dumps(hparams.to_dict(), indent=2), encoding="utf-8")

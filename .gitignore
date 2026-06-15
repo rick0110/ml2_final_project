@@ -226,3 +226,9 @@ local_weight_models/
 package-lock.json
 package.json
 .vscode/
+
+# Caching directories
+_cache/
+_cache_models/
+**/_cache/
+**/_cache_models/

@@ -2,15 +2,30 @@
 """
 Preprocess LibriSpeech EN raw data into Tacotron2-VAE compatible mel-spectrogram tensors.
 
-What this script does:
-- Scans the LibriSpeech raw root for transcript files and matching audio
-- Reads utterance text from `*.trans.txt`
-- Loads audio, converts to mono, and resamples to target SR
-- Computes Tacotron2-compatible 80-bin log-mel spectrograms (Dynamic Range Compression)
-- Filters examples by duration
-- Saves per-utterance `.pt` tensors
-- Writes a metadata CSV
-- Optionally plots a few mel spectrograms for validation
+Responsibilities:
+    - Scan the LibriSpeech raw root for transcript files and matching audio.
+    - Read utterance text from `*.trans.txt`.
+    - Load audio, convert to mono, and resample to target sampling rate.
+    - Compute Tacotron2-compatible 80-bin log-mel spectrograms (Dynamic Range Compression).
+    - Filter examples by duration.
+    - Save per-utterance `.pt` tensors.
+    - Write a metadata CSV.
+    - Optionally plot mel spectrograms for validation.
+
+Main Classes:
+    - Tacotron2MelTransform: Custom mel-spectrogram transformation matching original Tacotron2-VAE.
+    - Example: Dataclass representing a single training example metadata.
+
+Main Functions:
+    - discover_examples: Scan directory for audio and text pairs.
+    - process_example: Single example processing logic.
+    - plot_mels: Save mel spectrogram visualizations.
+
+Tensor Conventions:
+    B = batch size
+    S = number of audio samples
+    T = number of frames
+    n_mels = mel frequency bins (standard 80)
 """
 
 from __future__ import annotations
@@ -23,9 +38,10 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from logging import warning
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+from torch import Tensor
 import torch.nn.functional as F
 import torchaudio
 import librosa.filters
@@ -47,6 +63,15 @@ _WORKER_MEL_TRANSFORM: Optional[torch.nn.Module] = None
 
 @dataclass
 class Example:
+    """
+    Metadata for a discovered LibriSpeech example.
+
+    Attributes:
+        audio_path (str): Relative path to the audio file.
+        text (str): Utterance transcript.
+        duration (float): Utterance duration in seconds (initialized to 0.0).
+        utt_id (str): Unique identifier for the utterance.
+    """
     audio_path: str
     text: str
     duration: float
@@ -54,6 +79,12 @@ class Example:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for preprocessing.
+
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Prepare Tacotron2-compatible mel spectrograms for LibriSpeech EN",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -85,6 +116,22 @@ class Tacotron2MelTransform(torch.nn.Module):
     """
     Exact replica of TacotronSTFT from the original tacotron2-vae-master project.
     Uses librosa for the mel basis to guarantee 100% parity.
+
+    Architecture:
+        Reflective Padding -> STFT -> Magnitude -> Mel Basis Projection -> Log Scaling.
+
+    Inputs:
+        waveform:
+            Shape (B, S) or (S,)
+
+    Outputs:
+        mel_output:
+            Shape (B, n_mels, T)
+
+    Example:
+        >>> transform = Tacotron2MelTransform()
+        >>> audio = torch.randn(1, 16000)
+        >>> mel = transform(audio)
     """
     def __init__(
         self,
@@ -97,6 +144,19 @@ class Tacotron2MelTransform(torch.nn.Module):
         mel_fmax: float = 8000.0,
         clip_val: float = 1e-5,
     ) -> None:
+        """
+        Initialize the Tacotron2 mel transform.
+
+        Args:
+            filter_length (int): FFT filter length (n_fft). Defaults to 1024.
+            hop_length (int): Hop length for STFT. Defaults to 256.
+            win_length (int): Window length for STFT. Defaults to 1024.
+            n_mel_channels (int): Number of mel frequency bins. Defaults to 80.
+            sampling_rate (int): Audio sampling rate. Defaults to 16000.
+            mel_fmin (float): Minimum frequency for mel filter bank. Defaults to 0.0.
+            mel_fmax (float): Maximum frequency for mel filter bank. Defaults to 8000.0.
+            clip_val (float): Guard value for log scaling. Defaults to 1e-5.
+        """
         super().__init__()
         self.filter_length = filter_length
         self.hop_length = hop_length
@@ -114,15 +174,26 @@ class Tacotron2MelTransform(torch.nn.Module):
         window = torch.hann_window(win_length)
         self.register_buffer("window", window)
 
-    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
+    def forward(self, waveform: Tensor) -> Tensor:
+        """
+        Apply the mel transformation to a waveform.
+
+        Args:
+            waveform (Tensor): Input audio waveform.
+                Shape: (B, S) or (S,)
+
+        Returns:
+            Tensor: Log-mel spectrogram.
+                Shape: (B, n_mels, T)
+        """
         if waveform.dim() == 1:
-            waveform = waveform.unsqueeze(0)
+            waveform = waveform.unsqueeze(0)  # (1, S)
 
         # Explicit Padding to match original TacotronSTFT
-        p = int((self.filter_length - self.hop_length) / 2)
-        waveform = F.pad(waveform.unsqueeze(1), (p, p), mode='reflect').squeeze(1)
+        p: int = int((self.filter_length - self.hop_length) / 2)
+        waveform = F.pad(waveform.unsqueeze(1), (p, p), mode='reflect').squeeze(1) # (B, S + 2*p)
 
-        stft_out = torch.stft(
+        stft_out: Tensor = torch.stft(
             waveform,
             n_fft=self.filter_length,
             hop_length=self.hop_length,
@@ -133,17 +204,26 @@ class Tacotron2MelTransform(torch.nn.Module):
             normalized=False,
             onesided=True,
             return_complex=True
-        )
-        magnitudes = torch.abs(stft_out)
+        ) # (B, filter_length/2 + 1, T)
+        magnitudes: Tensor = torch.abs(stft_out) # (B, filter_length/2 + 1, T)
 
-        mel_output = torch.matmul(self.mel_basis, magnitudes)
+        mel_output: Tensor = torch.matmul(self.mel_basis, magnitudes) # (B, n_mels, T)
         
         # Dynamic Range Compression (Tacotron standard)
-        mel_output = torch.log(torch.clamp(mel_output, min=self.clip_val))
+        mel_output = torch.log(torch.clamp(mel_output, min=self.clip_val)) # (B, n_mels, T)
         return mel_output
 
 
 def resolve_input_root(input_dir: Path) -> Path:
+    """
+    Verify and resolve the input root directory for LibriSpeech.
+
+    Args:
+        input_dir (Path): Provided input directory.
+
+    Returns:
+        Path: Resolved root directory.
+    """
     if input_dir.name == "LibriSpeech" and input_dir.exists():
         return input_dir
     candidate = input_dir / "LibriSpeech"
@@ -153,6 +233,16 @@ def resolve_input_root(input_dir: Path) -> Path:
 
 
 def find_audio_file(transcript_path: Path, utt_id: str) -> Optional[Path]:
+    """
+    Find the audio file matching a transcript entry.
+
+    Args:
+        transcript_path (Path): Path to the transcript file.
+        utt_id (str): Utterance ID.
+
+    Returns:
+        Optional[Path]: Path to the audio file if found, else None.
+    """
     for extension in (".flac", ".wav"):
         candidate = transcript_path.parent / f"{utt_id}{extension}"
         if candidate.exists():
@@ -163,6 +253,15 @@ def find_audio_file(transcript_path: Path, utt_id: str) -> Optional[Path]:
 
 
 def discover_examples(input_root: Path) -> List[Example]:
+    """
+    Scan the dataset directory for examples.
+
+    Args:
+        input_root (Path): Dataset root.
+
+    Returns:
+        List[Example]: List of discovered examples.
+    """
     examples: List[Example] = []
     transcript_files = sorted(input_root.rglob("*.trans.txt"))
 
@@ -203,15 +302,29 @@ def process_example(
     target_sr: int,
     overwrite: bool = False,
 ) -> Optional[Dict[str, Any]]:
-    audio_path = input_root / Path(ex.audio_path)
+    """
+    Process a single example: load audio, transform, and save.
+
+    Args:
+        ex (Example): Example metadata.
+        input_root (Path): Dataset input root.
+        out_root (Path): Processed output root.
+        mel_transform (torch.nn.Module): Mel transformation module.
+        target_sr (int): Target sampling rate.
+        overwrite (bool): Whether to overwrite existing files. Defaults to False.
+
+    Returns:
+        Optional[Dict[str, Any]]: Metadata for the processed example, or None if skipped.
+    """
+    audio_path: Path = input_root / Path(ex.audio_path)
     if not audio_path.exists():
         return None
 
-    out_path = out_root / f"{ex.utt_id}.pt"
+    out_path: Path = out_root / f"{ex.utt_id}.pt"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     
     if out_path.exists() and not overwrite:
-        data = torch.load(out_path, map_location="cpu", weights_only=False)
+        data: Dict[str, Any] = torch.load(out_path, map_location="cpu", weights_only=False)
         return {
             "mel_path": str(out_path),
             "duration": float(data.get("duration", 0.0)),
@@ -219,19 +332,21 @@ def process_example(
             "utt_id": ex.utt_id,
         }
 
-    waveform, sr = torchaudio.load(str(audio_path))
+    waveform: Tensor
+    sr: int
+    waveform, sr = torchaudio.load(str(audio_path)) # (channels, S)
     
     if waveform.ndim > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
+        waveform = waveform.mean(dim=0, keepdim=True) # (1, S)
     
     if sr != target_sr:
-        waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=target_sr)
+        waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=target_sr) # (1, S_new)
         sr = target_sr
 
-    duration = waveform.shape[-1] / sr
+    duration: float = waveform.shape[-1] / sr
     
     with torch.no_grad():
-        log_mel = mel_transform(waveform)
+        log_mel: Tensor = mel_transform(waveform) # (1, n_mels, T)
 
     torch.save(
         {
@@ -267,6 +382,22 @@ def _init_worker(
     log_zero_guard_value: float,
     overwrite: bool,
 ) -> None:
+    """
+    Initialize global state for a worker process.
+
+    Args:
+        input_root (Path): Dataset input root.
+        out_root (Path): Processed output root.
+        target_sr (int): Target sampling rate.
+        n_mels (int): Number of mel channels.
+        filter_length (int): FFT filter length.
+        win_length (int): Window length.
+        hop_length (int): Hop length.
+        f_min (float): Min frequency.
+        f_max (float): Max frequency.
+        log_zero_guard_value (float): Log guard value.
+        overwrite (bool): Overwrite flag.
+    """
     global _WORKER_INPUT_ROOT, _WORKER_OUT_ROOT, _WORKER_TARGET_SR, _WORKER_OVERWRITE, _WORKER_MEL_TRANSFORM
     _WORKER_INPUT_ROOT = input_root
     _WORKER_OUT_ROOT = out_root
@@ -290,6 +421,15 @@ def _init_worker(
 
 
 def _process_example_worker(ex: Example) -> Optional[Dict[str, Any]]:
+    """
+    Worker process wrapper for process_example.
+
+    Args:
+        ex (Example): Example to process.
+
+    Returns:
+        Optional[Dict[str, Any]]: Processed metadata.
+    """
     if _WORKER_INPUT_ROOT is None or _WORKER_OUT_ROOT is None or _WORKER_TARGET_SR is None or _WORKER_MEL_TRANSFORM is None:
         raise RuntimeError("Worker was not initialized correctly")
     return process_example(
@@ -303,6 +443,15 @@ def _process_example_worker(ex: Example) -> Optional[Dict[str, Any]]:
 
 
 def plot_mels(manifest: List[Dict[str, Any]], out_dir: Path, n: int = 5, seed: int = 1234) -> None:
+    """
+    Save mel spectrogram visualizations for a few samples.
+
+    Args:
+        manifest (List[Dict[str, Any]]): Manifest of processed examples.
+        out_dir (Path): Output directory for figures.
+        n (int): Number of samples to plot. Defaults to 5.
+        seed (int): Random seed for sampling. Defaults to 1234.
+    """
     if plt is None:
         print("matplotlib not available; skipping plots")
         return
@@ -316,11 +465,12 @@ def plot_mels(manifest: List[Dict[str, Any]], out_dir: Path, n: int = 5, seed: i
     out_dir.mkdir(parents=True, exist_ok=True)
     
     for i, row in enumerate(samples, start=1):
-        data = torch.load(row["mel_path"], map_location="cpu", weights_only=False)
-        mel = data["mel"].squeeze(0).numpy()
+        data: Dict[str, Any] = torch.load(row["mel_path"], map_location="cpu", weights_only=False)
+        mel: Tensor = data["mel"].squeeze(0) # (n_mels, T)
+        mel_np = mel.numpy()
 
         fig, ax = plt.subplots(1, 1, figsize=(10, 4))
-        im = ax.imshow(mel, origin="lower", aspect="auto", interpolation="nearest")
+        im = ax.imshow(mel_np, origin="lower", aspect="auto", interpolation="nearest")
         ax.set_title(f"{row.get('utt_id', Path(row['mel_path']).stem)} - Tacotron2 Mel")
         ax.set_ylabel("Mel bin")
         ax.set_xlabel("Frame")
@@ -333,21 +483,24 @@ def plot_mels(manifest: List[Dict[str, Any]], out_dir: Path, n: int = 5, seed: i
 
 
 def main() -> None:
-    args = parse_args()
+    """
+    Main entry point for LibriSpeech EN preprocessing.
+    """
+    args: argparse.Namespace = parse_args()
     random.seed(args.seed)
 
-    input_root = resolve_input_root(args.input_dir)
+    input_root: Path = resolve_input_root(args.input_dir)
     if not input_root.exists():
         raise FileNotFoundError(f"Input directory does not exist: {input_root}")
 
-    out_root = args.out_dir
+    out_root: Path = args.out_dir
     out_root.mkdir(parents=True, exist_ok=True)
 
-    examples = discover_examples(input_root)
+    examples: List[Example] = discover_examples(input_root)
     manifest: List[Dict[str, Any]] = []
 
     if args.num_workers <= 1:
-        mel_transform = Tacotron2MelTransform(
+        mel_transform: Tacotron2MelTransform = Tacotron2MelTransform(
             sampling_rate=args.target_sr,
             n_mel_channels=args.n_mels,
             filter_length=args.filter_length,
@@ -358,7 +511,9 @@ def main() -> None:
             clip_val=args.log_zero_guard_value,
         )
         for ex in tqdm.tqdm(examples, desc="Processing examples"):
-            res = process_example(ex, input_root, out_root, mel_transform, args.target_sr, overwrite=args.overwrite)
+            res: Optional[Dict[str, Any]] = process_example(
+                ex, input_root, out_root, mel_transform, args.target_sr, overwrite=args.overwrite
+            )
             if res is None:
                 warning(f"Failed to process example {ex.utt_id}; skipping")
                 continue
@@ -385,7 +540,7 @@ def main() -> None:
                 args.overwrite,
             ),
         ) as executor:
-            chunksize = max(1, len(examples) // max(args.num_workers * 8, 1))
+            chunksize: int = max(1, len(examples) // max(args.num_workers * 8, 1))
             for ex, res in zip(examples, tqdm.tqdm(executor.map(_process_example_worker, examples, chunksize=chunksize), total=len(examples), desc="Processing examples")):
                 if res is None:
                     warning(f"Failed to process example {ex.utt_id}; skipping")
@@ -398,7 +553,7 @@ def main() -> None:
     if not manifest:
         raise RuntimeError("No examples were kept after duration filtering.")
 
-    manifest_csv = out_root.parent / "mels_metadata.csv"
+    manifest_csv: Path = out_root.parent / "mels_metadata.csv"
     with manifest_csv.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(["mel_path", "duration", "text", "utt_id"])
@@ -406,7 +561,7 @@ def main() -> None:
             writer.writerow([row["mel_path"], f"{row['duration']:.6f}", row.get("text", ""), row.get("utt_id", "")])
 
     if args.plot_samples > 0:
-        figs_dir = out_root.parent / "figures"
+        figs_dir: Path = out_root.parent / "figures"
         plot_mels(manifest, figs_dir, n=args.plot_samples, seed=args.seed)
 
     print(f"Prepared {len(manifest)} mel tensors in {out_root}")

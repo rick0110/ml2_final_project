@@ -1,33 +1,25 @@
 """
 Global Style Token (GST) module.
 
-This module implements the Global Style Token (GST) mechanism, which aims to
-capture global style information from mel-spectrograms and provide it as an
-embedding vector to TTS models. This allows for stylistic control over generated
-speech, such as speaker identity or emotional tone.
+Responsibilities:
+    - Capture global style information from mel-spectrograms.
+    - Provide style embeddings for TTS models to control prosody/identity.
+    - Implement a bank of learnable style tokens with attention mechanism.
 
-The GST module consists of:
-1. A stack of convolutional layers to extract features from mel-spectrograms.
-2. A GRU layer to encode temporal information from the extracted features.
-3. A Multi-Head Attention mechanism that uses the GRU output as a query to attend
-   over learnable style tokens.
+Main Classes:
+    - GST: The primary Global Style Token module.
 
-Dependencies:
-    - torch: PyTorch for neural network operations.
-    - torch.nn: PyTorch neural network modules.
-    - typing: For type hinting.
-
-Typical Usage:
-    >>> import torch
-    >>> gst = GST(n_conv_layers=6, hidden_size=128, n_style_tokens=10, n_mels=80, n_heads=4)
-    >>> mel_spectrogram = torch.randn(16, 80, 100) # Batch size, n_mels, time_steps
-    >>> style_embedding, attention_weights = gst(mel_spectrogram, return_att_weights=True)
-    >>> print(style_embedding.shape) # torch.Size([16, 1, 128])
-    >>> print(attention_weights.shape) # torch.Size([16, 10])
+Tensor Conventions:
+    B = batch size
+    T = sequence length (frames)
+    n_mels = mel frequency bins
+    H = hidden dimension
+    N_tokens = number of style tokens
 """
 import torch
 from torch import nn
-from typing import Union, Tuple, List
+from torch import Tensor
+from typing import Union, Tuple, List, Optional
 
 # Define default values for hyperparameters
 DEFAULT_N_CONV_LAYERS: int = 6
@@ -45,30 +37,25 @@ class GST(nn.Module):
     Captures global style information from mel-spectrograms and provides it as an
     embedding vector to the model, enabling stylistic control over generated speech.
 
-    Args:
-        n_conv_layers (int, optional): Number of convolutional layers. Must be even.
-                                       Defaults to 6.
-        hidden_size (int, optional): Size of the GRU hidden state. Defaults to 128.
-        n_style_tokens (int, optional): Number of learnable style tokens. Defaults to 10.
-        n_mels (int, optional): Dimensionality of mel-spectrogram features. Defaults to 80.
-        n_heads (int, optional): Number of attention heads for the multi-head attention mechanism.
-                                 Defaults to 4.
+    Architecture:
+        Conv Stack (Feature Extraction) -> GRU (Temporal Encoding) -> Multi-Head Attention (Style Selection)
 
-    Attributes:
-        n_conv_layers (int): Number of convolutional layers.
-        conv_layers (nn.ModuleList): List of sequential convolutional blocks.
-        style_attention (nn.GRU): GRU layer to process features after convolutions.
-        multHeadAttention (nn.MultiheadAttention): Multi-head attention mechanism.
-        style_tokens (nn.Parameter): Learnable style tokens.
+    Inputs:
+        x:
+            Shape (B, n_mels, T)
+        return_att_weights:
+            Whether to return attention weights.
+
+    Outputs:
+        style_embedding:
+            Shape (B, 1, H)
+        attention_weights (optional):
+            Shape (B, N_tokens)
 
     Example:
         >>> gst = GST(n_conv_layers=6, hidden_size=128, n_style_tokens=10, n_mels=80, n_heads=4)
-        >>> mel_input = torch.randn(16, 80, 100) # Batch size, n_mels, time_steps
+        >>> mel_input = torch.randn(16, 80, 100) # (B, n_mels, T)
         >>> style_embedding, attention_weights = gst(mel_input, return_att_weights=True)
-        >>> print(style_embedding.shape)
-        torch.Size([16, 1, 128])
-        >>> print(attention_weights.shape)
-        torch.Size([16, 10])
     """
 
     def __init__(
@@ -78,7 +65,17 @@ class GST(nn.Module):
         n_style_tokens: int = DEFAULT_N_STYLE_TOKENS,
         n_mels: int = DEFAULT_N_MELS,
         n_heads: int = DEFAULT_N_HEADS,
-    ):
+    ) -> None:
+        """
+        Initialize the GST module.
+
+        Args:
+            n_conv_layers (int): Number of convolutional layers. Must be even.
+            hidden_size (int): Size of the GRU hidden state and style tokens.
+            n_style_tokens (int): Number of learnable style tokens in the bank.
+            n_mels (int): Dimensionality of input mel-spectrogram features.
+            n_heads (int): Number of attention heads for the multi-head attention mechanism.
+        """
         super().__init__()
         assert n_conv_layers % 2 == 0, "n_conv_layers must be even"
         self.n_conv_layers: int = n_conv_layers
@@ -113,15 +110,13 @@ class GST(nn.Module):
                 nn.BatchNorm2d(num_features=out_channels_i),
             )
             self.conv_layers.append(conv_block)
-        # After conv_layers, the shape is approximately:
-        # [batch_size, 32*(2**(n_conv_layers//2 - 1)), n_mels/(2**(n_conv_layers//2)), time_steps/(2**(n_conv_layers//2))]
 
         # Determine input size for GRU by probing the output shape of conv layers
         with torch.no_grad():
             # Create a dummy input to infer shape after convolutions
-            dummy_input: torch.Tensor = torch.zeros(1, 1, n_mels, 1)
+            dummy_input: Tensor = torch.zeros(1, 1, n_mels, 1)
             # Pass through convolutional layers
-            conv_output_shape_probe: torch.Tensor = self.forward_n_conv_layers(dummy_input)
+            conv_output_shape_probe: Tensor = self.forward_n_conv_layers(dummy_input)
             # Calculate the flattened feature dimension
             style_attention_input_size: int = conv_output_shape_probe.size(1) * conv_output_shape_probe.size(2)
 
@@ -142,97 +137,97 @@ class GST(nn.Module):
         )  # Shape: [n_style_tokens, hidden_size]
 
     def forward(
-        self, x: torch.Tensor, return_att_weights: bool = False
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        self, x: Tensor, return_att_weights: bool = False
+    ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """
         Forward pass of the GST module.
 
         Args:
-            x (torch.Tensor): Input mel-spectrogram. Shape: (batch_size, n_mels, time_steps)
-            return_att_weights (bool, optional): If True, also returns attention weights.
-                                                  Defaults to False.
+            x (Tensor): Input mel-spectrogram. Shape: (B, n_mels, T)
+            return_att_weights (bool): If True, also returns attention weights.
 
         Returns:
-            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
-                - If return_att_weights is False:
-                    Style embedding vector. Shape: (batch_size, 1, hidden_size)
-                - If return_att_weights is True:
-                    Tuple containing:
-                        - Style embedding vector. Shape: (batch_size, 1, hidden_size)
-                        - Attention weights. Shape: (batch_size, n_style_tokens)
+            Union[Tensor, Tuple[Tensor, Tensor]]: Style embedding vector (B, 1, H) 
+                and optionally attention weights (B, N_tokens).
         """
         return self.forward_style_embedding(x, return_att_weights)
 
     def forward_style_embedding(
-        self, x: torch.Tensor, return_att_weights: bool = False
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        self, x: Tensor, return_att_weights: bool = False
+    ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """
         Computes the style embedding and optionally attention weights.
 
         Args:
-            x (torch.Tensor): Input mel-spectrogram. Shape: (batch_size, n_mels, time_steps)
-            return_att_weights (bool, optional): If True, returns attention weights. Defaults to False.
+            x (Tensor): Input mel-spectrogram. Shape: (B, n_mels, T)
+            return_att_weights (bool): If True, returns attention weights.
 
         Returns:
-            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: Style embedding and optionally attention weights.
+            Union[Tensor, Tuple[Tensor, Tensor]]: Style embedding and optionally attention weights.
         """
-        # Pass through convolutional layers
-        x = self.forward_n_conv_layers(x)
-        # Reshape and transpose for GRU input
-        # x shape after convs: [batch_size, channels, n_mels', time_steps']
-        # Flatten channels * n_mels' for GRU input feature dimension
-        x = x.reshape(x.size(0), -1, x.size(3))  # Shape: [batch_size, flattened_features, time_steps']
-        x = x.transpose(1, 2)  # Shape: [batch_size, time_steps', flattened_features]
+        # Ensure input has channel dimension if needed
+        if x.ndim == 3:
+            x = x.unsqueeze(1) # (B, 1, n_mels, T)
 
-        # Process with GRU. GRU output: (num_layers*num_directions, batch, hidden_size)
-        gru_output, _ = self.style_attention(x)
-        # Use the last hidden state: [batch_size, hidden_size]
-        x = gru_output.squeeze(0)
-        x = torch.nn.functional.silu(x)  # Apply SiLU activation
+        # Pass through convolutional layers
+        x = self.forward_n_conv_layers(x) # (B, C_last, n_mels', T')
+        
+        # Reshape and transpose for GRU input
+        # Flatten channels * n_mels' for GRU input feature dimension
+        x = x.reshape(x.size(0), -1, x.size(3))  # Shape: (B, C_last * n_mels', T')
+        x = x.transpose(1, 2)  # Shape: (B, T', C_last * n_mels')
+
+        # Process with GRU
+        gru_output: Tensor
+        gru_output, _ = self.style_attention(x) # Shape: (B, T', H)
+        
+        # Use the last hidden state
+        x = gru_output[:, -1, :] # Shape: (B, H)
+        x = torch.nn.functional.silu(x) # Shape: (B, H)
 
         # Compute style embedding using multi-head attention over style tokens
         return self.forward_style_multihead_attention(x, return_att_weights)
 
-    def forward_n_conv_layers(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_n_conv_layers(self, x: Tensor) -> Tensor:
         """
         Applies the sequence of convolutional layers.
 
         Args:
-            x (torch.Tensor): Input tensor. Shape: (batch_size, 1, n_mels, time_steps)
+            x (Tensor): Input tensor. Shape: (B, 1, n_mels, T)
 
         Returns:
-            torch.Tensor: Output tensor after convolutional layers.
+            Tensor: Output tensor after convolutional layers. Shape: (B, C_last, n_mels', T')
         """
         for conv in self.conv_layers:
-            x = conv(x)
+            x = conv(x) # (B, C_i, n_mels_i, T_i)
         return x
 
     def forward_style_multihead_attention(
-        self, x: torch.Tensor, return_att_weights: bool = False
-    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+        self, x: Tensor, return_att_weights: bool = False
+    ) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """
         Computes the final style embedding using multi-head attention over style tokens.
 
         Args:
-            x (torch.Tensor): Processed features from GRU. Shape: (batch_size, hidden_size)
-            return_att_weights (bool, optional): If True, returns attention weights. Defaults to False.
+            x (Tensor): Processed features from GRU. Shape: (B, H)
+            return_att_weights (bool): If True, returns attention weights.
 
         Returns:
-            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: Style embedding and optionally attention weights.
+            Union[Tensor, Tuple[Tensor, Tensor]]: Style embedding and optionally attention weights.
         """
         # Query is the GRU output, expanded to have a time dimension of 1
-        query: torch.Tensor = x.unsqueeze(1)  # Shape: [batch_size, 1, hidden_size]
+        query: Tensor = x.unsqueeze(1)  # Shape: (B, 1, H)
+        
         # Keys and Values are the learnable style tokens, broadcasted to match batch size
-        keys: torch.Tensor = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1)
-        values: torch.Tensor = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1)
+        keys: Tensor = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1)   # (B, N_tokens, H)
+        values: Tensor = self.style_tokens.unsqueeze(0).expand(x.size(0), -1, -1) # (B, N_tokens, H)
 
         # Apply multi-head attention
-        # att_out shape: [batch_size, 1, hidden_size]
-        # att_weights shape: [batch_size, 1, n_style_tokens]
-        att_out, att_weights = self.multHeadAttention(query, keys, values)
+        att_out: Tensor
+        att_weights: Tensor
+        att_out, att_weights = self.multHeadAttention(query, keys, values) # (B, 1, H), (B, 1, N_tokens)
 
         if return_att_weights:
-            # Squeeze the time dimension from attention weights and return
-            return att_out, att_weights.squeeze(1)  # Shapes: [batch_size, 1, hidden_size], [batch_size, n_style_tokens]
+            return att_out, att_weights.squeeze(1)  # (B, 1, H), (B, N_tokens)
         else:
-            return att_out  # Shape: [batch_size, 1, hidden_size]
+            return att_out  # (B, 1, H)

@@ -1,21 +1,16 @@
-"""Hyperparameters for Tacotron 2 VAE model.
+"""
+Hyperparameters for Tacotron 2 VAE model.
 
-This module defines the default hyperparameters for the Tacotron 2 model
-with Variational Autoencoder (VAE) components for prosody modeling.
-It uses Python's `dataclasses` for a clean and organized structure.
+Responsibilities:
+    - Define all configurable parameters for the Tacotron 2 VAE model.
+    - Provide utility functions to create, load, and convert hyperparameters.
+    - Maintain defaults for experiment, data, audio, model, and optimization settings.
 
-Dependencies:
-    - dataclasses: For creating data classes.
-    - typing: For type hinting (Any, Dict, List, Optional).
+Main Classes:
+    - Tacotron2VAEHparams: Data class containing all hyperparameter settings.
 
-Typical Usage:
-    >>> from src.models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
-    >>> # Create default hyperparameters
-    >>> hparams = Tacotron2VAEHparams()
-    >>> # Or create with overrides
-    >>> overrides = {"epochs": 500, "batch_size": 64}
-    >>> hparams_override = create_hparams(overrides)
-    >>> print(hparams_override.epochs)
+Main Functions:
+    - create_hparams: Factory function to create hparams with optional overrides.
 """
 from __future__ import annotations
 
@@ -33,25 +28,13 @@ class Tacotron2VAEHparams:
     and optimization.
 
     Attributes:
-        # Experiment Parameters
         epochs (int): Total number of training epochs.
         iters_per_checkpoint (int): Number of iterations between saving checkpoints.
         seed (int): Random seed for reproducibility.
-        dynamic_loss_scaling (bool): Whether to use dynamic loss scaling.
-        distributed_run (bool): Whether to run in distributed training mode.
-        dist_backend (str): Backend for distributed training (e.g., 'nccl').
-        dist_url (str): URL for distributed training initialization.
-        cudnn_enabled (bool): Whether to enable cuDNN.
-        cudnn_benchmark (bool): Whether to use cuDNN benchmarking for optimization.
-
-        # Data Parameters
-        load_mel_from_disk (bool): Whether to load pre-computed mel-spectrograms from disk.
         training_files (str): Path to the training file list.
         validation_files (str): Path to the validation file list.
         text_cleaners (List[str]): List of text cleaning functions to apply.
         sort_by_length (bool): Whether to sort training data by sequence length.
-
-        # Audio Parameters
         max_wav_value (float): Maximum possible value for waveform samples.
         sampling_rate (int): Audio sampling rate.
         filter_length (int): FFT filter length.
@@ -60,33 +43,17 @@ class Tacotron2VAEHparams:
         n_mel_channels (int): Number of mel-spectrogram channels.
         mel_fmin (float): Minimum frequency for mel filter bank.
         mel_fmax (float): Maximum frequency for mel filter bank.
-
-        # Model Parameters
         n_symbols (int): Number of symbols in the vocabulary (e.g., characters).
         symbols_embedding_dim (int): Dimension of the text symbol embedding.
         encoder_kernel_size (int): Kernel size for encoder convolutional layers.
         encoder_n_convolutions (int): Number of convolutional layers in the encoder.
         encoder_embedding_dim (int): Dimension of the encoder output.
-        n_emotions (int): Number of distinct emotion categories (if applicable).
-        emotion_embedding_dim (int): Dimension of emotion embeddings.
-        E (int): Dimension of the style embedding (output of VAE_GST).
-        ref_enc_filters (List[int]): Filter sizes for the reference encoder's convolutional layers.
-        ref_enc_size (List[int]): Kernel sizes for the reference encoder's convolutional layers.
-        ref_enc_strides (List[int]): Strides for the reference encoder's convolutional layers.
-        ref_enc_pad (List[int]): Padding for the reference encoder's convolutional layers.
-        ref_enc_gru_size (int): Hidden size of the GRU in the reference encoder.
         z_latent_dim (int): Dimensionality of the latent space (z) in the VAE.
-        anneal_function (str): KL divergence annealing function ('logistic', 'linear').
+        anneal_function (str): KL divergence annealing function ('logistic', 'linear', 'constant').
         anneal_k (float): Steepness parameter for annealing function.
         anneal_x0 (int): Midpoint parameter for annealing function.
         anneal_upper (float): Upper bound for KL divergence weight during annealing.
         anneal_lag (int): Number of steps before KL divergence annealing starts.
-        prosody_n_convolutions (int): Number of convolutional layers for prosody processing.
-        prosody_conv_dim_in (List[int]): Input dimensions for prosody convolutional layers.
-        prosody_conv_dim_out (List[int]): Output dimensions for prosody convolutional layers.
-        prosody_conv_kernel (int): Kernel size for prosody convolutional layers.
-        prosody_conv_stride (int): Stride for prosody convolutional layers.
-        prosody_embedding_dim (int): Dimension of the final prosody embedding.
         n_frames_per_step (int): Number of mel-frames generated per decoder step.
         decoder_rnn_dim (int): Hidden dimension of the decoder RNN.
         prenet_dim (int): Dimension of the Prenet layers.
@@ -101,8 +68,6 @@ class Tacotron2VAEHparams:
         postnet_embedding_dim (int): Dimension of the postnet's hidden layers.
         postnet_kernel_size (int): Kernel size for postnet convolutional layers.
         postnet_n_convolutions (int): Number of convolutional layers in the postnet.
-
-        # Optimization Hyperparameters
         use_saved_learning_rate (bool): Whether to restore learning rate from checkpoint.
         learning_rate (float): Initial learning rate.
         weight_decay (float): Weight decay for the optimizer.
@@ -115,10 +80,6 @@ class Tacotron2VAEHparams:
     epochs: int = 300
     iters_per_checkpoint: int = 500
     seed: int = 42
-    dynamic_loss_scaling: bool = True
-    distributed_run: bool = False
-    dist_backend: str = "nccl"
-    dist_url: str = "tcp://localhost:54321"
     cudnn_enabled: bool = True
     cudnn_benchmark: bool = True
 
@@ -127,7 +88,6 @@ class Tacotron2VAEHparams:
     training_files: str = ""
     validation_files: str = ""
     text_cleaners: List[str] = field(default_factory=lambda: ["portuguese_cleaners"])
-    sort_by_length: bool = False
 
     # Audio Parameters
     max_wav_value: float = 32768.0
@@ -148,16 +108,12 @@ class Tacotron2VAEHparams:
     encoder_n_convolutions: int = 3
     encoder_embedding_dim: int = 512
 
-    # Emotion embedding parameters (if applicable)
-    n_emotions: int = 1
-    emotion_embedding_dim: int = 16
-
     # VAE_GST parameters
     E: int = 512  # Style embedding dimension
     ref_enc_filters: List[int] = field(default_factory=lambda: [32, 32, 64, 64, 128, 128])
-    ref_enc_size: List[int] = field(default_factory=lambda: [3, 3]) # Kernel sizes, not used directly in current ref_encoder impl.
-    ref_enc_strides: List[int] = field(default_factory=lambda: [2, 2]) # Strides, not used directly in current ref_encoder impl.
-    ref_enc_pad: List[int] = field(default_factory=lambda: [1, 1]) # Padding, not used directly in current ref_encoder impl.
+    ref_enc_size: List[int] = field(default_factory=lambda: [3, 3]) # Kernel sizes
+    ref_enc_strides: List[int] = field(default_factory=lambda: [2, 2]) # Strides
+    ref_enc_pad: List[int] = field(default_factory=lambda: [1, 1]) # Padding
     ref_enc_gru_size: int = 256  # GRU hidden size in reference encoder
 
     z_latent_dim: int = 32  # Latent space dimension (z)
@@ -166,14 +122,6 @@ class Tacotron2VAEHparams:
     anneal_x0: int = 10000
     anneal_upper: float = 0.2
     anneal_lag: int = 50000
-
-    # Prosody parameters (if distinct from VAE_GST, currently seems redundant)
-    prosody_n_convolutions: int = 6
-    prosody_conv_dim_in: List[int] = field(default_factory=lambda: [1, 32, 32, 64, 64, 128])
-    prosody_conv_dim_out: List[int] = field(default_factory=lambda: [32, 32, 64, 64, 128, 128])
-    prosody_conv_kernel: int = 3
-    prosody_conv_stride: int = 2
-    prosody_embedding_dim: int = 128
 
     # Decoder parameters
     n_frames_per_step: int = 1
@@ -200,16 +148,29 @@ class Tacotron2VAEHparams:
     learning_rate: float = 1e-3
     weight_decay: float = 1e-6
     grad_clip_thresh: float = 1.0
-    batch_size: int = 16
+    batch_size: int = 32
     mask_padding: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
-        """Converts the hyperparameters dataclass to a dictionary."""
+        """
+        Converts the hyperparameters dataclass to a dictionary.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing all hyperparameter settings.
+        """
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Tacotron2VAEHparams":
-        """Creates a Tacotron2VAEHparams instance from a dictionary."""
+    def from_dict(cls, data: Dict[str, Any]) -> Tacotron2VAEHparams:
+        """
+        Creates a Tacotron2VAEHparams instance from a dictionary.
+
+        Args:
+            data (Dict[str, Any]): Dictionary containing settings.
+
+        Returns:
+            Tacotron2VAEHparams: Initialized hyperparameters object.
+        """
         # Filter dictionary to include only fields defined in the dataclass
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
@@ -224,6 +185,11 @@ def create_hparams(overrides: Optional[Dict[str, Any]] = None) -> Tacotron2VAEHp
 
     Returns:
         Tacotron2VAEHparams: An instance of the hyperparameters object.
+
+    Example:
+        >>> hparams = create_hparams({"batch_size": 32})
+        >>> print(hparams.batch_size)
+        32
     """
     hparams = Tacotron2VAEHparams()
     if overrides:

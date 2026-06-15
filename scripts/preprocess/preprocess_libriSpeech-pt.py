@@ -1,21 +1,38 @@
 #!/usr/bin/env python3
 
-## Warning: these tranformed mels do not shoud be used for inference or training the model
+## Warning: these transformed mels should not be used for inference or training the model
 # All the transform should be applied by our engine to ensure compatibility
 
-"""Preprocess LibriSpeech raw data into FastPitch-compatible mel-spectrogram tensors.
+"""
+Preprocess LibriSpeech PT raw data into FastPitch-compatible mel-spectrogram tensors.
 
-What this script does:
-- Scans a LibriSpeech raw root for transcript files and matching audio
-- Reads utterance text from `*.trans.txt`
-- Loads audio, converts to mono, and resamples to 22050 Hz
-- Computes FastPitch-compatible 80-bin log-mel spectrograms
-- Filters examples by duration
-- Saves per-utterance `.pt` tensors
-- Computes global mean/std over the full dataset
-- Saves normalized mels ("mel_normalized") back into the `.pt` files
-- Writes a metadata CSV and global stats (`mel_stats.pt`)
-- Optionally plots a few mel spectrograms for validation
+Responsibilities:
+    - Scan a LibriSpeech raw root for transcript files and matching audio.
+    - Read utterance text from transcripts.
+    - Load audio, convert to mono, and resample to 22050 Hz.
+    - Compute FastPitch-compatible 80-bin log-mel spectrograms.
+    - Filter examples by duration.
+    - Save per-utterance `.pt` tensors.
+    - Compute global mean/std over the full dataset for normalization.
+    - Save normalized mels ("mel_normalized") back into the `.pt` files.
+    - Write a metadata CSV and global stats (`mel_stats.pt`).
+    - Optionally plot a few mel spectrograms for validation.
+
+Main Classes:
+    - FastPitchMelTransform: Mel extraction module matching NeMo/FastPitch settings.
+    - Example: Dataclass for example metadata.
+
+Main Functions:
+    - discover_examples: Scan directory for audio and text pairs.
+    - process_example: Load, transform, and save single example.
+    - compute_dataset_stats: Calculate global mean and standard deviation.
+    - add_normalized_mels: Update saved tensors with normalized versions.
+
+Tensor Conventions:
+    B = batch size
+    S = number of audio samples
+    T = number of frames
+    n_mels = mel frequency bins (standard 80)
 """
 
 from __future__ import annotations
@@ -32,6 +49,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
+from torch import Tensor
 import torchaudio
 import tqdm
 
@@ -50,6 +68,15 @@ _WORKER_MEL_TRANSFORM: Optional[torch.nn.Module] = None
 
 @dataclass
 class Example:
+    """
+    Metadata for a discovered LibriSpeech-PT example.
+
+    Attributes:
+        audio_path (str): Relative path to the audio file.
+        text (str): Utterance transcript.
+        duration (float): Utterance duration in seconds.
+        utt_id (str): Unique identifier.
+    """
     audio_path: str
     text: str
     duration: float
@@ -57,6 +84,12 @@ class Example:
 
 
 def parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments.
+
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Prepare FastPitch-compatible mel spectrograms for LibriSpeech",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -87,6 +120,22 @@ class FastPitchMelTransform(torch.nn.Module):
     """
     FastPitch-compatible log-mel extraction.
     Matches the NeMo preprocessor settings exactly.
+
+    Architecture:
+        Spectrogram -> Mel Scale -> Log Guard -> Log.
+
+    Inputs:
+        waveform:
+            Shape (B, S) or (S,)
+
+    Outputs:
+        log_mel:
+            Shape (B, n_mels, T)
+
+    Example:
+        >>> transform = FastPitchMelTransform()
+        >>> audio = torch.randn(1, 22050)
+        >>> mel = transform(audio)
     """
     def __init__(
         self,
@@ -99,6 +148,19 @@ class FastPitchMelTransform(torch.nn.Module):
         f_max: float = 8000.0,
         log_zero_guard_value: float = 1e-5,
     ) -> None:
+        """
+        Initialize FastPitch mel transform.
+
+        Args:
+            sample_rate (int): Sampling rate. Defaults to 22050.
+            n_mels (int): Number of mel bins. Defaults to 80.
+            n_fft (int): FFT size. Defaults to 1024.
+            win_length (int): Window size. Defaults to 1024.
+            hop_length (int): Hop size. Defaults to 256.
+            f_min (float): Min frequency. Defaults to 0.0.
+            f_max (float): Max frequency. Defaults to 8000.0.
+            log_zero_guard_value (float): Log guard. Defaults to 1e-5.
+        """
         super().__init__()
 
         self.spec = torchaudio.transforms.Spectrogram(
@@ -123,19 +185,40 @@ class FastPitchMelTransform(torch.nn.Module):
             mel_scale="htk",
         )
 
-        self.log_zero_guard_value = float(log_zero_guard_value)
+        self.log_zero_guard_value: float = float(log_zero_guard_value)
 
-    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
+    def forward(self, waveform: Tensor) -> Tensor:
+        """
+        Transform waveform to log-mel spectrogram.
+
+        Args:
+            waveform (Tensor): Input waveform.
+                Shape: (B, S) or (S,)
+
+        Returns:
+            Tensor: Log-mel spectrogram.
+                Shape: (B, n_mels, T)
+        """
         if waveform.dim() == 1:
-            waveform = waveform.unsqueeze(0)
+            waveform = waveform.unsqueeze(0)  # (1, S)
 
-        spec = self.spec(waveform)          # [C, F, T]
-        mel = self.mel_scale(spec)          # [C, n_mels, T]
-        log_mel = torch.log(mel + self.log_zero_guard_value)
+        spec: Tensor = self.spec(waveform)          # (B, n_fft/2 + 1, T)
+        mel: Tensor = self.mel_scale(spec)          # (B, n_mels, T)
+        log_mel: Tensor = torch.log(mel + self.log_zero_guard_value) # (B, n_mels, T)
         return log_mel
 
 
 def find_audio_file(transcript_path: Path, utt_id: str) -> Optional[Path]:
+    """
+    Find audio file for a given utterance ID.
+
+    Args:
+        transcript_path (Path): Path to transcript.
+        utt_id (str): Utterance ID.
+
+    Returns:
+        Optional[Path]: Path to audio if exists.
+    """
     candidate_stems = [
         transcript_path.parent / f"{utt_id}.wav"
     ]
@@ -148,37 +231,48 @@ def find_audio_file(transcript_path: Path, utt_id: str) -> Optional[Path]:
 
 
 def discover_examples(input_root: Path) -> List[Example]:
-    examples: List[Example] = []
-    transcript_file = (input_root ).glob("trans*")
-    for trans in transcript_file: 
-        transcript_file = trans
-    
-    with transcript_file.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line:
-                continue
-            line = line.strip()
-            match = re.match(r"^(\S+)\s+(.*)$", line)
-            utt_id = match.group(1).strip() if match else None
-            text = match.group(2).strip() if match else None
-            
-            if not utt_id or not text:
-                continue
-            split_utt_id = utt_id.split("_")
-            audio_file_root = input_root / "audio" / "/".join(split_utt_id[:-1])
-            audio_file = audio_file_root / f"{'_'.join(split_utt_id)}.wav"
+    """
+    Scan root directory for transcript and audio.
 
-            if audio_file is None:
-                continue
-            examples.append(
-                Example(
-                    audio_path=str(audio_file.relative_to(input_root)),
-                    text=text.strip(),
-                    duration=0.0,
-                    utt_id=utt_id,
+    Args:
+        input_root (Path): Dataset root.
+
+    Returns:
+        List[Example]: Discovered metadata.
+    """
+    examples: List[Example] = []
+    transcript_files: List[Path] = list((input_root).glob("trans*"))
+    
+    if not transcript_files:
+        warning(f"No transcript files starting with 'trans' found in {input_root}")
+        return []
+
+    # Assuming we use the first one if multiple exist, or iterate
+    for transcript_file in transcript_files:
+        with transcript_file.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                if not line:
+                    continue
+                line = line.strip()
+                match = re.match(r"^(\S+)\s+(.*)$", line)
+                utt_id = match.group(1).strip() if match else None
+                text = match.group(2).strip() if match else None
+                
+                if not utt_id or not text:
+                    continue
+                split_utt_id = utt_id.split("_")
+                audio_file_root = input_root / "audio" / "/".join(split_utt_id[:-1])
+                audio_file = audio_file_root / f"{'_'.join(split_utt_id)}.wav"
+
+                examples.append(
+                    Example(
+                        audio_path=str(audio_file.relative_to(input_root)),
+                        text=text.strip(),
+                        duration=0.0,
+                        utt_id=utt_id,
+                    )
                 )
-            )
-    print(f"Discovered {len(examples)} examples from {transcript_file}")
+    print(f"Discovered {len(examples)} examples from {input_root}")
 
     return examples
 
@@ -191,14 +285,28 @@ def process_example(
     target_sr: int,
     overwrite: bool = False,
 ) -> Optional[Dict[str, Any]]:
-    audio_path = input_root / Path(ex.audio_path)
+    """
+    Process a single LibriSpeech-PT example.
+
+    Args:
+        ex (Example): Example metadata.
+        input_root (Path): Input root.
+        out_root (Path): Output root.
+        mel_transform (torch.nn.Module): Mel transform.
+        target_sr (int): Target SR.
+        overwrite (bool): Overwrite flag.
+
+    Returns:
+        Optional[Dict[str, Any]]: Processed metadata.
+    """
+    audio_path: Path = input_root / Path(ex.audio_path)
     if not audio_path.exists():
         return None
 
-    out_path = out_root / f"{ex.utt_id}.pt"
+    out_path: Path = out_root / f"{ex.utt_id}.pt"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if out_path.exists() and not overwrite:
-        data = torch.load(out_path, map_location="cpu")
+        data: Dict[str, Any] = torch.load(out_path, map_location="cpu")
         return {
             "mel_path": str(out_path),
             "duration": float(data.get("duration", 0.0)),
@@ -206,17 +314,19 @@ def process_example(
             "utt_id": ex.utt_id,
         }
 
-    waveform, sr = torchaudio.load(str(audio_path))
+    waveform: Tensor
+    sr: int
+    waveform, sr = torchaudio.load(str(audio_path)) # (channels, S)
     if waveform.ndim > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
+        waveform = waveform.mean(dim=0, keepdim=True) # (1, S)
     if sr != target_sr:
-        waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=target_sr)
+        waveform = torchaudio.functional.resample(waveform, orig_freq=sr, new_freq=target_sr) # (1, S_new)
         sr = target_sr
 
-    duration = waveform.shape[-1] / sr
+    duration: float = waveform.shape[-1] / sr
     
     with torch.no_grad():
-        log_mel = mel_transform(waveform)
+        log_mel: Tensor = mel_transform(waveform) # (1, n_mels, T)
 
     torch.save(
         {
@@ -251,6 +361,22 @@ def _init_worker(
     log_zero_guard_value: float,
     overwrite: bool,
 ) -> None:
+    """
+    Initialize worker global state.
+
+    Args:
+        input_root (Path): Input root.
+        out_root (Path): Output root.
+        target_sr (int): Target SR.
+        n_mels (int): Mel bins.
+        n_fft (int): FFT size.
+        win_length (int): Window size.
+        hop_length (int): Hop size.
+        f_min (float): Min freq.
+        f_max (float): Max freq.
+        log_zero_guard_value (float): Guard value.
+        overwrite (bool): Overwrite flag.
+    """
     global _WORKER_INPUT_ROOT, _WORKER_OUT_ROOT, _WORKER_TARGET_SR, _WORKER_OVERWRITE, _WORKER_MEL_TRANSFORM
     _WORKER_INPUT_ROOT = input_root
     _WORKER_OUT_ROOT = out_root
@@ -274,6 +400,15 @@ def _init_worker(
 
 
 def _process_example_worker(ex: Example) -> Optional[Dict[str, Any]]:
+    """
+    Worker wrapper for processing.
+
+    Args:
+        ex (Example): Example metadata.
+
+    Returns:
+        Optional[Dict[str, Any]]: Processed metadata.
+    """
     if _WORKER_INPUT_ROOT is None or _WORKER_OUT_ROOT is None or _WORKER_TARGET_SR is None or _WORKER_MEL_TRANSFORM is None:
         raise RuntimeError("Worker was not initialized correctly")
     return process_example(
@@ -289,14 +424,20 @@ def _process_example_worker(ex: Example) -> Optional[Dict[str, Any]]:
 def compute_dataset_stats(manifest: List[Dict[str, Any]]) -> Tuple[float, float]:
     """
     Compute global mean/std over ALL values in ALL mel tensors.
+
+    Args:
+        manifest (List[Dict[str, Any]]): List of processed example metadata.
+
+    Returns:
+        Tuple[float, float]: Global mean and standard deviation.
     """
-    total_sum = 0.0
-    total_sum_sq = 0.0
-    total_count = 0
+    total_sum: float = 0.0
+    total_sum_sq: float = 0.0
+    total_count: int = 0
 
     for row in tqdm.tqdm(manifest, desc="Computing global mel stats"):
-        data = torch.load(row["mel_path"], map_location="cpu")
-        mel = data["mel"].to(torch.float64)
+        data: Dict[str, Any] = torch.load(row["mel_path"], map_location="cpu")
+        mel: Tensor = data["mel"].to(torch.float64) # (1, n_mels, T)
 
         total_sum += mel.sum().item()
         total_sum_sq += (mel * mel).sum().item()
@@ -305,13 +446,13 @@ def compute_dataset_stats(manifest: List[Dict[str, Any]]) -> Tuple[float, float]
     if total_count == 0:
         raise RuntimeError("No mel values found to compute statistics.")
 
-    mean = total_sum / total_count
-    var = total_sum_sq / total_count - mean * mean
+    mean: float = total_sum / total_count
+    var: float = total_sum_sq / total_count - mean * mean
 
     if var <= 0.0:
         raise RuntimeError(f"Computed non-positive variance: {var}")
 
-    std = var ** 0.5
+    std: float = var ** 0.5
     return mean, std
 
 
@@ -322,16 +463,21 @@ def add_normalized_mels(
 ) -> None:
     """
     Reopen every .pt file and add z-score normalized mel.
+
+    Args:
+        manifest (List[Dict[str, Any]]): Manifest of examples.
+        mean (float): Global mean.
+        std (float): Global standard deviation.
     """
-    mean_t = torch.tensor(mean, dtype=torch.float32)
-    std_t = torch.tensor(std, dtype=torch.float32)
+    mean_t: Tensor = torch.tensor(mean, dtype=torch.float32)
+    std_t: Tensor = torch.tensor(std, dtype=torch.float32)
 
     for row in tqdm.tqdm(manifest, desc="Writing normalized mels"):
-        path = Path(row["mel_path"])
-        data = torch.load(path, map_location="cpu")
+        path: Path = Path(row["mel_path"])
+        data: Dict[str, Any] = torch.load(path, map_location="cpu")
 
-        mel = data["mel"].to(torch.float32)
-        mel_normalizado = (mel - mean_t) / std_t
+        mel: Tensor = data["mel"].to(torch.float32) # (1, n_mels, T)
+        mel_normalizado: Tensor = (mel - mean_t) / std_t # (1, n_mels, T)
 
         data["mel"] = mel
         data["mel_normalized"] = mel_normalizado
@@ -340,6 +486,15 @@ def add_normalized_mels(
 
 
 def plot_mels(manifest: List[Dict[str, Any]], out_dir: Path, n: int = 5, seed: int = 42) -> None:
+    """
+    Visualize mel spectrograms.
+
+    Args:
+        manifest (List[Dict[str, Any]]): Manifest of examples.
+        out_dir (Path): Output directory.
+        n (int): Number of samples. Defaults to 5.
+        seed (int): Random seed. Defaults to 42.
+    """
     if plt is None:
         print("matplotlib not available; skipping plots")
         return
@@ -353,19 +508,22 @@ def plot_mels(manifest: List[Dict[str, Any]], out_dir: Path, n: int = 5, seed: i
     out_dir.mkdir(parents=True, exist_ok=True)
     
     for i, row in enumerate(samples, start=1):
-        data = torch.load(row["mel_path"], map_location="cpu")
-        mel = data["mel"].squeeze(0).numpy()
-        mel_norm = data["mel_normalized"].squeeze(0).numpy()
+        data: Dict[str, Any] = torch.load(row["mel_path"], map_location="cpu")
+        mel: Tensor = data["mel"].squeeze(0) # (n_mels, T)
+        mel_norm: Tensor = data["mel_normalized"].squeeze(0) # (n_mels, T)
+        
+        mel_np = mel.numpy()
+        mel_norm_np = mel_norm.numpy()
 
         fig, axes = plt.subplots(1, 2, figsize=(14, 4))
 
-        im0 = axes[0].imshow(mel, origin="lower", aspect="auto", interpolation="nearest")
+        im0 = axes[0].imshow(mel_np, origin="lower", aspect="auto", interpolation="nearest")
         axes[0].set_title(f"{row.get('utt_id', Path(row['mel_path']).stem)} - mel")
         axes[0].set_ylabel("Mel bin")
         axes[0].set_xlabel("Frame")
         fig.colorbar(im0, ax=axes[0])
 
-        im1 = axes[1].imshow(mel_norm, origin="lower", aspect="auto", interpolation="nearest")
+        im1 = axes[1].imshow(mel_norm_np, origin="lower", aspect="auto", interpolation="nearest")
         axes[1].set_title(f"{row.get('utt_id', Path(row['mel_path']).stem)} - mel_normalized")
         axes[1].set_ylabel("Mel bin")
         axes[1].set_xlabel("Frame")
@@ -378,21 +536,24 @@ def plot_mels(manifest: List[Dict[str, Any]], out_dir: Path, n: int = 5, seed: i
 
 
 def main() -> None:
-    args = parse_args()
+    """
+    Main entry point for LibriSpeech PT preprocessing.
+    """
+    args: argparse.Namespace = parse_args()
     random.seed(args.seed)
 
-    input_root = args.input_dir
+    input_root: Path = args.input_dir
     if not input_root.exists():
         raise FileNotFoundError(f"Input directory does not exist: {input_root}")
 
-    out_root = args.out_dir
+    out_root: Path = args.out_dir
     out_root.mkdir(parents=True, exist_ok=True)
 
-    examples = discover_examples(input_root)
+    examples: List[Example] = discover_examples(input_root)
 
     manifest: List[Dict[str, Any]] = []
     if args.num_workers <= 1:
-        mel_transform = FastPitchMelTransform(
+        mel_transform: FastPitchMelTransform = FastPitchMelTransform(
             sample_rate=args.target_sr,
             n_mels=args.n_mels,
             n_fft=args.n_fft,
@@ -403,7 +564,9 @@ def main() -> None:
             log_zero_guard_value=args.log_zero_guard_value,
         )
         for ex in tqdm.tqdm(examples, desc="Processing examples"):
-            res = process_example(ex, input_root, out_root, mel_transform, args.target_sr, overwrite=args.overwrite)
+            res: Optional[Dict[str, Any]] = process_example(
+                ex, input_root, out_root, mel_transform, args.target_sr, overwrite=args.overwrite
+            )
             if res is None:
                 warning(f"Failed to process example {ex.utt_id}; skipping")
                 continue
@@ -430,7 +593,7 @@ def main() -> None:
                 args.overwrite,
             ),
         ) as executor:
-            chunksize = max(1, len(examples) // max(args.num_workers * 8, 1))
+            chunksize: int = max(1, len(examples) // max(args.num_workers * 8, 1))
             for ex, res in zip(examples, tqdm.tqdm(executor.map(_process_example_worker, examples, chunksize=chunksize), total=len(examples), desc="Processing examples")):
                 if res is None:
                     warning(f"Failed to process example {ex.utt_id}; skipping")
@@ -447,7 +610,7 @@ def main() -> None:
     mean, std = compute_dataset_stats(manifest)
 
     # Save Stats File
-    stats_path = out_root.parent / "mel_stats.pt"
+    stats_path: Path = out_root.parent / "mel_stats.pt"
     torch.save(
         {
             "mean": float(mean),
@@ -468,7 +631,7 @@ def main() -> None:
     # Re-open .pt files to inject mel_normalized
     add_normalized_mels(manifest, mean, std)
 
-    manifest_csv = out_root.parent / "librispeech_mels_metadata.csv"
+    manifest_csv: Path = out_root.parent / "librispeech_mels_metadata.csv"
     with manifest_csv.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(["mel_path", "duration", "text", "utt_id"])
@@ -476,7 +639,7 @@ def main() -> None:
             writer.writerow([row["mel_path"], f"{row['duration']:.6f}", row.get("text", ""), row.get("utt_id", "")])
 
     if args.plot_samples > 0:
-        figs_dir = out_root.parent / "figures"
+        figs_dir: Path = out_root.parent / "figures"
         figs_dir.mkdir(parents=True, exist_ok=True)
         plot_mels(manifest, figs_dir, n=args.plot_samples, seed=args.seed)
 
