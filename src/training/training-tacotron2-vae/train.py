@@ -189,7 +189,9 @@ def main() -> None:
     if args.resume_experiment:
         checkpoint_path: Optional[Path] = find_latest_checkpoint(Path(hparams.checkpoint_dir))
         if checkpoint_path:
-            model, optimizer, learning_rate, iteration = load_checkpoint(checkpoint_path, model)
+            model, optimizer_state, learning_rate, iteration = load_checkpoint(checkpoint_path, model)
+            if optimizer_state is not None:
+                optimizer.load_state_dict(optimizer_state)
 
     torch.backends.cudnn.enabled = hparams.cudnn_enabled
     torch.backends.cudnn.benchmark = hparams.cudnn_benchmark

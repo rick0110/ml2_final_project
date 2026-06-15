@@ -82,7 +82,7 @@ class Tacotron2LossVAE(nn.Module):
             float: Computed KL weight.
         """
         if anneal_function == "logistic":
-            return float(upper / (upper + np.exp(-k * (step - x0))))
+            return float(upper / (1.0 + np.exp(-k * (step - x0))))
         if anneal_function == "linear":
             if step > lag:
                 return min(upper, step / x0)
@@ -134,6 +134,11 @@ class Tacotron2LossVAE(nn.Module):
         kl_weight: float = self.kl_anneal_function(
             self.anneal_function, self.lag, step, self.k, self.x0, self.upper
         )
+
+        # Apply KL loss only once every K steps to prevent collapse, as described in the paper
+        k_steps = 100 if step < 15000 else 400
+        if step % k_steps != 0:
+            kl_weight = 0.0
 
         recon_loss: Tensor = mel_loss + gate_loss # scalar
         total_loss: Tensor = recon_loss + kl_weight * kl_loss # scalar
