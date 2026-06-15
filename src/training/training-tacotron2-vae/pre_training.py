@@ -86,11 +86,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--anneal-function", type=str, default="logistic")
     parser.add_argument("--checkpoint-path", type=str, default=None)
     parser.add_argument("--resume-experiment", type=str, default=None)
-    parser.add_argument("--experiment-name", type=str, default=None)
+    parser.add_argument("--experiment-name", type=str, default="pre_train_tacotron")
     parser.add_argument(
         "--artifacts-dir",
         type=Path,
-        default=ARTIFACTS_DIR,
+        default="/home/richard/project/ml2_final_project/data/processed/LibriSpeech",
         help="Path with the data, metadata.csv",
     )
     return parser.parse_args()
