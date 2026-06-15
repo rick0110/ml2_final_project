@@ -1,57 +1,117 @@
+"""
+Training utility functions for Tacotron 2 VAE.
+
+Responsibilities:
+    - Implement TextMelCollate: Collate function for batching text, mel, and emotion labels.
+    - Provide factory function for creating DataLoaders.
+    - Manage experiment directory structure and timestamping.
+
+Main Classes:
+    - TextMelCollate: Handles variable-length sequence padding for training batches.
+
+Main Functions:
+    - create_dataloader: Standardized DataLoader initialization.
+    - create_experiment_dir: Setup folder structure for a new training run.
+
+Tensor Conventions:
+    B = batch size
+    T = sequence length (frames/tokens)
+    n_mels = mel channels
+"""
+
 from __future__ import annotations
 
 import csv
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 import torch
+from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-ARTIFACTS_DIR = PROJECT_ROOT / "data" / "processed" / "libriSpeech-en-tacotron-vae"
-EXPERIMENTS_DIR = PROJECT_ROOT / "experiments" / "tacotron2-vae"
+PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
+ARTIFACTS_DIR: Path = PROJECT_ROOT / "data" / "processed" / "tts-portuguese-Corpora"
+EXPERIMENTS_DIR: Path = PROJECT_ROOT / "experiments" / "tacotron2-vae"
 
 
 class TextMelCollate:
-    def __init__(self, n_frames_per_step: int = 1):
-        self.n_frames_per_step = n_frames_per_step
+    """
+    Collate function for Tacotron 2 VAE training.
 
-    def __call__(self, batch):
+    Architecture:
+        Sorts by text length -> Pads text -> Pads mel (multiple of frames_per_step) -> Sets gate targets.
+
+    Inputs:
+        batch: List of tuples from Dataset.
+
+    Outputs:
+        text_padded: (B, max_T_text)
+        input_lengths: (B,)
+        mel_padded: (B, n_mels, max_T_mel)
+        gate_padded: (B, max_T_mel)
+        output_lengths: (B,)
+        emotions: (B, 4)
+
+    Example:
+        >>> collate_fn = TextMelCollate(n_frames_per_step=1)
+        >>> loader = DataLoader(dataset, collate_fn=collate_fn)
+    """
+    def __init__(self, n_frames_per_step: int = 1) -> None:
+        """
+        Initialize the collate function.
+
+        Args:
+            n_frames_per_step (int): Multiple for mel padding.
+        """
+        self.n_frames_per_step: int = n_frames_per_step
+
+    def __call__(self, batch: List[Tuple[Tensor, Tensor, Tensor]]) -> Tuple[
+        Tensor, Tensor, Tensor, Tensor, Tensor, Tensor
+    ]:
+        """
+        Process a list of samples into a padded batch.
+
+        Args:
+            batch: list of (text, mel, emotion).
+
+        Returns:
+            Tuple of padded tensors.
+        """
+        # Sort by text length
         input_lengths, ids_sorted_decreasing = torch.sort(
             torch.LongTensor([len(item[0]) for item in batch]),
             dim=0,
             descending=True,
         )
-        max_input_len = input_lengths[0]
+        max_input_len: int = input_lengths[0].item()
 
-        text_padded = torch.LongTensor(len(batch), max_input_len)
+        # Pad text
+        text_padded: Tensor = torch.LongTensor(len(batch), max_input_len)
         text_padded.zero_()
         for i in range(len(ids_sorted_decreasing)):
-            text = batch[ids_sorted_decreasing[i]][0]
+            text: Tensor = batch[ids_sorted_decreasing[i]][0]
             text_padded[i, : text.size(0)] = text
 
-        # emotions = torch.FloatTensor(len(batch), len(batch[0][3]))
-        #
-        #for i in range(len(ids_sorted_decreasing)):
-        #    emotions[i, :] = batch[ids_sorted_decreasing[i]][3]
+        # Mock emotions (fixed to neutral for LibriSpeech)
+        emotions: Tensor = torch.zeros(len(batch), 4, dtype=torch.float32)
 
-        emotions = torch.zeros(len(batch), 4, dtype=torch.float32)
-
-        num_mels = batch[0][1].size(0)
-        max_target_len = max(x[1].size(1) for x in batch)
+        # Mel padding calculations
+        num_mels: int = batch[0][1].size(0)
+        max_target_len: int = max(x[1].size(1) for x in batch)
         if max_target_len % self.n_frames_per_step != 0:
             max_target_len += self.n_frames_per_step - max_target_len % self.n_frames_per_step
 
-        mel_padded = torch.FloatTensor(len(batch), num_mels, max_target_len)
+        mel_padded: Tensor = torch.FloatTensor(len(batch), num_mels, max_target_len)
         mel_padded.zero_()
-        gate_padded = torch.FloatTensor(len(batch), max_target_len)
+        gate_padded: Tensor = torch.FloatTensor(len(batch), max_target_len)
         gate_padded.zero_()
-        output_lengths = torch.LongTensor(len(batch))
+        output_lengths: Tensor = torch.LongTensor(len(batch))
 
         for i in range(len(ids_sorted_decreasing)):
-            mel = batch[ids_sorted_decreasing[i]][1]
+            mel: Tensor = batch[ids_sorted_decreasing[i]][1]
             mel_padded[i, :, : mel.size(1)] = mel
+            # Gate target is 1 at the end of the sequence
             gate_padded[i, mel.size(1) - 1 :] = 1
             output_lengths[i] = mel.size(1)
 
@@ -72,6 +132,19 @@ def create_dataloader(
     collate_fn: TextMelCollate,
     shuffle: bool,
 ) -> DataLoader:
+    """
+    Initialize a DataLoader.
+
+    Args:
+        dataset (Dataset): Source data.
+        batch_size (int): Samples per batch.
+        num_workers (int): Parallel workers.
+        collate_fn (TextMelCollate): Collate logic.
+        shuffle (bool): Whether to shuffle.
+
+    Returns:
+        DataLoader: Initialized loader.
+    """
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -82,14 +155,25 @@ def create_dataloader(
     )
 
 
-
 def create_experiment_dir(experiment_name: Optional[str] = None) -> Path:
-    experiments_root = PROJECT_ROOT / "experiments" / "tacotron2-vae"
+    """
+    Setup directory structure for a new experiment run.
+
+    Args:
+        experiment_name (Optional[str]): Custom name or None for timestamped folder.
+
+    Returns:
+        Path: Experiment root directory.
+    """
+    experiments_root: Path = PROJECT_ROOT / "experiments" / "tacotron2-vae"
     experiments_root.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    experiment_dir = experiments_root / (experiment_name or f"attempt_{timestamp}")
+    timestamp: str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    experiment_dir: Path = experiments_root / (experiment_name or f"attempt_{timestamp}")
     experiment_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize subdirectories
     (experiment_dir / "checkpoints").mkdir(exist_ok=True)
     (experiment_dir / "tensorboard").mkdir(exist_ok=True)
     (experiment_dir / "logs").mkdir(exist_ok=True)
+    
     return experiment_dir

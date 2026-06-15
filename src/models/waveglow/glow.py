@@ -1,437 +1,508 @@
+"""
+WaveGlow implementation.
+
+Responsibilities:
+    - Implement WaveGlow: A flow-based generative model for audio synthesis.
+    - Implement WN: Non-causal WaveNet-like architecture for affine coupling.
+    - Implement Invertible1x1Conv: Reversible 1x1 convolution for flow mixing.
+    - Implement WaveGlowLoss: Negative Log-Likelihood (NLL) loss for the Gaussian prior.
+
+Main Classes:
+    - WaveGlow: Top-level model.
+    - WN: Core transform module.
+    - Invertible1x1Conv: Mixer layer.
+    - WaveGlowLoss: Loss function.
+
+Main Functions:
+    - fused_add_tanh_sigmoid_multiply: JIT-compiled activation function.
+    - remove: Helper to strip weight normalization.
+
+Tensor Conventions:
+    B = batch size
+    T = sequence length (audio samples or frames)
+    n_mels = mel frequency bins
+    n_group = grouping size for squeeze operation
+"""
 import copy
 import torch
+from torch import Tensor
 from torch.autograd import Variable
 import torch.nn.functional as F
 from typing import Tuple, List, Union, Dict, Any
 
 
 @torch.jit.script
-def fused_add_tanh_sigmoid_multiply(input_a: torch.Tensor, input_b: torch.Tensor, n_channels: torch.Tensor) -> torch.Tensor:
+def fused_add_tanh_sigmoid_multiply(input_a: Tensor, input_b: Tensor, n_channels: Tensor) -> Tensor:
     """
     Fuses the add, tanh, sigmoid, and multiply operations for performance.
 
-    This function adds two inputs, splits the result into two halves along the channel dimension,
-    applies tanh to the first half and sigmoid to the second half, and then multiplies them.
+    Architecture:
+        (a + b) -> Split -> [Tanh(left) * Sigmoid(right)]
 
     Args:
-        input_a (torch.Tensor): The first input tensor. Shape: (batch_size, 2*n_channels, length)
-        input_b (torch.Tensor): The second input tensor. Shape: (batch_size, 2*n_channels, length)
-        n_channels (torch.Tensor): A tensor containing a single integer representing the number of channels (half of the input channels).
+        input_a (Tensor): First input. Shape: (B, 2*C, T)
+        input_b (Tensor): Second input. Shape: (B, 2*C, T)
+        n_channels (Tensor): Scalar tensor with value C.
 
     Returns:
-        torch.Tensor: The result of the operation. Shape: (batch_size, n_channels, length)
-
-    Example:
-        >>> input_a = torch.randn(2, 4, 10)
-        >>> input_b = torch.randn(2, 4, 10)
-        >>> n_channels = torch.IntTensor([2])
-        >>> output = fused_add_tanh_sigmoid_multiply(input_a, input_b, n_channels)
-        >>> output.shape
-        torch.Size([2, 2, 10])
+        Tensor: Processed output. Shape: (B, C, T)
     """
-    n_channels_int = n_channels[0]
-    in_act = input_a + input_b  # [batch_size, 2*n_channels, length]
-    t_act = torch.tanh(in_act[:, :n_channels_int, :])  # [batch_size, n_channels, length]
-    s_act = torch.sigmoid(in_act[:, n_channels_int:, :])  # [batch_size, n_channels, length]
-    acts = t_act * s_act  # [batch_size, n_channels, length]
+    n_channels_int: int = int(n_channels[0].item())
+    in_act: Tensor = input_a + input_b  # (B, 2*C, T)
+    t_act: Tensor = torch.tanh(in_act[:, :n_channels_int, :])  # (B, C, T)
+    s_act: Tensor = torch.sigmoid(in_act[:, n_channels_int:, :])  # (B, C, T)
+    acts: Tensor = t_act * s_act  # (B, C, T)
     return acts
 
 
 class WaveGlowLoss(torch.nn.Module):
     """
-    Loss function for WaveGlow.
+    Negative Log-Likelihood Loss for WaveGlow.
 
-    Computes the negative log-likelihood loss for the WaveGlow model.
+    Mathematical Intuition:
+        Loss = (z^2 / 2*sigma^2) - sum(log|s|) - sum(log|det W|)
 
-    Args:
-        sigma (float, optional): The standard deviation of the Gaussian prior. Defaults to 1.0.
+    Inputs:
+        model_output:
+            z: Latent variable. (B, C_latent, T_groups)
+            log_s_list: List of log-scale tensors from affine coupling.
+            log_det_W_list: List of log-determinant scalars from 1x1 convs.
 
-    Example:
-        >>> loss_fn = WaveGlowLoss(sigma=1.0)
-        >>> z = torch.randn(2, 8, 100)
-        >>> log_s_list = [torch.randn(2, 4, 100) for _ in range(12)]
-        >>> log_det_W_list = [torch.tensor(0.5) for _ in range(12)]
-        >>> loss = loss_fn((z, log_s_list, log_det_W_list))
-        >>> loss.item() # Returns a scalar loss
+    Outputs:
+        loss: Scalar NLL.
     """
-    def __init__(self, sigma: float = 1.0):
-        super(WaveGlowLoss, self).__init__()
-        self.sigma = sigma
-
-    def forward(self, model_output: Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]) -> torch.Tensor:
+    def __init__(self, sigma: float = 1.0) -> None:
         """
-        Calculates the loss.
+        Initialize the loss.
 
         Args:
-            model_output (Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]): Output from WaveGlow forward pass.
+            sigma (float): Standard deviation of Gaussian prior.
+        """
+        super(WaveGlowLoss, self).__init__()
+        self.sigma: float = sigma
+
+    def forward(self, model_output: Tuple[Tensor, List[Tensor], List[Tensor]]) -> Tensor:
+        """
+        Compute WaveGlow NLL loss.
+
+        Args:
+            model_output: (z, log_s_list, log_det_W_list).
 
         Returns:
-            torch.Tensor: A scalar loss value.
+            Tensor: Scalar loss normalized by dimensions.
         """
         z, log_s_list, log_det_W_list = model_output
+        log_s_total: Tensor
+        log_det_W_total: Tensor
+
         for i, log_s in enumerate(log_s_list):
             if i == 0:
-                log_s_total = torch.sum(log_s)  # []
-                log_det_W_total = log_det_W_list[i]  # []
+                log_s_total = torch.sum(log_s)  # scalar
+                log_det_W_total = log_det_W_list[i]  # scalar
             else:
-                log_s_total = log_s_total + torch.sum(log_s)  # []
-                log_det_W_total += log_det_W_list[i]  # []
+                log_s_total = log_s_total + torch.sum(log_s)
+                log_det_W_total += log_det_W_list[i]
 
-        loss = torch.sum(z*z)/(2*self.sigma*self.sigma) - log_s_total - log_det_W_total  # []
-        return loss/(z.size(0)*z.size(1)*z.size(2))  # []
+        # Prior term + Change of variables correction
+        loss: Tensor = torch.sum(z*z)/(2*self.sigma*self.sigma) - log_s_total - log_det_W_total # scalar
+        
+        # Normalize by batch and all time/channel steps
+        return loss/(z.size(0)*z.size(1)*z.size(2))
 
 
 class Invertible1x1Conv(torch.nn.Module):
     """
-    The layer outputs both the convolution, and the log determinant
-    of its weight matrix. If reverse=True it does convolution with inverse.
+    Invertible 1x1 Convolution for Normalizing Flows.
 
-    Args:
-        c (int): Number of channels.
+    Architecture:
+        1x1 Conv with weight initialized as orthonormal matrix.
+    
+    Inputs:
+        z:
+            Shape (B, C, T_groups)
+        reverse:
+            Whether to apply the inverse operation.
 
-    Example:
-        >>> conv = Invertible1x1Conv(8)
-        >>> z = torch.randn(2, 8, 100)
-        >>> out, log_det = conv(z)
-        >>> z_rev = conv(out, reverse=True)
+    Outputs:
+        output:
+            Shape (B, C, T_groups)
+        log_det (if forward):
+            Scalar.
     """
-    def __init__(self, c: int):
-        super(Invertible1x1Conv, self).__init__()
-        self.conv = torch.nn.Conv1d(c, c, kernel_size=1, stride=1, padding=0, bias=False)
+    def __init__(self, c: int) -> None:
+        """
+        Initialize the invertible layer.
 
-        # Sample a random orthonormal matrix to initialize weights
-        W = torch.qr(torch.FloatTensor(c, c).normal_())[0]
+        Args:
+            c (int): Number of channels.
+        """
+        super(Invertible1x1Conv, self).__init__()
+        self.conv: torch.nn.Conv1d = torch.nn.Conv1d(c, c, kernel_size=1, stride=1, padding=0, bias=False)
+
+        # Sample a random orthonormal matrix
+        W: Tensor = torch.linalg.qr(torch.FloatTensor(c, c).normal_())[0] # (C, C)
 
         # Ensure determinant is 1.0 not -1.0
         if torch.det(W) < 0:
             W[:,0] = -1*W[:,0]
+        
         W = W.view(c, c, 1)
         self.conv.weight.data = W
 
-    def forward(self, z: torch.Tensor, reverse: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    def forward(self, z: Tensor, reverse: bool = False) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """
-        Forward or reverse computation of the 1x1 convolution.
-
         Args:
-            z (torch.Tensor): Input tensor. Shape: (batch_size, channels, length)
-            reverse (bool, optional): Whether to apply the inverse. Defaults to False.
+            z (Tensor): Input (B, C, T_groups).
+            reverse (bool): Inverse flag.
 
         Returns:
-            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: The output tensor, or tuple of output tensor and log determinant.
+            Forward: (output, log_det).
+            Reverse: output.
         """
-        # shape
         batch_size, group_size, n_of_groups = z.size()
 
-        W = self.conv.weight.squeeze()  # [c, c]
+        W: Tensor = self.conv.weight.squeeze()  # (C, C)
 
         if reverse:
             if not hasattr(self, 'W_inverse'):
-                # Reverse computation
-                W_inverse = W.float().inverse()  # [c, c]
-                W_inverse = Variable(W_inverse[..., None])  # [c, c, 1]
+                W_inverse: Tensor = W.float().inverse()  # (C, C)
+                W_inverse = Variable(W_inverse[..., None])  # (C, C, 1)
                 W_inverse = W_inverse.to(device=z.device, dtype=z.dtype)
-                self.W_inverse = W_inverse
-            z = F.conv1d(z, self.W_inverse, bias=None, stride=1, padding=0)  # [batch_size, group_size, n_of_groups]
+                self.W_inverse: Tensor = W_inverse
+            
+            z = F.conv1d(z, self.W_inverse, bias=None, stride=1, padding=0) # (B, C, T_groups)
             return z
         else:
-            # Forward computation
-            log_det_W = batch_size * n_of_groups * torch.logdet(W)  # []
-            z = self.conv(z)  # [batch_size, group_size, n_of_groups]
+            log_det_W: Tensor = batch_size * n_of_groups * torch.logdet(W) # scalar
+            z = self.conv(z) # (B, C, T_groups)
             return z, log_det_W
 
 
 class WN(torch.nn.Module):
     """
-    This is the WaveNet like layer for the affine coupling. The primary difference
-    from WaveNet is the convolutions need not be causal. There is also no dilation
-    size reset. The dilation only doubles on each layer.
+    Non-causal WaveNet-like transformation block.
 
-    Args:
-        n_in_channels (int): Input audio channels.
-        n_mel_channels (int): Input spectrogram channels.
-        n_layers (int): Number of WaveNet layers.
-        n_channels (int): Number of residual and skip channels.
-        kernel_size (int): Kernel size for dilated convolutions.
+    Architecture:
+        Conv1d (Start) -> [Dilation Conv + Tanh/Sigmoid Cond] * n_layers -> Conv1d (End)
 
-    Example:
-        >>> wn = WN(n_in_channels=4, n_mel_channels=80, n_layers=8, n_channels=256, kernel_size=3)
-        >>> audio = torch.randn(2, 4, 100)
-        >>> spect = torch.randn(2, 80, 100)
-        >>> output = wn((audio, spect))
-        >>> output.shape
-        torch.Size([2, 8, 100])
+    Inputs:
+        forward_input:
+            (audio, spect)
+            audio: (B, C_in, T_groups)
+            spect: (B, C_mel_group, T_groups)
+
+    Outputs:
+        output:
+            Shape (B, 2*C_in, T_groups) (scale and bias for affine coupling).
     """
-    def __init__(self, n_in_channels: int, n_mel_channels: int, n_layers: int, n_channels: int, kernel_size: int):
+    def __init__(self, n_in_channels: int, n_mel_channels: int, n_layers: int, n_channels: int, kernel_size: int) -> None:
+        """
+        Initialize the WN block.
+
+        Args:
+            n_in_channels (int): Input audio channels.
+            n_mel_channels (int): Spectrogram channels (pre-upsampled).
+            n_layers (int): Layers per block.
+            n_channels (int): Residual/skip dimension.
+            kernel_size (int): Kernel size.
+        """
         super(WN, self).__init__()
         assert(kernel_size % 2 == 1)
         assert(n_channels % 2 == 0)
-        self.n_layers = n_layers
-        self.n_channels = n_channels
-        self.in_layers = torch.nn.ModuleList()
-        self.res_skip_layers = torch.nn.ModuleList()
-        self.cond_layers = torch.nn.ModuleList()
+        self.n_layers: int = n_layers
+        self.n_channels: int = n_channels
+        self.in_layers: torch.nn.ModuleList = torch.nn.ModuleList()
+        self.res_skip_layers: torch.nn.ModuleList = torch.nn.ModuleList()
+        self.cond_layers: torch.nn.ModuleList = torch.nn.ModuleList()
 
-        start = torch.nn.Conv1d(n_in_channels, n_channels, 1)
-        start = torch.nn.utils.weight_norm(start, name='weight')
-        self.start = start
+        self.start: torch.nn.Conv1d = torch.nn.utils.weight_norm(
+            torch.nn.Conv1d(n_in_channels, n_channels, 1), name='weight'
+        )
 
-        # Initializing last layer to 0 makes the affine coupling layers
-        # do nothing at first.  This helps with training stability
-        end = torch.nn.Conv1d(n_channels, 2*n_in_channels, 1)
-        end.weight.data.zero_()
-        end.bias.data.zero_()
-        self.end = end
+        # Output produces parameters for affine transform (log_s and b)
+        self.end: torch.nn.Conv1d = torch.nn.Conv1d(n_channels, 2*n_in_channels, 1)
+        self.end.weight.data.zero_()
+        self.end.bias.data.zero_()
 
         for i in range(n_layers):
-            dilation = 2 ** i
-            padding = int((kernel_size*dilation - dilation)/2)
-            in_layer = torch.nn.Conv1d(n_channels, 2*n_channels, kernel_size,
-                                       dilation=dilation, padding=padding)
-            in_layer = torch.nn.utils.weight_norm(in_layer, name='weight')
+            dilation: int = 2 ** i
+            padding: int = int((kernel_size*dilation - dilation)/2)
+            
+            in_layer: torch.nn.Conv1d = torch.nn.utils.weight_norm(
+                torch.nn.Conv1d(n_channels, 2*n_channels, kernel_size, dilation=dilation, padding=padding),
+                name='weight'
+            )
             self.in_layers.append(in_layer)
 
-            cond_layer = torch.nn.Conv1d(n_mel_channels, 2*n_channels, 1)
-            cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
+            cond_layer: torch.nn.Conv1d = torch.nn.utils.weight_norm(
+                torch.nn.Conv1d(n_mel_channels, 2*n_channels, 1),
+                name='weight'
+            )
             self.cond_layers.append(cond_layer)
 
-            # last one is not necessary
-            if i < n_layers - 1:
-                res_skip_channels = 2*n_channels
-            else:
-                res_skip_channels = n_channels
-            res_skip_layer = torch.nn.Conv1d(n_channels, res_skip_channels, 1)
-            res_skip_layer = torch.nn.utils.weight_norm(res_skip_layer, name='weight')
+            res_skip_channels: int = 2*n_channels if i < n_layers - 1 else n_channels
+            res_skip_layer: torch.nn.Conv1d = torch.nn.utils.weight_norm(
+                torch.nn.Conv1d(n_channels, res_skip_channels, 1),
+                name='weight'
+            )
             self.res_skip_layers.append(res_skip_layer)
 
-    def forward(self, forward_input: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+    def forward(self, forward_input: Tuple[Tensor, Tensor]) -> Tensor:
         """
-        Forward computation of the WN block.
+        Forward computation.
 
         Args:
-            forward_input (Tuple[torch.Tensor, torch.Tensor]): A tuple containing the audio and the spectrogram tensors.
+            forward_input: (audio, spect).
 
         Returns:
-            torch.Tensor: The output tensor of the WN block.
+            Tensor: (B, 2*C_in, T_groups)
         """
         audio, spect = forward_input
-        audio = self.start(audio)  # [batch_size, n_channels, length]
+        audio = self.start(audio)  # (B, n_channels, T_groups)
+
+        output: Tensor = torch.zeros_like(audio) # (B, n_channels, T_groups)
 
         for i in range(self.n_layers):
-            acts = fused_add_tanh_sigmoid_multiply(
-                self.in_layers[i](audio),  # [batch_size, 2*n_channels, length]
-                self.cond_layers[i](spect),  # [batch_size, 2*n_channels, length]
-                torch.IntTensor([self.n_channels]))  # [batch_size, n_channels, length]
+            acts: Tensor = fused_add_tanh_sigmoid_multiply(
+                self.in_layers[i](audio),  # (B, 2*n_channels, T_groups)
+                self.cond_layers[i](spect),  # (B, 2*n_channels, T_groups)
+                torch.IntTensor([self.n_channels]))  # (B, n_channels, T_groups)
 
-            res_skip_acts = self.res_skip_layers[i](acts)  # [batch_size, res_skip_channels, length]
+            res_skip_acts: Tensor = self.res_skip_layers[i](acts)  # (B, res_skip_channels, T_groups)
+            
             if i < self.n_layers - 1:
-                audio = res_skip_acts[:, :self.n_channels, :] + audio  # [batch_size, n_channels, length]
-                skip_acts = res_skip_acts[:, self.n_channels:, :]  # [batch_size, n_channels, length]
+                audio = res_skip_acts[:, :self.n_channels, :] + audio  # Residual path
+                skip_acts = res_skip_acts[:, self.n_channels:, :]  # Skip path
             else:
-                skip_acts = res_skip_acts  # [batch_size, n_channels, length]
+                skip_acts = res_skip_acts
 
             if i == 0:
-                output = skip_acts  # [batch_size, n_channels, length]
+                output = skip_acts
             else:
-                output = skip_acts + output  # [batch_size, n_channels, length]
-        return self.end(output)  # [batch_size, 2*n_in_channels, length]
+                output = skip_acts + output
+        
+        return self.end(output)  # (B, 2*n_in_channels, T_groups)
 
 
 class WaveGlow(torch.nn.Module):
     """
-    WaveGlow model for mel-spectrogram to audio synthesis.
+    WaveGlow: A Flow-based Generative Model for Voice Synthesis.
 
-    Args:
-        n_mel_channels (int): Number of mel spectrogram channels.
-        n_flows (int): Number of normalizing flow steps.
-        n_group (int): Number of samples in a group for the squeeze operation.
-        n_early_every (int): Every how many flows to output early samples.
-        n_early_size (int): Number of early samples to output.
-        WN_config (dict): Configuration dictionary for the WN module.
+    Architecture:
+        Upsample -> [Squeeze -> 1x1Conv -> AffineCoupling (WN) -> Split] * n_flows
+
+    Inputs (Training):
+        forward_input: (spect, audio)
+            spect: (B, n_mel_channels, frames)
+            audio: (B, time)
+
+    Outputs (Training):
+        z: (B, C_latent, T_groups)
+        log_s_list: list of log scales.
+        log_det_W_list: list of log determinants.
+
+    Inputs (Inference):
+        spect: (B, n_mel_channels, frames)
+        sigma: scalar noise variance.
+
+    Outputs (Inference):
+        audio: (B, time)
 
     Example:
-        >>> wn_config = {'n_layers': 8, 'n_channels': 256, 'kernel_size': 3}
-        >>> waveglow = WaveGlow(n_mel_channels=80, n_flows=12, n_group=8, n_early_every=4, n_early_size=2, WN_config=wn_config)
-        >>> spect = torch.randn(2, 80, 100) # [batch_size, n_mel_channels, frames]
-        >>> audio = torch.randn(2, 25600) # [batch_size, time]
-        >>> z, log_s_list, log_det_W_list = waveglow((spect, audio))
-        >>> z.shape
-        torch.Size([2, 4, 3200])
+        >>> waveglow = WaveGlow(...)
+        >>> audio = waveglow.infer(mel_spectrogram)
     """
-    def __init__(self, n_mel_channels: int, n_flows: int, n_group: int, n_early_every: int,
-                 n_early_size: int, WN_config: Dict[str, Any]):
+    def __init__(
+        self, 
+        n_mel_channels: int, 
+        n_flows: int, 
+        n_group: int, 
+        n_early_every: int,
+        n_early_size: int, 
+        WN_config: Dict[str, Any]
+    ) -> None:
+        """
+        Initialize WaveGlow.
+
+        Args:
+            n_mel_channels (int): Mel bins.
+            n_flows (int): Flow steps.
+            n_group (int): Number of audio samples to group.
+            n_early_every (int): Frequency of early sample output.
+            n_early_size (int): Dimensions of early output.
+            WN_config (dict): WaveNet configuration.
+        """
         super(WaveGlow, self).__init__()
 
-        self.upsample = torch.nn.ConvTranspose1d(n_mel_channels,
-                                                 n_mel_channels,
-                                                 1024, stride=256)
+        self.upsample: torch.nn.ConvTranspose1d = torch.nn.ConvTranspose1d(
+            n_mel_channels, n_mel_channels, 1024, stride=256
+        )
         assert(n_group % 2 == 0)
-        self.n_flows = n_flows
-        self.n_group = n_group
-        self.n_early_every = n_early_every
-        self.n_early_size = n_early_size
-        self.WN = torch.nn.ModuleList()
-        self.convinv = torch.nn.ModuleList()
+        self.n_flows: int = n_flows
+        self.n_group: int = n_group
+        self.n_early_every: int = n_early_every
+        self.n_early_size: int = n_early_size
+        self.WN: torch.nn.ModuleList = torch.nn.ModuleList()
+        self.convinv: torch.nn.ModuleList = torch.nn.ModuleList()
 
-        n_half = int(n_group/2)
+        n_half: int = int(n_group/2)
+        n_remaining_channels: int = n_group
 
-        # Set up layers with the right sizes based on how many dimensions
-        # have been output already
-        n_remaining_channels = n_group
         for k in range(n_flows):
             if k % self.n_early_every == 0 and k > 0:
                 n_half = n_half - int(self.n_early_size/2)
                 n_remaining_channels = n_remaining_channels - self.n_early_size
+            
             self.convinv.append(Invertible1x1Conv(n_remaining_channels))
             self.WN.append(WN(n_half, n_mel_channels*n_group, **WN_config))
-        self.n_remaining_channels = n_remaining_channels  # Useful during inference
+        
+        self.n_remaining_channels: int = n_remaining_channels
 
-    def forward(self, forward_input: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]:
+    def forward(self, forward_input: Tuple[Tensor, Tensor]) -> Tuple[Tensor, List[Tensor], List[Tensor]]:
         """
-        Forward pass for training.
+        Forward pass (training). Transforms audio to Gaussian latent z.
 
         Args:
-            forward_input (Tuple[torch.Tensor, torch.Tensor]):
-                forward_input[0] = mel_spectrogram: batch x n_mel_channels x frames
-                forward_input[1] = audio: batch x time
+            forward_input: (spect, audio).
+                spect: (B, C_mel, T_f)
+                audio: (B, T_a)
 
         Returns:
-            Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]: The latent variable z, list of log scales, and list of log determinants.
+            (z, log_s_list, log_det_W_list).
         """
         spect, audio = forward_input
 
-        #  Upsample spectrogram to size of audio
-        spect = self.upsample(spect)  # [batch_size, n_mel_channels, time]
+        # 1. Upsample spectrogram to match audio resolution
+        spect = self.upsample(spect)  # (B, C_mel, T_a_upsampled)
         assert(spect.size(2) >= audio.size(1))
         if spect.size(2) > audio.size(1):
-            spect = spect[:, :, :audio.size(1)]  # [batch_size, n_mel_channels, time]
+            spect = spect[:, :, :audio.size(1)]  # (B, C_mel, T_a)
 
-        spect = spect.unfold(2, self.n_group, self.n_group).permute(0, 2, 1, 3)  # [batch_size, n_groups, n_mel_channels, group_size]
-        spect = spect.contiguous().view(spect.size(0), spect.size(1), -1).permute(0, 2, 1)  # [batch_size, n_mel_channels*n_group, n_groups]
+        # 2. Reshape spectrogram to group level
+        spect = spect.unfold(2, self.n_group, self.n_group).permute(0, 2, 1, 3) # (B, T_groups, C_mel, group_size)
+        spect = spect.contiguous().view(spect.size(0), spect.size(1), -1).permute(0, 2, 1) # (B, C_mel*n_group, T_groups)
 
-        audio = audio.unfold(1, self.n_group, self.n_group).permute(0, 2, 1)  # [batch_size, n_group, n_groups]
-        output_audio = []
-        log_s_list = []
-        log_det_W_list = []
+        # 3. Reshape audio to group level
+        audio = audio.unfold(1, self.n_group, self.n_group).permute(0, 2, 1) # (B, n_group, T_groups)
+        
+        output_audio: List[Tensor] = []
+        log_s_list: List[Tensor] = []
+        log_det_W_list: List[Tensor] = []
 
         for k in range(self.n_flows):
             if k % self.n_early_every == 0 and k > 0:
-                output_audio.append(audio[:, :self.n_early_size, :])  # [batch_size, n_early_size, n_groups]
-                audio = audio[:, self.n_early_size:, :]  # [batch_size, current_channels, n_groups]
+                output_audio.append(audio[:, :self.n_early_size, :]) # Save early output
+                audio = audio[:, self.n_early_size:, :] # Continue with remaining dimensions
 
-            audio, log_det_W = self.convinv[k](audio)  # [batch_size, current_channels, n_groups], []
+            # Mixer
+            audio, log_det_W = self.convinv[k](audio) # (B, C_rem, T_groups)
             log_det_W_list.append(log_det_W)
 
-            n_half = int(audio.size(1)/2)
-            audio_0 = audio[:, :n_half, :]  # [batch_size, n_half, n_groups]
-            audio_1 = audio[:, n_half:, :]  # [batch_size, n_half, n_groups]
+            # Affine Coupling
+            n_half: int = int(audio.size(1)/2)
+            audio_0: Tensor = audio[:, :n_half, :]
+            audio_1: Tensor = audio[:, n_half:, :]
 
-            output = self.WN[k]((audio_0, spect))  # [batch_size, 2*n_half, n_groups]
-            log_s = output[:, n_half:, :]  # [batch_size, n_half, n_groups]
-            b = output[:, :n_half, :]  # [batch_size, n_half, n_groups]
-            audio_1 = torch.exp(log_s)*audio_1 + b  # [batch_size, n_half, n_groups]
+            output: Tensor = self.WN[k]((audio_0, spect)) # (B, 2*n_half, T_groups)
+            log_s: Tensor = output[:, n_half:, :]
+            b: Tensor = output[:, :n_half, :]
+            
+            audio_1 = torch.exp(log_s)*audio_1 + b
             log_s_list.append(log_s)
 
-            audio = torch.cat([audio_0, audio_1], 1)  # [batch_size, current_channels, n_groups]
+            audio = torch.cat([audio_0, audio_1], 1)
 
         output_audio.append(audio)
-        return torch.cat(output_audio, 1), log_s_list, log_det_W_list  # [batch_size, n_group, n_groups]
+        return torch.cat(output_audio, 1), log_s_list, log_det_W_list
 
-    def infer(self, spect: torch.Tensor, sigma: float = 1.0) -> torch.Tensor:
+    def infer(self, spect: Tensor, sigma: float = 1.0) -> Tensor:
         """
-        Synthesizes audio from a mel spectrogram.
+        Reverse pass (inference). Transforms Gaussian noise to audio.
 
         Args:
-            spect (torch.Tensor): The input mel spectrogram. Shape: (batch_size, n_mel_channels, frames)
-            sigma (float, optional): Standard deviation of the Gaussian noise. Defaults to 1.0.
+            spect (Tensor): Mel-spectrogram (B, C_mel, T_f).
+            sigma (float): Sampling variance.
 
         Returns:
-            torch.Tensor: The synthesized audio. Shape: (batch_size, time)
-
-        Example:
-            >>> waveglow = WaveGlow(80, 12, 8, 4, 2, {'n_layers': 8, 'n_channels': 256, 'kernel_size': 3})
-            >>> spect = torch.randn(1, 80, 100)
-            >>> audio = waveglow.infer(spect)
-            >>> audio.shape
-            torch.Size([1, 25600])
+            Tensor: Synthesized audio (B, T_a).
         """
-        spect = self.upsample(spect)  # [batch_size, n_mel_channels, time]
-        # trim conv artifacts. maybe pad spec to kernel multiple
-        time_cutoff = self.upsample.kernel_size[0] - self.upsample.stride[0]
-        spect = spect[:, :, :-time_cutoff]  # [batch_size, n_mel_channels, trimmed_time]
+        spect = self.upsample(spect)  # (B, C_mel, T_a_ups)
+        
+        # Trim artifacts
+        time_cutoff: int = self.upsample.kernel_size[0] - self.upsample.stride[0]
+        spect = spect[:, :, :-time_cutoff] # (B, C_mel, T_a)
 
-        spect = spect.unfold(2, self.n_group, self.n_group).permute(0, 2, 1, 3)  # [batch_size, n_groups, n_mel_channels, group_size]
-        spect = spect.contiguous().view(spect.size(0), spect.size(1), -1).permute(0, 2, 1)  # [batch_size, n_mel_channels*n_group, n_groups]
+        # Group spectrogram
+        spect = spect.unfold(2, self.n_group, self.n_group).permute(0, 2, 1, 3)
+        spect = spect.contiguous().view(spect.size(0), spect.size(1), -1).permute(0, 2, 1) # (B, C_mel*group, T_groups)
 
-        audio = torch.randn(
+        # Initialize with Gaussian noise
+        audio: Tensor = torch.randn(
             spect.size(0), self.n_remaining_channels, spect.size(2),
             dtype=spect.dtype, device=spect.device
         )
-
-        audio = torch.autograd.Variable(sigma*audio)  # [batch_size, n_remaining_channels, n_groups]
+        audio = Variable(sigma*audio) # (B, C_rem, T_groups)
 
         for k in reversed(range(self.n_flows)):
-            n_half = int(audio.size(1)/2)
-            audio_0 = audio[:, :n_half, :]  # [batch_size, n_half, n_groups]
-            audio_1 = audio[:, n_half:, :]  # [batch_size, n_half, n_groups]
+            n_half: int = int(audio.size(1)/2)
+            audio_0: Tensor = audio[:, :n_half, :]
+            audio_1: Tensor = audio[:, n_half:, :]
 
-            output = self.WN[k]((audio_0, spect))  # [batch_size, 2*n_half, n_groups]
-            s = output[:, n_half:, :]  # [batch_size, n_half, n_groups]
-            b = output[:, :n_half, :]  # [batch_size, n_half, n_groups]
-            audio_1 = (audio_1 - b)/torch.exp(s)  # [batch_size, n_half, n_groups]
-            audio = torch.cat([audio_0, audio_1], 1)  # [batch_size, current_channels, n_groups]
+            output: Tensor = self.WN[k]((audio_0, spect))
+            s: Tensor = output[:, n_half:, :]
+            b: Tensor = output[:, :n_half, :]
+            
+            # Inverse affine transform
+            audio_1 = (audio_1 - b)/torch.exp(s)
+            audio = torch.cat([audio_0, audio_1], 1)
 
-            audio = self.convinv[k](audio, reverse=True)  # [batch_size, current_channels, n_groups]
+            # Inverse mixer
+            audio = self.convinv[k](audio, reverse=True)
 
+            # Re-inject early samples from prior
             if k % self.n_early_every == 0 and k > 0:
-                z = torch.randn(
+                z: Tensor = torch.randn(
                     spect.size(0), self.n_early_size, spect.size(2),
                     dtype=spect.dtype, device=spect.device
                 )
-                audio = torch.cat((sigma*z, audio), 1)  # [batch_size, current_channels + n_early_size, n_groups]
+                audio = torch.cat((sigma*z, audio), 1)
 
-        audio = audio.permute(0, 2, 1).contiguous().view(audio.size(0), -1).data  # [batch_size, time]
-        return audio
+        # Reshape back to 1D waveform
+        audio_final: Tensor = audio.permute(0, 2, 1).contiguous().view(audio.size(0), -1) # (B, T_a)
+        return audio_final
 
     @staticmethod
     def remove_weightnorm(model: torch.nn.Module) -> torch.nn.Module:
         """
-        Removes weight normalization from the WaveGlow model for faster inference.
+        Strips weight normalization from all layers.
 
         Args:
-            model (torch.nn.Module): The WaveGlow model.
+            model (nn.Module): WaveGlow instance.
 
         Returns:
-            torch.nn.Module: The model with weight normalization removed.
-
-        Example:
-            >>> waveglow = WaveGlow(80, 12, 8, 4, 2, {'n_layers': 8, 'n_channels': 256, 'kernel_size': 3})
-            >>> waveglow = WaveGlow.remove_weightnorm(waveglow)
+            nn.Module: Optimized model.
         """
         waveglow = model
-        for WN in waveglow.WN:
-            WN.start = torch.nn.utils.remove_weight_norm(WN.start)
-            WN.in_layers = remove(WN.in_layers)
-            WN.cond_layers = remove(WN.cond_layers)
-            WN.res_skip_layers = remove(WN.res_skip_layers)
+        for WN_block in waveglow.WN:
+            WN_block.start = torch.nn.utils.remove_weight_norm(WN_block.start)
+            WN_block.in_layers = remove(WN_block.in_layers)
+            WN_block.cond_layers = remove(WN_block.cond_layers)
+            WN_block.res_skip_layers = remove(WN_block.res_skip_layers)
         return waveglow
 
 
 def remove(conv_list: torch.nn.ModuleList) -> torch.nn.ModuleList:
     """
-    Removes weight normalization from a list of convolutional layers.
+    Removes weight normalization from a list of layers.
 
     Args:
-        conv_list (torch.nn.ModuleList): A module list of convolutional layers.
+        conv_list (ModuleList): Layers.
 
     Returns:
-        torch.nn.ModuleList: The module list with weight normalization removed from its elements.
-
-    Example:
-        >>> convs = torch.nn.ModuleList([torch.nn.utils.weight_norm(torch.nn.Conv1d(10, 10, 1))])
-        >>> convs_unnormed = remove(convs)
+        ModuleList: Unnormalized layers.
     """
-    new_conv_list = torch.nn.ModuleList()
+    new_conv_list: torch.nn.ModuleList = torch.nn.ModuleList()
     for old_conv in conv_list:
-        old_conv = torch.nn.utils.remove_weight_norm(old_conv)
-        new_conv_list.append(old_conv)
+        new_conv: torch.nn.Module = torch.nn.utils.remove_weight_norm(old_conv)
+        new_conv_list.append(new_conv)
     return new_conv_list
