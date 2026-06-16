@@ -3,6 +3,10 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+echo "FFmpeg/" >> .gitignore
+echo "*.pt" >> .gitignore
+echo "*.wav" >> .gitignore
+
 # C extensions
 *.so
 

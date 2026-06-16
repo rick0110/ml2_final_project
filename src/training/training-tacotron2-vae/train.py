@@ -115,9 +115,15 @@ def main():
     save_hparams(hparams, experiment_dir / "hparams.json")
     text_processor.save(experiment_dir / "symbols.json")
 
+    if "VERBO" in str(artifacts_dir):
+        data_dir_to_load = artifacts_dir
+    else:
+        data_dir_to_load = Path("data/processed/libriSpeech-en-tacotron-vae")
+
     train_dataset, test_dataset, val_dataset = load_data(
         text_processor=text_processor,
-        data_dir=Path("data/processed/libriSpeech-en-tacotron-vae"),
+        data_dir=data_dir_to_load,
+        # data_dir=Path("data/processed/libriSpeech-en-tacotron-vae"), HERI e BIA
         val_split=args.val_split,
         generator=torch.Generator().manual_seed(args.seed)
     )
