@@ -193,6 +193,7 @@ def save_checkpoint(
 def load_checkpoint(
     checkpoint_path: Path,
     model: nn.Module,
+    warm_start: bool = False,
 ) -> Tuple[nn.Module, Optional[Dict[str, Any]], float, int]:
     """
     Load model and training state.
@@ -205,10 +206,25 @@ def load_checkpoint(
         Tuple: model, optimizer_state, learning_rate, iteration.
     """
     checkpoint: Dict[str, Any] = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    model.load_state_dict(checkpoint["state_dict"])
-    learning_rate: float = checkpoint.get("learning_rate", 1e-3)
-    iteration: int = checkpoint.get("iteration", 0)
-    optimizer: Optional[Dict[str, Any]] = checkpoint.get("optimizer", None)
+    
+    if warm_start:
+        print("Warm starting... filtering mismatched weights (e.g. transcript_embedding)")
+        model_state = model.state_dict()
+        checkpoint_state = checkpoint["state_dict"]
+        filtered_state = {
+            k: v for k, v in checkpoint_state.items()
+            if k in model_state and v.size() == model_state[k].size()
+        }
+        model.load_state_dict(filtered_state, strict=False)
+        # When warm starting, we usually want to reset optimizer and iteration
+        learning_rate = 1e-3
+        iteration = 0
+        optimizer = None
+    else:
+        model.load_state_dict(checkpoint["state_dict"])
+        learning_rate: float = checkpoint.get("learning_rate", 1e-3)
+        iteration: int = checkpoint.get("iteration", 0)
+        optimizer: Optional[Dict[str, Any]] = checkpoint.get("optimizer", None)
 
     return model, optimizer, learning_rate, iteration
 
@@ -261,6 +277,17 @@ def get_singular_values_of_latent_covariance(
     z_numpy: np.ndarray = np.concatenate(latent_vectors, axis=0) # (N_samples, L)
     z_centered: np.ndarray = z_numpy - np.mean(z_numpy, axis=0, keepdims=True)
 
+    if np.isnan(z_centered).any() or np.isinf(z_centered).any():
+        print("WARNING: NaN or Inf detected in latent vectors. Skipping SVD to prevent crash.")
+        L = z_centered.shape[1]
+        return {
+            "latent_vectors": z_numpy,
+            "singular_values": np.zeros(L),
+            "explained_variance": np.zeros(L),
+            "explained_variance_ratio": np.zeros(L),
+            "components": np.eye(L),
+        }
+
     U, S, Vt = np.linalg.svd(z_centered, full_matrices=False)
 
     explained_variance: np.ndarray = S**2 / (z_centered.shape[0] - 1)
@@ -288,7 +315,8 @@ def train_epoch(
     learning_rate: float,
     training_metadata: Optional[Dict[str, Any]] = None,
     tensorboard_logger: Optional[TensorBoardLogger] = None,
-) -> Dict[str, Any]:
+    accumulation_steps: int = 1
+) -> Tuple[Dict[str, Any], Optional[float], int]:
     """
     Run one training epoch.
 
@@ -297,6 +325,7 @@ def train_epoch(
         hparams (Tacotron2VAEHparams): Hyperparameters.
         train_loader (DataLoader): Training data.
         test_loader (DataLoader): Test/Validation data.
+        val_loader (DataLoader): Validation data.
         optimizer (Optimizer): Optimizer.
         criterion (Tacotron2LossVAE): Loss module.
         device (torch.device): Device.
@@ -309,17 +338,19 @@ def train_epoch(
     """
     model.train()
 
-    for batch in tqdm(train_loader, desc=f"training", leave=False):
-        model.train()
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = learning_rate
+    epoch_val_loss: Optional[float] = None
 
-        optimizer.zero_grad()
+    optimizer.zero_grad()
+    for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"training", leave=False)):
+        model.train()
+
         x, y = model.parse_batch(batch, device)
         y_pred: List[torch.Tensor] = model(x) # [mel, mel_post, gate, align, mu, logvar, z]
 
         loss, recon_loss, kl_loss, kl_weight = criterion(y_pred, y, iteration)
-        loss.backward()
+        
+        scaled_loss = loss / accumulation_steps
+        scaled_loss.backward()
 
         # Capture gradient norms per layer (only when logging checkpoints/plots to save GPU-CPU sync time)
         layer_grads: List[float] = []
@@ -328,11 +359,15 @@ def train_epoch(
                 if param.grad is not None:
                     layer_grads.append(param.grad.norm().item())
 
-        grad_norm: torch.Tensor = torch.nn.utils.clip_grad_norm_(
-            model.parameters(), hparams.grad_clip_thresh
-        )
-        optimizer.step()
         reduced_loss: float = loss.item()
+        grad_norm = torch.tensor(0.0)
+
+        if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(train_loader):
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                model.parameters(), hparams.grad_clip_thresh
+            )
+            optimizer.step()
+            optimizer.zero_grad()
 
         if iteration % hparams.iters_per_checkpoint == 0:
             checkpoint_path: Path = Path(hparams.checkpoint_dir) / f"epoch_{iteration}"
@@ -366,8 +401,14 @@ def train_epoch(
                     xv, yv = model.parse_batch(val_batch, device)
                     yv_pred: List[torch.Tensor] = model(xv)
                     val_loss, val_recon, val_kl, _ = criterion(yv_pred, yv, iteration)
+                    epoch_val_loss = val_loss.item()
 
-                mel_pred: np.ndarray = yt_pred[0][0].cpu().numpy() # (n_mels, T)
+                    # Generate inference spectrogram for the first item in the batch
+                    infer_text = xt[0][0].unsqueeze(0)
+                    infer_audio = yt[0][0].unsqueeze(0)
+                    _, mel_outputs_postnet, _ = model.inference_mel(infer_text, infer_audio)
+                    mel_pred: np.ndarray = mel_outputs_postnet[0].cpu().numpy() # (n_mels, T)
+
                 mel_target: np.ndarray = yt[0][0].cpu().numpy()   # (n_mels, T)
 
                 training_metadata.setdefault("singular_values_of_latent_covariance", []).append(singular_values_info)
@@ -431,7 +472,7 @@ def train_epoch(
 
         iteration += 1
 
-    return training_metadata
+    return training_metadata, epoch_val_loss, iteration
 
 
 def save_hparams(hparams: Tacotron2VAEHparams, path: Path) -> None:

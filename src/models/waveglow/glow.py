@@ -23,10 +23,8 @@ Tensor Conventions:
     n_mels = mel frequency bins
     n_group = grouping size for squeeze operation
 """
-import copy
 import torch
 from torch import Tensor
-from torch.autograd import Variable
 import torch.nn.functional as F
 from typing import Tuple, List, Union, Dict, Any
 
@@ -101,7 +99,7 @@ class WaveGlowLoss(torch.nn.Module):
                 log_det_W_total = log_det_W_list[i]  # scalar
             else:
                 log_s_total = log_s_total + torch.sum(log_s)
-                log_det_W_total += log_det_W_list[i]
+                log_det_W_total = log_det_W_total + log_det_W_list[i]
 
         # Prior term + Change of variables correction
         loss: Tensor = torch.sum(z*z)/(2*self.sigma*self.sigma) - log_s_total - log_det_W_total # scalar
@@ -164,17 +162,25 @@ class Invertible1x1Conv(torch.nn.Module):
         W: Tensor = self.conv.weight.squeeze()  # (C, C)
 
         if reverse:
-            if not hasattr(self, 'W_inverse'):
+            # Recompute W_inverse if not cached
+            if not hasattr(self, 'W_inverse') or self.W_inverse is None:
                 W_inverse: Tensor = W.float().inverse()  # (C, C)
-                W_inverse = Variable(W_inverse[..., None])  # (C, C, 1)
+                W_inverse = W_inverse[..., None]  # (C, C, 1)
                 W_inverse = W_inverse.to(device=z.device, dtype=z.dtype)
                 self.W_inverse: Tensor = W_inverse
             
             z = F.conv1d(z, self.W_inverse, bias=None, stride=1, padding=0) # (B, C, T_groups)
             return z
         else:
-            log_det_W: Tensor = batch_size * n_of_groups * torch.logdet(W) # scalar
+            # Use slogdet[1] to avoid NaN if determinant is negative
+            _, log_det_W_val = torch.slogdet(W)
+            log_det_W: Tensor = batch_size * n_of_groups * log_det_W_val # scalar
             z = self.conv(z) # (B, C, T_groups)
+            
+            # Invalidate cache if forward pass is called (which means training occurred)
+            if hasattr(self, 'W_inverse'):
+                self.W_inverse = None
+                
             return z, log_det_W
 
 
@@ -441,7 +447,7 @@ class WaveGlow(torch.nn.Module):
             spect.size(0), self.n_remaining_channels, spect.size(2),
             dtype=spect.dtype, device=spect.device
         )
-        audio = Variable(sigma*audio) # (B, C_rem, T_groups)
+        audio = sigma * audio  # (B, C_rem, T_groups)
 
         for k in reversed(range(self.n_flows)):
             n_half: int = int(audio.size(1)/2)

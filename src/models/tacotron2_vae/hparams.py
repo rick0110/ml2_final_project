@@ -117,11 +117,12 @@ class Tacotron2VAEHparams:
     ref_enc_gru_size: int = 256  # GRU hidden size in reference encoder
 
     z_latent_dim: int = 32  # Latent space dimension (z)
-    anneal_function: str = "logistic"
+    anneal_function: str = "cyclical"
     anneal_k: float = 0.0025
     anneal_x0: int = 10000
     anneal_upper: float = 0.2
-    anneal_lag: int = 50000
+    anneal_lag: int = 5000
+    free_bits: float = 0.25  # Minimum KL per latent dimension (prevents posterior collapse)
 
     # Decoder parameters
     n_frames_per_step: int = 1
@@ -131,6 +132,7 @@ class Tacotron2VAEHparams:
     gate_threshold: float = 0.5
     p_attention_dropout: float = 0.1
     p_decoder_dropout: float = 0.1
+    p_decoder_input_dropout: float = 0.8  # Frame dropout on decoder input (weakens autoregressive decoder)
 
     # Attention parameters
     attention_rnn_dim: int = 1024
@@ -145,8 +147,8 @@ class Tacotron2VAEHparams:
 
     # Optimization Hyperparameters
     use_saved_learning_rate: bool = False
-    learning_rate: float = 1e-3
-    weight_decay: float = 1e-6
+    learning_rate: float = 1e-5
+    weight_decay: float = 1e-4
     grad_clip_thresh: float = 1.0
     batch_size: int = 32
     mask_padding: bool = True

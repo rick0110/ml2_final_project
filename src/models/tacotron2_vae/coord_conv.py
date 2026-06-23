@@ -86,8 +86,10 @@ class AddCoords(nn.Module):
             yy_channel = yy_channel.permute(0, 1, 3, 2)  # (1, 1, H, W)
 
             # Normalize to [-1, 1]
-            xx_channel = xx_channel.float() / (dim_y - 1) # (1, 1, H, W)
-            yy_channel = yy_channel.float() / (dim_x - 1) # (1, 1, H, W)
+            denom_y = max(dim_y - 1, 1)
+            denom_x = max(dim_x - 1, 1)
+            xx_channel = xx_channel.float() / denom_y # (1, 1, H, W)
+            yy_channel = yy_channel.float() / denom_x # (1, 1, H, W)
             xx_channel = xx_channel * 2 - 1              # (1, 1, H, W)
             yy_channel = yy_channel * 2 - 1              # (1, 1, H, W)
 
@@ -107,7 +109,7 @@ class AddCoords(nn.Module):
         raise NotImplementedError(f"Rank {self.rank} not supported")
 
 
-class CoordConv2d(conv.Conv2d):
+class CoordConv2d(nn.Module):
     """
     2D Convolution layer with coordinate channels added to the input.
     
@@ -155,9 +157,7 @@ class CoordConv2d(conv.Conv2d):
             bias (bool): Whether to use bias.
             with_r (bool): Whether to append radial coordinate channel.
         """
-        super().__init__(
-            in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias
-        )
+        super().__init__()
         self.rank: int = 2
         self.addcoords: AddCoords = AddCoords(self.rank, with_r)
         self.conv: nn.Conv2d = nn.Conv2d(

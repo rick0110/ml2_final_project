@@ -28,6 +28,7 @@ import csv
 import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import LambdaLR
 from typing import Any, Dict, List, Optional, Tuple
 
 # Import training utilities
@@ -45,25 +46,19 @@ sys.path.insert(0, str(PROJECT_ROOT / "src" / "training" / "training-tacotron2-v
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "data" / "loader_vae_tacotron"))
 
 
-try:
-    from losses import Tacotron2LossVAE
-    from models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
-    from models.tacotron2_vae.model import load_tacotron2_vae_model
-    from text_processing import TextProcessor, build_symbols_from_texts
-    from train_utils import (
-        TensorBoardLogger,
-        load_checkpoint,
-        save_checkpoint,
-        save_hparams,
-        train_epoch,
-        find_latest_checkpoint
-    )
-    from loader_tacotron import load_data
-except ImportError:
-    # Handle cases where path insertion didn't cover all imports
-    from src.training.training_tacotron2_vae.losses import Tacotron2LossVAE
-    from src.models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
-    from src.models.tacotron2_vae.model import load_tacotron2_vae_model
+from losses import Tacotron2LossVAE
+from models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
+from models.tacotron2_vae.model import load_tacotron2_vae_model
+from text_processing import TextProcessor, build_symbols_from_texts
+from train_utils import (
+    TensorBoardLogger,
+    load_checkpoint,
+    save_checkpoint,
+    save_hparams,
+    train_epoch,
+    find_latest_checkpoint
+)
+from loader_tacotron import load_data
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -77,6 +72,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--iters-per-checkpoint", type=int, default=500)
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--accumulation-steps", type=int, default=8, help="Number of gradient accumulation steps")
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-6)
     parser.add_argument("--grad-clip-thresh", type=float, default=1.0)
@@ -180,6 +176,8 @@ def main() -> None:
         lr=hparams.learning_rate,
         weight_decay=hparams.weight_decay,
     )
+    # Using Inverse Square Root decay (Noam-style per epoch) 
+    scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch: 1.0 / (max(1, epoch) ** 0.5))
     criterion: Tacotron2LossVAE = Tacotron2LossVAE(hparams)
 
     iteration: int = 0
@@ -201,7 +199,7 @@ def main() -> None:
     tensorboard_logger = TensorBoardLogger(experiment_dir / "logs")
     
     for epoch in range(hparams.epochs):
-        training_metadata = train_epoch(
+        training_metadata, epoch_val_loss, iteration = train_epoch(
             model=model,
             hparams=hparams,
             train_loader=train_loader,
@@ -213,11 +211,16 @@ def main() -> None:
             iteration=iteration,
             learning_rate=learning_rate,
             training_metadata=training_metadata,
-            tensorboard_logger=tensorboard_logger
+            tensorboard_logger=tensorboard_logger,
+            accumulation_steps=args.accumulation_steps
         )
         
+        # LambdaLR steps at the end of every epoch unconditionally
+        scheduler.step()
+        learning_rate = optimizer.param_groups[0]['lr']
+            
         # Update global iteration count
-        iteration += len(train_loader)
+        # iteration += len(train_loader) # removed as it is returned by train_epoch
 
     print(f"Training finished. Experiment dir: {experiment_dir}")
     tensorboard_logger.close()

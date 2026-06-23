@@ -27,7 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "training" / "training-tacotron2-vae"))
 
 try:
-    from data.loader_TTS_GST.DataSet import DatasetTTSPortuguese
+    from data.loader_vae_tacotron.loader_tacotron import DatasetLibriSpeechTacotronVAE
     from text_processing import TextProcessor, build_symbols_from_texts
     from utils import ARTIFACTS_DIR
 except ImportError:
@@ -85,12 +85,14 @@ def main() -> None:
     args: argparse.Namespace = parse_args()
     random.seed(args.seed)
 
-    # Note: Assuming DatasetTTSPortuguese exists in the specified path
     try:
-        from data.loader_TTS_GST.DataSet import DatasetTTSPortuguese
-        dataset: DatasetTTSPortuguese = DatasetTTSPortuguese(data_dir=args.data_dir)
-    except ImportError:
-        print("Warning: DatasetTTSPortuguese import failed. Logic requires proper src setup.")
+        from data.loader_vae_tacotron.loader_tacotron import DatasetLibriSpeechTacotronVAE
+        dataset: DatasetLibriSpeechTacotronVAE = DatasetLibriSpeechTacotronVAE(
+            text_processor=None,  # We don't need text processor just for metadata extraction
+            data_dir=args.data_dir
+        )
+    except ImportError as e:
+        print(f"Warning: Dataset import failed: {e}. Logic requires proper src setup.")
         return
 
     rows: List[Dict[str, Any]] = []

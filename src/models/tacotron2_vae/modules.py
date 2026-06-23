@@ -209,7 +209,7 @@ class VAE_GST(nn.Module):
         if self.training:
             std: Tensor = torch.exp(0.5 * logvar) # (B, L)
             eps: Tensor = torch.randn_like(std)   # (B, L)
-            return eps.mul(std).add_(mu)          # (B, L)
+            return eps * std + mu                  # (B, L)
         return mu  # Return mean during inference
 
     def forward(
@@ -231,6 +231,8 @@ class VAE_GST(nn.Module):
         # Latent distribution parameters
         mu: Tensor = self.fc1(enc_out)     # (B, L)
         logvar: Tensor = self.fc2(enc_out) # (B, L)
+        # Clamp logvar to prevent numerical instability
+        logvar = torch.clamp(logvar, min=-10.0, max=2.0)
         
         # Sample z
         z: Tensor = self.reparameterize(mu, logvar) # (B, L)

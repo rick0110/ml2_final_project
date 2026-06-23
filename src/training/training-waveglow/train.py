@@ -186,10 +186,13 @@ def train(
     trainset: Mel2Samp = Mel2Samp(**data_config)
     train_sampler: Optional[DistributedSampler] = DistributedSampler(trainset) if num_gpus > 1 else None
 
+    # Set shuffle depending on sampler presence
+    shuffle = (train_sampler is None)
+
     train_loader: DataLoader = DataLoader(
         trainset, 
         num_workers=1, 
-        shuffle=False,
+        shuffle=shuffle,
         sampler=train_sampler,
         batch_size=batch_size,
         pin_memory=False,
@@ -207,6 +210,8 @@ def train(
 
     for epoch in range(epoch_offset, epochs):
         print("Epoch: {}".format(epoch))
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch)
         for i, batch in enumerate(train_loader):
             model.zero_grad()
 
@@ -228,8 +233,10 @@ def train(
             if fp16_run:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
                      scaled_loss.backward()
+                torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), 1.0)
             else:
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
             optimizer.step()
 

@@ -1,13 +1,12 @@
-\documentclass[11pt]{article}
+\documentclass[12pt]{article}
 
 \usepackage[margin=1in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage[english]{babel}
+\usepackage[english,portuguese]{babel}
 \usepackage{lmodern}
 \usepackage{microtype}
-\usepackage{amsmath}
-\usepackage{amssymb}
+\usepackage{amsmath, amsfonts, amssymb, amsthm}
 \usepackage{tabularx}
 \usepackage{hyperref}
 \usepackage{xcolor}
@@ -18,14 +17,23 @@
 \usepackage{graphicx}
 \usepackage{listings}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc, backgrounds, shadows}
+\usepackage{setspace}
+\usepackage{titlesec}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, fit, calc, backgrounds, shadows, decorations.pathreplacing}
+
+\onehalfspacing
 
 \hypersetup{
   colorlinks=true,
   linkcolor=blue!60!black,
   urlcolor=blue!60!black,
   citecolor=blue!60!black,
-  pdftitle={Technical Implementation Document: Tacotron2-VAE and WaveGlow},
+  pdftitle={Comprehensive Theoretical and Technical Implementation Document: Tacotron2-VAE Fine-Tuning},
   pdfauthor={ml2_final_project}
 }
 
@@ -47,7 +55,7 @@
 
 \newcommand{\pathtt}[1]{\texttt{#1}}
 
-\title{\textbf{Technical Implementation Document}\\ \Large Data Pipeline, System Architecture, and Training Workflow \\ (Tacotron2-VAE \& WaveGlow)}
+\title{\textbf{Comprehensive Theoretical and Technical Architecture Document}\\ \Large Adapting an English Pretrained Tacotron2-VAE for Brazilian Portuguese: Acoustic Theory, Variational Inference, and Phonetic Mapping}
 \author{ml2\_final\_project}
 \date{\today}
 
@@ -56,136 +64,37 @@
 \maketitle
 
 \begin{abstract}
-This document provides a highly detailed, faithful representation of the \pathtt{ml2\_final\_project} repository, specifically from the \pathtt{merge/preparing\_merge\_vae\_tacotron} branch. It thoroughly documents the repository structure, the complete data preprocessing pipeline, the progressively detailed neural network architectures of the Tacotron2-VAE acoustic model and the WaveGlow neural vocoder, as well as the exact loss functions, training mechanics, and configuration hyperparameters exactly as they are defined in the codebase.
+This document serves as a comprehensive theoretical and technical exposition of the \pathtt{ml2\_final\_project} repository. The objective of this research and engineering effort is to adapt an English-pretrained, state-of-the-art Text-to-Speech (TTS) architecture (Tacotron 2 + Variational Autoencoder) and a Neural Vocoder (WaveGlow) to Brazilian Portuguese (PT-BR). The challenge requires profound modifications ranging from linguistic processing to statistical initialization of neural embeddings and the correction of mathematical approximations in digital signal processing. This document is structured to present the problem domain first, followed by the deep mathematical theory underlying the architecture, the specific libraries utilized, the explicit problems encountered during domain adaptation, and the rigorous solutions applied.
 \end{abstract}
 
 \tableofcontents
 \newpage
 
 % ==========================================
-% SECTION 1: REPOSITORY STRUCTURE
+% SECTION 1: PROBLEM FORMULATION
 % ==========================================
-\section{Repository Structure and Overview}
+\section{Problem Formulation and Objectives}
 
-The repository organizes its workflow into isolated components, ensuring that raw data, preprocessing scripts, model definitions, and training loops operate independently.
+The synthesis of highly expressive, human-like speech from text in a low-to-medium resource language (such as Brazilian Portuguese, in the context of affective TTS) presents several non-trivial challenges. Transfer learning from high-resource languages (English) is the standard paradigm to bypass the prohibitive computational costs of training from scratch. However, naive transfer learning fails catastrophically due to orthogonal phonetic distributions and mismatched acoustic environments.
 
-\subsection{Top-Level Directory Tree}
+\subsection{Linguistic Incompatibility}
+The mapping from graphemes (letters) to phonemes (sounds) is highly language-dependent. English orthography is notoriously opaque, whereas Portuguese is relatively transparent but rich in nasal vowels ($\tilde{a}$, $\tilde{o}$) and distinct vibrants. A model pretrained on an English alphabet cannot natively process or synthesize these distinct acoustic targets without a fundamental restructuring of its embedding space.
 
-\begin{lstlisting}[language=bash]
-ml2_final_project/
-|-- data/
-|   |-- raw/                             # Original, unmodified audio corpora
-|   |   |-- libriSpeech-pt/
-|   |   |-- libriSpeech-en/
-|   |   `-- tts-portuguese-Corpora/
-|   `-- processed/                       # Serialized .pt tensors and metadata
-|       |-- libriSpeech-en-tacotron-vae/
-|       `-- tts_portuguese/
-|-- scripts/
-|   |-- download_datasets/               # Shell/Python fetchers
-|   |-- inference/                       # Audio generation utilities
-|   |-- preprocess/                      # Normalization & feature extraction
-|   |   |-- preprocess_libriSpeech-pt.py
-|   |   |-- preprocess_libri-Speech-en_vaeTacotron.py
-|   |   `-- preprocess_mels_tts_portuguese.py
-|   `-- utils/                           # Model analysis scripts
-|-- src/
-|   |-- data/                            # PyTorch Datasets and DataLoaders
-|   |   |-- loader_vae_tacotron/
-|   |   `-- loader_waveglow/
-|   |-- models/                          # Neural Network Architecture
-|   |   |-- tacotron2_vae/               # Acoustic model components
-|   |   `-- waveglow/                    # Neural Vocoder components
-|   `-- training/                        # Checkpointing, loops, and losses
-|       |-- training-tacotron2-vae/
-|       `-- training-waveglow/
-|-- experiments/                         # Output artifacts, logs, checkpoints
-|-- docs/                                # Project documentation
-|-- notebooks/                           # Jupyter exploratory analysis
-`-- remote_access/                       # SSH automation/configs
-\end{lstlisting}
+\subsection{Prosodic Transfer and Variational Inference}
+Standard Tacotron 2 generates deterministic prosody averaged over the training data. To generate expressive speech, we employ a Variational Autoencoder (VAE) to model a latent prosody space. The core problem is \textit{Posterior Collapse}, an endemic issue in VAEs where the autoregressive decoder becomes overly powerful and ignores the latent variable $z$, causing the KL divergence to vanish ($D_{KL}(q_\phi(z|x) \| p(z)) \to 0$).
 
-\subsection{Directory Roles}
-\begin{itemize}[leftmargin=1.5em]
-    \item \textbf{\pathtt{data/}:} The lifecycle of audio starts in \pathtt{data/raw/} and transitions to \pathtt{data/processed/} via the preprocessing scripts.
-    \item \textbf{\pathtt{scripts/}:} Houses standalone execution scripts. Preprocessing scripts iterate over raw corpora, standardize sample rates, extract initial acoustic features, and write manifest CSVs.
-    \item \textbf{\pathtt{src/models/}:} The core PyTorch implementation. Divided explicitly into \pathtt{tacotron2\_vae} (handling text-to-mel logic) and \pathtt{waveglow} (handling mel-to-audio logic).
-    \item \textbf{\pathtt{src/training/}:} Contains isolated training loops. Tacotron uses a standard iteration-based loop, while WaveGlow implements Distributed Data Parallel (DDP).
-\end{itemize}
+\subsection{Signal Processing Anomalies}
+Neural networks operate on extracted features rather than raw audio. Mel-spectrograms are logarithmically compressed. In traditional TTS pipelines, shorter utterances in a batch are padded with zeros. However, in the Log-Mel domain, zero corresponds to a high-energy acoustic signal. This creates adversarial noise during training, significantly degrading the VAE's ability to extract pure prosody.
 
-\newpage
 % ==========================================
-% SECTION 2: DATA PIPELINE
+% SECTION 2: GLOBAL PIPELINE ARCHITECTURE
 % ==========================================
-\section{Data Pipeline and Preprocessing}
+\section{Global System Pipeline}
 
-The data pipeline bridges the gap between raw datasets and PyTorch \pathtt{DataLoader} iterations. The pipeline consists of two primary phases: off-line preprocessing (\pathtt{scripts/preprocess}) and on-line data loading (\pathtt{src/data}).
+Before delving into the mathematics, it is crucial to visualize the macro-architecture of the system. The pipeline is fundamentally divided into Data Preprocessing, Acoustic Modeling (Tacotron2-VAE), and Neural Vocoding (WaveGlow).
 
-\subsection{Phase 1: Offline Preprocessing}
-The repository provides specialized scripts for different datasets (e.g., \pathtt{preprocess\_libri-Speech-en\_vaeTacotron.py}). 
-
-\textbf{Workflow sequence:}
-\begin{enumerate}
-    \item \textbf{Discovery:} The script recursively glob-searches for \pathtt{*.trans.txt} files.
-    \item \textbf{Text Loading:} Each row matches an utterance ID to a transcription text.
-    \item \textbf{Audio Normalization:} The corresponding audio file is loaded via \pathtt{torchaudio}. It is converted to mono (by averaging channels if necessary) and resampled to the target sampling rate (16000 Hz for EN, 22050 Hz for PT).
-    \item \textbf{Feature Extraction:} A specialized transform computes the 80-bin Mel-spectrogram. For Tacotron2-VAE compatibility, the \pathtt{Tacotron2MelTransform} utilizes \pathtt{librosa.filters.mel} to guarantee parity with the original Tacotron codebase.
-    \item \textbf{Duration Filtering:} Utterances shorter than 0.3s or longer than 10.0s (to prevent OOM errors) are discarded.
-    \item \textbf{Serialization:} The waveform, mel-spectrogram, text, duration, and sampling rate are serialized into a \pathtt{.pt} file.
-    \item \textbf{Manifest Generation:} A \pathtt{mels\_metadata.csv} is generated containing \pathtt{mel\_path, duration, text, utt\_id}.
-\end{enumerate}
-
-\textbf{Preprocessing Hyperparameters (LibriSpeech-EN):}
-\begin{table}[h]
+\begin{figure}[H]
 \centering
-\begin{tabular}{@{}ll@{}}
-\toprule
-\textbf{Parameter} & \textbf{Value} \\ \midrule
-Target Sample Rate & 16000 \\
-Number of Mel Bins & 80 \\
-FFT / Filter Length & 1024 \\
-Window Length & 1024 \\
-Hop Length & 256 \\
-F-Min / F-Max & 0.0 / 8000.0 \\
-Dynamic Range Compression Limit & $1 \times 10^{-5}$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Phase 2: Online Dataset Loading}
-In \pathtt{src/data/loader\_vae\_tacotron/loader\_tacotron.py}, the \pathtt{DatasetLibriSpeechTacotronVAE} class reads the generated \pathtt{mels\_metadata.csv}.
-
-\textbf{Crucial Implementation Detail:}
-Although the offline scripts extract Mel-spectrograms, the \pathtt{loader\_tacotron.py} \textit{ignores} the serialized Mel-spectrogram and re-computes it on the fly during the \pathtt{\_\_getitem\_\_} call. 
-\begin{lstlisting}[language=Python]
-# Excerpt from loader_tacotron.py
-def get_mel(self, audio):
-    audio_norm = audio / MAX_WAV_VALUE
-    audio_norm = audio_norm.unsqueeze(0)
-    audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
-    melspec = self.stft.mel_spectrogram(audio_norm)
-    return torch.squeeze(melspec, 0)
-\end{lstlisting}
-
-\textbf{Online STFT Configuration:} The online STFT relies on \pathtt{TacotronSTFT} defined in \pathtt{layers.py}, configured specifically with \pathtt{filter\_length=800, hop\_length=200, win\_length=800, sampling\_rate=22050}. 
-
-\textbf{Text Normalization:} The text is passed through \pathtt{TextNormalizerEN}, which utilizes Regex to strip punctuation and the \pathtt{num2words} library to spell out integer values before tokenization.
-
-\textbf{Emotion Tensor Injection:} An emotion tensor of shape \pathtt{[4]} is initialized and attached to every batch. By default, index 0 is set to 1.0 (Neutral), acting as a placeholder for later fine-tuning on affective datasets.
-
-\newpage
-% ==========================================
-% SECTION 3: ARCHITECTURE (General to Specific)
-% ==========================================
-\section{Model Architectures}
-
-The repository generates audio via a two-stage cascaded pipeline. The diagrams below have been structured to ensure readability and prevent module overlap.
-
-\subsection{5.1 Complete System Overview}
-
-Text transcripts are converted to character sequences and fed into \textbf{Tacotron2-VAE}. Simultaneously, the target audio's mel-spectrogram is ingested by the VAE module to extract a latent prosody embedding. Tacotron predicts a highly expressive Mel-spectrogram, which is subsequently inverted into a 1D waveform by \textbf{WaveGlow}.
-
-\begin{center}
 \begin{tikzpicture}[
   block/.style={draw, rounded corners, thick, align=center, minimum height=1.2cm, fill=blue!5, text width=3cm},
   input/.style={draw, rectangle, thick, align=center, minimum height=1.2cm, fill=orange!10, text width=2.8cm},
@@ -195,7 +104,7 @@ Text transcripts are converted to character sequences and fed into \textbf{Tacot
 % First Row
 \node[input] (text) at (0, 0) {Input Text\\(Tokens)};
 \node[block, fill=green!5, draw=green!60!black] (taco) at (5, 0) {Tacotron2-VAE\\(Acoustic Model)};
-\node[input] (refmel) at (5, 2.5) {Reference Mel\\(Prosody)};
+\node[input] (refmel) at (5, 2.5) {Reference Mel\\(Prosody Target)};
 
 % Second Row (U-Shape flow)
 \node[block] (predmel) at (10, 0) {Predicted\\Mel-Spectrogram};
@@ -209,74 +118,63 @@ Text transcripts are converted to character sequences and fed into \textbf{Tacot
 \draw[arrow] (waveglow) -- (audio);
 
 \end{tikzpicture}
-\end{center}
+\caption{Global End-to-End Pipeline representing the flow from Text to Audio.}
+\end{figure}
 
-\subsection{5.2 Tacotron-VAE Module Overview}
+% ==========================================
+% SECTION 3: THEORETICAL FOUNDATION
+% ==========================================
+\section{Mathematical and Statistical Foundations}
 
-Defined in \pathtt{src/models/tacotron2\_vae/model.py}, the model is an autoregressive encoder-decoder.
+\subsection{The Acoustic Domain: STFT and Mel-Spectrograms}
+To model audio, we approximate the human auditory system. The raw waveform $x(t)$ is highly multidimensional. The STFT is defined as:
+\begin{equation}
+X(m, k) = \sum_{n=0}^{N-1} x(n + mH) \cdot w(n) \cdot e^{-j \frac{2\pi}{N} kn}
+\end{equation}
+where $w(n)$ is the Hann window, $H$ is the hop length, and $N$ is the FFT size. 
+The Mel scale mimics the non-linear human perception of pitch. We project the power spectrum onto the Mel basis $M$:
+\begin{equation}
+S_{mel} = M |X(m, k)|
+\end{equation}
+Finally, we apply Dynamic Range Compression. Because human loudness perception is logarithmic, we compress the magnitudes:
+\begin{equation}
+S_{log} = \log\left( \max(S_{mel}, \epsilon) \right)
+\end{equation}
+where $\epsilon = 10^{-5}$ is the clipping threshold to prevent $\log(0)$.
 
-\begin{center}
-\begin{tikzpicture}[
-  node distance=1.0cm and 1.4cm,
-  block/.style={draw, rectangle, rounded corners, thick, align=center, minimum height=1cm, fill=blue!5, text width=3.0cm},
-  input/.style={draw, rectangle, thick, align=center, minimum height=1cm, fill=orange!10, text width=2.8cm},
-  merge/.style={draw, circle, thick, minimum size=10mm, fill=gray!10},
-  arrow/.style={-{Stealth[length=3mm]}, thick}
-]
+\subsection{Variational Inference and the ELBO}
+The goal of the VAE is to maximize the marginal likelihood of the data $p(x)$. Since the integral $p(x) = \int p_\theta(x|z)p(z)dz$ is intractable, we introduce a recognition network $q_\phi(z|x)$ to approximate the true posterior. 
+We optimize the Evidence Lower Bound (ELBO):
+\begin{equation}
+\log p(x) \geq \mathbb{E}_{q_\phi(z|x)}[\log p_\theta(x|z)] - D_{KL}(q_\phi(z|x) \| p(z))
+\end{equation}
+The first term is the \textbf{Reconstruction Loss} (handled by the decoder), and the second is the \textbf{Kullback-Leibler Divergence}, which forces the latent distribution to follow the prior $p(z) \sim \mathcal{N}(0, I)$.
 
-% Upper path
-\node[input] (text) at (0,0) {Input Text};
-\node[block] (encoder) at (4.2,0) {Text Encoder};
+% ==========================================
+% SECTION 4: ARCHITECTURE DEEP DIVE (LAYER-BY-LAYER DIAGRAMS)
+% ==========================================
+\section{Proposed Architecture: Layer-by-Layer Deep Dive}
 
-% Lower path
-\node[input] (ref) at (0,-2.8) {Target Mel};
-\node[block, fill=purple!5, draw=purple] (vae) at (4.2,-2.8) {VAE Module\\(Prosody)};
+We dissect the Tacotron2-VAE architecture into its fundamental sub-modules, presenting both the theoretical justification and the exact diagrammatic flow of tensors.
 
-% Merge and downstream
-\node[merge] (add) at (8.2,-1.4) {$+$};
-\node[block] (attn) at (12.0,-1.4) {Location-Sensitive\\Attention};
-\node[block] (decoder) at (12.0,-4.3) {Autoregressive\\Decoder};
-\node[block] (postnet) at (8.2,-4.3) {PostNet};
-\node[input] (out) at (4.2,-4.3) {Final Mel};
+\subsection{The Text Encoder}
+\textbf{Objective:} Map discrete phonetic IDs into a continuous linguistic context space.
+\\
+\textbf{Theory:} The input sequence $x_{1:T}$ is embedded into a 512-dimensional continuous space. The embeddings are passed through a bank of 3 Convolutional layers (kernel size 5). Convolutions capture $n$-gram local phonetic contexts (e.g., coarticulation effects where the sound of 'p' is modified by the following 'a'). This is followed by a Bidirectional LSTM to capture long-range semantic intonation.
 
-% Connections
-\draw[arrow] (text) -- (encoder);
-\draw[arrow] (encoder.east) -- (add.north west);
-\draw[arrow] (ref) -- (vae);
-\draw[arrow] (vae.east) -- node[pos=0.52, below] {Style Embed} (add.south west);
-\draw[arrow] (add) -- (attn);
-\draw[arrow] (attn) -- (decoder);
-\draw[arrow] (decoder.west) -- node[pos=0.5, above] {Mel} (postnet.east);
-\draw[arrow] (postnet) -- (out);
-
-% Teacher forcing path
-\draw[
-  arrow,
-  dashed,
-  rounded corners=8pt
-]
-(ref.south) |- (-1.2,-5.7) -| node[pos=0.72, below] {Teacher Forcing (Training)} (decoder.south);
-
-\end{tikzpicture}
-\end{center}
-
-\newpage
-\subsection{5.3 Text Encoder Breakdown}
-
-The Text Encoder transforms character sequences into robust, context-aware embeddings.
-
-\begin{center}
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}[
   node distance=1.2cm,
-  block/.style={draw, rectangle, thick, align=center, minimum height=0.8cm, fill=cyan!5, text width=5cm},
+  block/.style={draw, rectangle, thick, align=center, minimum height=0.8cm, fill=cyan!5, text width=6cm},
   arrow/.style={-{Stealth[length=2mm]}, thick}
 ]
 
-\node[block, fill=orange!10] (in) {Input Tokens [B, T]};
-\node[block, below=of in] (emb) {Embedding Layer\\(Dim: 512)};
-\node[block, below=of emb] (conv1) {ConvNorm 1D (k=5, d=512)\\+ BatchNorm1d + ReLU + Dropout};
-\node[block, below=of conv1] (conv2) {ConvNorm 1D (k=5, d=512)\\+ BatchNorm1d + ReLU + Dropout};
-\node[block, below=of conv2] (conv3) {ConvNorm 1D (k=5, d=512)\\+ BatchNorm1d + ReLU + Dropout};
+\node[block, fill=orange!10] (in) {Phonetic Input Tokens \texttt{[B, T]}};
+\node[block, below=of in] (emb) {Embedding Layer\\(Vocab: 198 $\to$ Dim: 512)};
+\node[block, below=of emb] (conv1) {ConvNorm 1D (k=5, d=512)\\+ BatchNorm1d + ReLU + Dropout(0.5)};
+\node[block, below=of conv1] (conv2) {ConvNorm 1D (k=5, d=512)\\+ BatchNorm1d + ReLU + Dropout(0.5)};
+\node[block, below=of conv2] (conv3) {ConvNorm 1D (k=5, d=512)\\+ BatchNorm1d + ReLU + Dropout(0.5)};
 \node[block, below=of conv3] (lstm) {Bidirectional LSTM\\(Hidden: 256/dir $\to$ 512)};
 \node[block, fill=green!10, below=of lstm] (out) {Text Embeddings $h_{text}$\\ \texttt{[B, T, 512]}};
 
@@ -288,17 +186,21 @@ The Text Encoder transforms character sequences into robust, context-aware embed
 \draw[arrow] (lstm) -- (out);
 
 \end{tikzpicture}
-\end{center}
+\caption{The Text Encoder architecture processing sequences of phonetic IDs.}
+\end{figure}
 
-\subsection{5.4 VAE (Prosody) Breakdown}
+\subsection{The VAE Reference Encoder (Prosody Extraction)}
+\textbf{Objective:} Extract a fixed-length prosodic style vector from the target mel-spectrogram.
+\\
+\textbf{Theory:} A 2D Convolutional stack (including CoordConv layers to retain spatial awareness of frequency bins) compresses the mel-spectrogram $S_{log} \in \mathbb{R}^{80 \times T_{mel}}$ into a sequence of features. A GRU processes this sequence and takes the final hidden state. 
+This hidden state is projected via two linear layers into $\mu$ and $\log(\sigma^2)$. Using the Reparameterization Trick, $z = \mu + \sigma \odot \epsilon$, we allow gradients to backpropagate. The latent $z$ is then projected to a 512-dimensional style embedding $E_{style}$.
 
-Defined in \pathtt{modules.py}. \textbf{Crucial Distinction:} The implementation defines a class named \pathtt{VAE\_GST}, but it lacks the Multi-Head Attention token bank seen in standard GSTs. Instead, it is a pure Variational Autoencoder that maps the reference mel to a latent distribution, samples $z$, and projects it linearly to a style embedding.
-
-\begin{center}
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}[
   node distance=1.15cm,
-  block/.style={draw, rectangle, thick, align=center, minimum height=0.85cm, fill=purple!5, text width=4.8cm},
-  small/.style={draw, rectangle, thick, align=center, minimum height=0.85cm, fill=purple!5, text width=2.6cm},
+  block/.style={draw, rectangle, thick, align=center, minimum height=0.85cm, fill=purple!5, text width=5.5cm},
+  small/.style={draw, rectangle, thick, align=center, minimum height=0.85cm, fill=purple!15, text width=2.6cm},
   arrow/.style={-{Stealth[length=2mm]}, thick}
 ]
 
@@ -307,10 +209,10 @@ Defined in \pathtt{modules.py}. \textbf{Crucial Distinction:} The implementation
 \node[block, below=of coord] (convs) {5x Conv2d Layers\\(k=3, s=2, filters $\to$ 128)};
 \node[block, below=of convs] (gru) {GRU (Hidden: 256)};
 
-\node[small, below left=0.7cm and 0.9cm of gru] (mu) {$\mu$\\(Dim: 32)};
-\node[small, below right=0.7cm and 0.9cm of gru] (var) {$\log \sigma^2$\\(Dim: 32)};
+\node[small, below left=0.7cm and 0.9cm of gru] (mu) {$\mu$ (Dim: 32)};
+\node[small, below right=0.7cm and 0.9cm of gru] (var) {$\log \sigma^2$ (Dim: 32)};
 
-\node[block, shape=ellipse, minimum height=0.9cm, text width=2.7cm, fill=yellow!20, below=1.3cm of gru] (z) {Sample $z$};
+\node[block, shape=ellipse, minimum height=0.9cm, text width=3cm, fill=yellow!20, below=1.3cm of gru] (z) {Sample $z \sim \mathcal{N}(\mu, \sigma^2)$};
 \node[block, below=of z] (proj) {Linear Projection\\(Dim: 512)};
 \node[block, fill=green!10, below=of proj] (out) {Style Embedding $E_{style}$\\\texttt{[B, 512]}};
 
@@ -325,48 +227,16 @@ Defined in \pathtt{modules.py}. \textbf{Crucial Distinction:} The implementation
 \draw[arrow] (proj) -- (out);
 
 \end{tikzpicture}
-\end{center}
-\textit{Integration Note:} $E_{style}$ is unsqueezed and added to the Text Embeddings: $h_{enc} = h_{text} + E_{style}$.
+\caption{The Variational Autoencoder (VAE) Module for Prosody Extraction.}
+\end{figure}
 
-\newpage
-\subsection{5.5 Location-Sensitive Attention Breakdown}
+\subsection{Autoregressive Decoder and Attention}
+\textbf{Objective:} Predict the acoustic frames $y_t$ given the context vector $c_t$ and previous frame $y_{t-1}$.
+\\
+\textbf{Theory:} The Prenet acts as an Information Bottleneck via Bayesian approximation (Dropout). Location-sensitive attention explicitly penalizes the network for focusing on phonemes it has already traversed using cumulative attention weights.
 
-The Attention module forces monotonic alignment by convolving over previous attention distributions.
-
-\begin{center}
-\begin{tikzpicture}[
-  node distance=1.2cm and 1cm,
-  block/.style={draw, rectangle, thick, align=center, minimum height=0.8cm, fill=yellow!5, text width=3.5cm},
-  arrow/.style={-{Stealth[length=2mm]}, thick}
-]
-
-\node[block, fill=orange!10] (hidden) {Attn Hidden State};
-\node[block, fill=orange!10, right=of hidden] (mem) {Encoder Output};
-\node[block, fill=orange!10, right=of mem] (cum) {Cumulative Weights};
-
-\node[block, below=of hidden] (q) {Query Layer\\Linear(1024 $\to$ 128)};
-\node[block, below=of mem] (m) {Memory Layer\\Linear(512 $\to$ 128)};
-\node[block, below=of cum] (loc) {Location Layer\\Conv1d(k=31) $\to$ Linear};
-
-\node[block, shape=circle, below=of m, inner sep=0.1cm, text width=0.5cm] (add) {$+$};
-\node[block, below=of add] (tanh) {$\tanh() \to v \to$ Softmax};
-\node[block, fill=green!10, below=of tanh] (ctx) {Context Vector\\($c_t$)};
-
-\draw[arrow] (hidden) -- (q);
-\draw[arrow] (mem) -- (m);
-\draw[arrow] (cum) -- (loc);
-\draw[arrow] (q.south) |- (add.west);
-\draw[arrow] (m.south) -- (add.north);
-\draw[arrow] (loc.south) |- (add.east);
-\draw[arrow] (add) -- (tanh);
-\draw[arrow] (tanh) -- (ctx);
-
-\end{tikzpicture}
-\end{center}
-
-\subsection{5.6 Autoregressive Decoder Breakdown}
-
-\begin{center}
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}[
   node distance=1cm and 1.5cm,
   block/.style={draw, rectangle, thick, align=center, minimum height=0.7cm, fill=red!5, text width=4.5cm},
@@ -374,10 +244,10 @@ The Attention module forces monotonic alignment by convolving over previous atte
 ]
 
 \node[block, fill=orange!10] (in) {Prev Mel Frame ($t-1$)};
-\node[block, below=of in] (prenet) {Prenet\\(2x Linear 256 + ReLU + Drop)};
+\node[block, below=of in] (prenet) {Prenet\\(2x Linear 256 + ReLU + Dropout)};
 \node[block, below=of prenet] (concat1) {Concat w/ Context $c_{t-1}$};
 \node[block, below=of concat1] (attrnn) {Attention RNN\\(LSTMCell 1024)};
-\node[block, right=of attrnn, text width=3cm] (attn) {Compute Attention\\(From 5.5)};
+\node[block, right=of attrnn, text width=3cm, fill=yellow!10] (attn) {Location-Sensitive\\Attention Layer};
 \node[block, below=of attrnn] (concat2) {Concat w/ Context $c_t$};
 \node[block, below=of concat2] (decrnn) {Decoder RNN\\(LSTMCell 1024)};
 \node[block, below=of decrnn] (proj) {Linear Projections};
@@ -398,23 +268,24 @@ The Attention module forces monotonic alignment by convolving over previous atte
 \draw[arrow] (proj.south) -- +(0,-0.3) -| (gate.north);
 
 \end{tikzpicture}
-\end{center}
+\caption{The Autoregressive Decoder Block.}
+\end{figure}
 
-\subsection{5.7 PostNet Breakdown}
+\subsection{The PostNet}
+\textbf{Theory:} The PostNet (a stack of 5 Conv1D layers) predicts a residual $\Delta y_{1:T}$. The final output is $y + \Delta y$. This corrects spectral smearing caused by the RNN.
 
-The PostNet operates over the entire predicted sequence to smooth out artifacts.
-
-\begin{center}
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}[
   node distance=1.2cm,
-  block/.style={draw, rectangle, thick, align=center, minimum height=0.8cm, fill=gray!10, text width=5cm},
+  block/.style={draw, rectangle, thick, align=center, minimum height=0.8cm, fill=gray!10, text width=5.5cm},
   arrow/.style={-{Stealth[length=2mm]}, thick}
 ]
 
 \node[block, fill=orange!10] (in) {Predicted Mel Sequence\\\texttt{[B, 80, T]}};
 \node[block, below=of in] (conv1) {ConvNorm 1D (k=5, d=512)\\+ BatchNorm1d + Tanh + Dropout};
 \node[block, below=of conv1] (conv2) {3x ConvNorm 1D (k=5, d=512)\\+ BatchNorm1d + Tanh + Dropout};
-\node[block, below=of conv2] (conv3) {ConvNorm 1D (k=5, d=80)\\+ BatchNorm1d + Dropout (Linear)};
+\node[block, below=of conv2] (conv3) {ConvNorm 1D (k=5, d=80)\\+ BatchNorm1d + Dropout};
 \node[block, shape=circle, inner sep=0cm, text width=0.6cm, right=1.5cm of conv3] (add) {$+$};
 \node[block, fill=green!10, below=of add] (out) {Final Refined Mel};
 
@@ -422,48 +293,105 @@ The PostNet operates over the entire predicted sequence to smooth out artifacts.
 \draw[arrow] (conv1) -- (conv2);
 \draw[arrow] (conv2) -- (conv3);
 \draw[arrow] (conv3) -- (add);
-\draw[arrow, rounded corners] (in.east) -- +(3.5,0) |- (add.north);
+\draw[arrow, rounded corners] (in.east) -- +(4.0,0) |- (add.north);
 \draw[arrow] (add) -- (out);
 
 \end{tikzpicture}
-\end{center}
+\caption{The Residual PostNet.}
+\end{figure}
 
-\newpage
-\subsection{5.8 WaveGlow Vocoder Overview}
 
-WaveGlow (\pathtt{src/models/waveglow/glow.py}) maps a Gaussian prior into high-fidelity audio conditioned on the synthesized Mel-spectrogram.
+% ==========================================
+% SECTION 5: DOMAIN ADAPTATION CHALLENGES & SOLUTIONS
+% ==========================================
+\section{Challenges in PT-BR Adaptation and Solutions}
 
-\begin{center}
+We now document the specific interventions required to adapt the English codebase to Portuguese, framing the problem before presenting the mathematical and structural solution.
+
+\subsection{Intervention 1: The Phonetic Revolution (Data Processing)}
+\textbf{The Problem:} 
+The original repository relied on character-level normalization (\pathtt{TextNormalizerEN}). The English normalizer coerced Portuguese text into English structures (e.g., "1990" to "one thousand nine hundred..."). Furthermore, Portuguese characters were dynamically mapped to IDs during runtime, creating an alphabet of 162 symbols. However, the downloaded NVIDIA checkpoint was trained strictly on 148 English symbols (characters + ARPAbet phonemes). Loading a 162-symbol space into a 148-symbol pretrained matrix caused a catastrophic misalignment: acoustic embeddings for "A" were assigned to random punctuation, destroying the model's linguistic comprehension.
+
+\textbf{The Solution:}
+We engineered a robust \pathtt{gruut}-based G2P pipeline. We hardcoded the 148 original NVIDIA symbols to preserve the exact weight matrix alignment. Then, we extracted 50 unique International Phonetic Alphabet (IPA) tokens specific to Brazilian Portuguese (e.g., \pathtt{@pt\_ã}, \pathtt{@pt\_ʎ}) and appended them. 
+
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}[
-  node distance=1cm and 1.2cm,
-  block/.style={draw, rectangle, thick, align=center, minimum height=1cm, fill=pink!20, text width=2.8cm},
+  block/.style={draw, rounded corners, thick, align=center, minimum height=1cm, fill=cyan!5, text width=3.5cm},
   arrow/.style={-{Stealth[length=3mm]}, thick}
 ]
 
-\node[block, fill=orange!10] (z) at (0,0) {Prior $z \sim \mathcal{N}(0, I)$};
-\node[block] (flow1) at (4,0) {Flow Step 1};
-\node[block, draw=none, fill=none] (dots) at (8,0) {\dots};
-\node[block] (flowN) at (12,0) {Flow Step 12};
-\node[block, fill=green!10] (audio) at (12,-2.5) {Audio Output};
+\node[block, fill=orange!10] (raw) at (0,0) {Raw Text\\ "A Dra. ganhou R\$ 2"};
+\node[block] (norm) at (5,0) {Normalizer\\ "a doutora ganhou dois reais"};
+\node[block] (g2p) at (10,0) {Gruut G2P\\ \pathtt{@pt\_a @pt\_d ...}};
+\node[block, fill=green!10] (seq) at (10,-2) {Sequence IDs\\ \pathtt{[165, 180, ...]}};
 
-\node[block, fill=cyan!10, text width=4cm] (cond) at (8,-2.5) {Upsampled Mel Conditioning};
-
-\draw[arrow] (z) -- (flow1);
-\draw[arrow] (flow1) -- (dots);
-\draw[arrow] (dots) -- (flowN);
-\draw[arrow] (flowN) -- (audio);
-
-\draw[arrow] (cond.west) -| (flow1.south);
-\draw[arrow] (cond.east) -| (flowN.south);
+\draw[arrow] (raw) -- (norm);
+\draw[arrow] (norm) -- (g2p);
+\draw[arrow] (g2p) -- (seq);
 
 \end{tikzpicture}
-\end{center}
+\caption{The newly implemented Phonetic G2P Data Pipeline.}
+\end{figure}
 
-\subsection{5.9 WaveGlow Flow Step Breakdown}
+The final alphabet length became \textbf{198 symbols}.
 
-Each flow step is invertible. It consists of an Invertible $1 \times 1$ Convolution followed by a WaveNet-based Affine Coupling Layer.
+\subsection{Intervention 2: Statistical Weight Initialization}
+\textbf{The Problem:}
+When expanding the embedding matrix from $[148, 512]$ to $[198, 512]$, PyTorch initializes the new rows representing the PT-BR phonemes using the default normal distribution: $\mathcal{W}_{new} \sim \mathcal{N}(0, 1.0)$. 
+However, statistical profiling of the pretrained NVIDIA Tacotron 2 embeddings revealed a profoundly different distribution:
+\begin{align}
+\mu_{\text{nvidia}} &\approx 0.000025 \\
+\sigma_{\text{nvidia}} &\approx 0.0347
+\end{align}
+If the new Portuguese phonemes were initialized with a standard deviation of $1.0$, their forward activations would be nearly 30 times larger than the English counterparts. This massive variance would propagate through the ConvNorm and LSTM layers, leading to unbounded gradients and a complete collapse of the attention matrix within the first epoch.
 
-\begin{center}
+\textbf{The Solution:}
+In \pathtt{src/models/tacotron2\_vae/model.py}, we implemented a statistical intercept during the state dictionary loading:
+\begin{lstlisting}[language=Python]
+pt_mean = pretrained_tensor.mean()
+pt_std = pretrained_tensor.std()
+
+# Initialize only the new PT-BR phonemes with the empirical distribution
+torch.nn.init.normal_(
+    model_sd[vae_key][n_overlap:], 
+    mean=pt_mean, 
+    std=pt_std
+)
+\end{lstlisting}
+This mathematical precision ensures that novel phonemes are injected into the latent space with the exact scale and variance expected by the subsequent pretrained layers, guaranteeing a smooth optimization trajectory.
+
+\subsection{Intervention 3: The Log-Mel Silence Padding Bug}
+\textbf{The Problem:}
+In standard recurrent networks, sequences in a batch are padded with zeros to match the longest sequence. The legacy collator (\pathtt{TextMelCollate}) executed \pathtt{mel\_padded.zero\_()}.
+However, recalling our DSP theory (Section 3.1), the dynamic range compression applies a logarithm. True acoustic silence (a magnitude near zero) is floored at $\epsilon = 10^{-5}$. 
+Therefore, the true representation of silence in the Log-Mel space is:
+\begin{equation}
+S_{silence} = \log(10^{-5}) \approx -11.5129
+\end{equation}
+By padding with $0.0$, the matrix was injecting a magnitude of $e^{0} = 1.0$, which corresponds to a deafening, broadband noise. The VAE Reference Encoder, attempting to compress the entire spectrogram into a prosodic embedding $z$, was forced to encode this adversarial "padding noise" as a valid emotional style for shorter utterances, destroying its capacity to isolate true prosody.
+
+\textbf{The Solution:}
+We corrected the mathematical logic in the collation process:
+\begin{lstlisting}[language=Python]
+mel_padded = torch.FloatTensor(len(batch), num_mels, max_target_len)
+mel_padded.fill_(-11.5129)  # Mathematically rigorous silence
+\end{lstlisting}
+This aligns the unmasked loss optimization, allowing the autoregressive decoder to gracefully learn to predict true silence after emitting the stop token.
+
+% ==========================================
+% SECTION 6: WAVEGLOW NEURAL VOCODER
+% ==========================================
+\section{WaveGlow: Neural Vocoding via Normalizing Flows}
+
+WaveGlow transforms the predicted Mel-spectrograms into high-fidelity audio waveforms without the artifacts common in Griffin-Lim phase reconstruction.
+
+\subsection{Normalizing Flows and the Invertible Architecture}
+\textbf{Theory:} WaveGlow learns a bijective mapping between a simple Gaussian prior $z \sim \mathcal{N}(0, I)$ and the complex audio distribution $x$. Because the mapping is invertible, we maximize the exact log-likelihood using the change of variables theorem.
+
+\begin{figure}[H]
+\centering
 \begin{tikzpicture}[
   node distance=1.2cm and 2cm,
   block/.style={draw, rectangle, thick, align=center, minimum height=0.8cm, fill=pink!10, text width=5cm},
@@ -492,158 +420,36 @@ Each flow step is invertible. It consists of an Invertible $1 \times 1$ Convolut
 \draw[arrow] (concat) -- (out);
 
 \end{tikzpicture}
-\end{center}
+\caption{A single Flow Step in WaveGlow, demonstrating the Affine Coupling Layer.}
+\end{figure}
 
-\subsection{5.10 Layer-by-Layer Dimension Summary}
-
-This section outlines tensor shapes explicitly inferable from \pathtt{hparams.py} assuming a Batch Size of $B$ and maximum text length $T_{text}$.
-
-\begin{table}[h]
-\centering
-\begin{tabular}{@{}llcc@{}}
-\toprule
-\textbf{Module} & \textbf{Submodule} & \textbf{Input Shape} & \textbf{Output Shape} \\ \midrule
-\textbf{Text Encoder} & Embedding & $[B, T_{text}]$ & $[B, T_{text}, 512]$ \\
-& ConvNorm Stack & $[B, 512, T_{text}]$ & $[B, 512, T_{text}]$ \\
-& Bi-LSTM & $[B, T_{text}, 512]$ & $[B, T_{text}, 512]$ \\ \midrule
-\textbf{VAE (Prosody)} & Reference Encoder & $[B, 80, T_{mel}]$ & $[B, 256]$ \\
-& fc1 ($\mu$), fc2 ($\log \sigma^2$) & $[B, 256]$ & $[B, 32]$ \\
-& fc3 (Style Embed) & $[B, 32]$ & $[B, 512]$ \\ \midrule
-\textbf{Decoder} & Prenet & $[B, 80]$ & $[B, 256]$ \\
-& Attention Context & - & $[B, 512]$ \\
-& Linear Mel Output & $[B, 1024 + 512]$ & $[B, 80]$ \\ \midrule
-\textbf{WaveGlow} & Upsampler (ConvTrans) & $[B, 80, T_{mel}]$ & $[B, 80, T_{audio}]$ \\
-& Output Audio & $[B, T_{audio}, 1]$ & $[B, T_{audio}]$ \\ \bottomrule
-\end{tabular}
-\end{table}
-
-\newpage
 % ==========================================
-% SECTION 6: LOSS FUNCTIONS
+% SECTION 7: LOSS OPTIMIZATION AND TRAINING DYNAMICS
 % ==========================================
-\section{Loss Functions}
+\section{Loss Optimization and Preventing Posterior Collapse}
 
-The models are trained independently using custom PyTorch criteria defined directly in their respective submodules.
+\subsection{Unmasked MSE and Stop Token Prediction}
+The acoustic loss is intentionally \textbf{unmasked}:
+\begin{equation}
+\mathcal{L}_{\text{Recon}} = \frac{1}{N} \sum (y - \hat{y}_{dec})^2 + \frac{1}{N} \sum (y - \hat{y}_{postnet})^2
+\end{equation}
+By not masking the padding regions, we force the network to output $-11.5129$ after the sequence ends. This regularizes the decoder, preventing infinite generation loops. The gate loss is optimized via Binary Cross-Entropy (BCE).
 
-\subsection{Tacotron2-VAE Losses (\pathtt{losses.py})}
+\subsection{KL Annealing and Free Bits}
+To combat the \textit{Posterior Collapse} inherent in VAEs, we employ two advanced strategies:
+\begin{enumerate}
+    \item \textbf{KL Annealing:} The weight of the KL divergence, $w_{KL}$, is scheduled using a logistic growth curve. Initially, $w_{KL} \approx 0$, allowing the encoder to map the unregularized variance. As training progresses, $w_{KL}$ increases to its upper bound, gradually forcing the latent space into a Gaussian prior.
+    \item \textbf{Free Bits:} We apply a hinge loss to the KL divergence for each latent dimension:
+    \begin{equation}
+    \mathcal{L}_{\text{KL\_dim}} = \max\left( \lambda_{free}, D_{KL}(q(z_i|x) \| p(z_i)) \right)
+    \end{equation}
+    This guarantees that every dimension of $z$ retains at least $\lambda_{free}$ nats of information, mathematically preventing the encoder from shutting down completely.
+\end{enumerate}
 
-The \pathtt{Tacotron2LossVAE} class evaluates three distinct objectives.
-
-\subsubsection{1. Reconstruction Loss ($\mathcal{L}_{\text{Recon}}$)}
-Mean Squared Error is computed both before and after the PostNet to ensure the recurrent network learns the gross spectral envelope while the PostNet refines the residual details.
-\[
-\mathcal{L}_{\text{Recon}} = \| \text{Mel}_{\text{target}} - \text{Mel}_{\text{decoder}} \|_2^2 + \| \text{Mel}_{\text{target}} - \text{Mel}_{\text{postnet}} \|_2^2
-\]
-
-\subsubsection{2. Gate Loss ($\mathcal{L}_{\text{Gate}}$)}
-Binary Cross Entropy with Logits penalizes incorrect predictions of the stop token.
-\[
-\mathcal{L}_{\text{Gate}} = \text{BCEWithLogits}(gate_{\text{predicted}}, gate_{\text{target}})
-\]
-
-\subsubsection{3. Kullback-Leibler Divergence ($\mathcal{L}_{\text{KL}}$)}
-Regularizes the latent space $z$ to approximate a standard normal distribution $\mathcal{N}(0, I)$.
-\[
-\mathcal{L}_{\text{KL}} = -0.5 \sum_{i} \left( 1 + \log(\sigma_i^2) - \mu_i^2 - \sigma_i^2 \right)
-\]
-
-\subsubsection{4. KL Annealing Strategy}
-To prevent posterior collapse, a dynamic weight $w_{KL}$ scales the KL loss. The repository allows \texttt{logistic}, \texttt{linear}, or \texttt{constant} scheduling. The default is logistic:
-\[
-w_{KL}(step) = \frac{\text{upper}}{\text{upper} + \exp(-k \times (step - x_0))}
-\]
-Where $\text{upper}=0.2$, $k=0.0025$, and $x_0=10000$.
-
-\textbf{Total Tacotron Objective:}
-\[
-\mathcal{L}_{\text{Tacotron}} = \mathcal{L}_{\text{Recon}} + \mathcal{L}_{\text{Gate}} + w_{KL} \cdot \mathcal{L}_{\text{KL}}
-\]
-
-\subsection{WaveGlow Losses (\pathtt{glow.py})}
-
-WaveGlow is trained to maximize the exact log-likelihood of the data. Because it uses normalizing flows, the objective relies on the change of variables theorem. The loss is effectively the Negative Log-Likelihood (NLL).
-
-The \pathtt{WaveGlowLoss} class computes:
-\[
-\mathcal{L}_{\text{WaveGlow}} = \frac{1}{B \cdot C \cdot T} \left( \sum_{i} \frac{z_i^2}{2\sigma^2} - \sum \log s - \sum \log |\det W| \right)
-\]
-Where:
-\begin{itemize}[leftmargin=1.5em]
-    \item $z$ is the latent representation mapped back to the prior.
-    \item $\sigma$ regulates the variance penalty (default $1.0$).
-    \item $\log s$ is the sum of scale logs generated by the affine coupling layers.
-    \item $\log |\det W|$ is the log determinant of the invertible $1 \times 1$ convolutions.
-    \item Normalization relies on Batch size ($B$), Channels ($C$), and Time length ($T$).
+\subsection{Hyperparameter Justification}
+\begin{itemize}
+    \item \textbf{Learning Rate ($10^{-5}$):} Standard training utilizes $10^{-3}$. Since we are fine-tuning a highly converged NVIDIA backbone, a large learning rate would destroy the delicate attention weights. $10^{-5}$ allows the gradient to optimize the new PT-BR phoneme embeddings without catastrophic forgetting.
+    \item \textbf{Gradient Clipping ($1.0$):} Exploding gradients are mathematically proven to occur in deep LSTMs due to the repeated multiplication of the weight matrices over time $T$. Clipping the $L_2$ norm of the gradients to $1.0$ guarantees Lipschitz continuity during optimization.
 \end{itemize}
-
-\newpage
-% ==========================================
-% SECTION 7: TRAINING PIPELINE
-% ==========================================
-\section{Training Pipeline}
-
-Training is orchestrated through execution scripts within \pathtt{src/training/}.
-
-\subsection{Tacotron2-VAE Training}
-The training entrypoint is \pathtt{src/training/training-tacotron2-vae/train.py}.
-\begin{itemize}[leftmargin=1.5em]
-    \item \textbf{Setup:} Reads the \texttt{mels\_metadata.csv} manifest, builds character symbols, and instantiates \pathtt{Tacotron2VAEHparams}.
-    \item \textbf{DataLoaders:} Instantiates \pathtt{DatasetLibriSpeechTacotronVAE} and uses \pathtt{TextMelCollate} to pad batches dynamically. Note that audio waveforms are loaded and converted to Mels iteratively during fetching.
-    \item \textbf{Optimizer:} Standard PyTorch \pathtt{Adam} optimizer.
-    \item \textbf{Loop:} Operates over fixed \pathtt{epochs}. Gradient clipping is applied (\pathtt{thresh=1.0}). Checkpoints are saved every \pathtt{iters\_per\_checkpoint} interval.
-\end{itemize}
-
-\textbf{Execution Example:}
-\begin{lstlisting}[language=bash]
-python src/training/training-tacotron2-vae/train.py \
-    --epochs 300 \
-    --batch-size 32 \
-    --learning-rate 1e-3 \
-    --artifacts-dir data/processed/libriSpeech-en-tacotron-vae \
-    --experiment-name v1_tacotron
-\end{lstlisting}
-
-\subsection{WaveGlow Training}
-The training entrypoint is \pathtt{src/training/training-waveglow/train.py}.
-\begin{itemize}[leftmargin=1.5em]
-    \item \textbf{Setup:} Parses a \texttt{config.json} containing \texttt{data\_config}, \texttt{dist\_config}, and \texttt{waveglow\_config}.
-    \item \textbf{Distributed Training:} Heavily leverages PyTorch Distributed Data Parallel (DDP). Initializes process groups across available GPUs.
-    \item \textbf{Mixed Precision:} Utilizes NVIDIA Apex (\pathtt{amp.initialize}) with \texttt{O1} optimization to drastically reduce VRAM overhead.
-    \item \textbf{Loop:} Reads precomputed mel-spectrograms from disks, passes them through the reverse flow, computes the NLL loss, and applies \pathtt{reduce\_tensor} across GPUs.
-\end{itemize}
-
-\textbf{Execution Example:}
-\begin{lstlisting}[language=bash]
-python -m torch.distributed.launch --nproc_per_node=2 \
-    src/training/training-waveglow/train.py \
-    -c config.json \
-    --checkpoints_dir experiments/waveglow/checkpoints
-\end{lstlisting}
-
-% ==========================================
-% SECTION 8: CONFIGURATIONS & HYPERPARAMETERS
-% ==========================================
-\section{Hyperparameters and Configurations}
-
-The following values are defined definitively inside \pathtt{hparams.py}.
-
-\begin{table}[h]
-\centering
-\caption{Tacotron2-VAE Global Configuration}
-\begin{tabular}{@{}ll@{}}
-\toprule
-\textbf{Category} & \textbf{Hyperparameters} \\ \midrule
-\textbf{Optimization} & Adam ($\text{lr}=1 \times 10^{-3}$, weight\_decay=$1 \times 10^{-6}$, grad\_clip=$1.0$), batch\_size=$32$ \\
-\textbf{Audio / Features} & Sampling Rate=$22050$ (or $16000$), n\_mels=$80$, max\_wav\_value=$32768.0$ \\
-\textbf{Text Encoding} & symbols\_embedding\_dim=$512$, conv\_filters=$512$, kernel\_size=$5$ \\
-\textbf{VAE Prosody} & ref\_filters=[32, 32, 64, 64, 128, 128], gru\_size=$256$, $z\_latent\_dim=32$, $E=512$ \\
-\textbf{Attention} & attention\_rnn\_dim=$1024$, attention\_dim=$128$, loc\_filters=$32$, loc\_kernel=$31$ \\
-\textbf{Decoder} & decoder\_rnn\_dim=$1024$, prenet\_dim=$256$, max\_steps=$1000$, dropout=$0.1$ \\
-\textbf{PostNet} & postnet\_embedding\_dim=$512$, postnet\_kernel\_size=$5$, convolutions=$5$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\textit{Implementation Note regarding Language Support:} The configuration declares \texttt{text\_cleaners=["portuguese\_cleaners"]}. The code defaults to Portuguese normalization heuristics but switches to English text processors (\pathtt{TextNormalizerEN}) dynamically based on the invoked data loader.
 
 \end{document}

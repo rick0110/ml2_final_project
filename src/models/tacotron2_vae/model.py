@@ -147,7 +147,8 @@ class Attention(nn.Module):
             attention_location_kernel_size,
             attention_dim,
         )
-        self.score_mask_value: float = -float("inf")
+        self.ln: nn.LayerNorm = nn.LayerNorm(attention_dim)
+        self.score_mask_value: float = -1e4
 
     def get_alignment_energies(self, query: Tensor, processed_memory: Tensor, attention_weights_cat: Tensor) -> Tensor:
         """
@@ -161,6 +162,7 @@ class Attention(nn.Module):
         """
         processed_query: Tensor = self.query_layer(query.unsqueeze(1)) # (B, 1, attention_dim)
         processed_attention_weights: Tensor = self.location_layer(attention_weights_cat) # (B, T_text, attention_dim)
+        processed_attention_weights = self.ln(processed_attention_weights)
         energies: Tensor = self.v(
             torch.tanh(processed_query + processed_attention_weights + processed_memory)
         ) # (B, T_text, 1)
@@ -235,7 +237,8 @@ class Prenet(nn.Module):
             Tensor: (B, T_dec, out_dim) or (B, out_dim)
         """
         for linear in self.layers:
-            x = F.dropout(F.relu(linear(x)), p=DROP_RATE, training=self.training)
+            # Force pre-net dropout to remain active at inference time
+            x = F.dropout(F.relu(linear(x)), p=DROP_RATE, training=True)
         return x
 
 
@@ -438,6 +441,7 @@ class Decoder(nn.Module):
         self.gate_threshold: float = hparams.gate_threshold
         self.p_attention_dropout: float = hparams.p_attention_dropout
         self.p_decoder_dropout: float = hparams.p_decoder_dropout
+        self.p_decoder_input_dropout: float = getattr(hparams, 'p_decoder_input_dropout', 0.5)
 
         self.prenet: Prenet = Prenet(
             hparams.n_mel_channels * hparams.n_frames_per_step,
@@ -624,6 +628,15 @@ class Decoder(nn.Module):
         decoder_inputs_parsed = torch.cat((decoder_input, decoder_inputs_parsed), dim=0) # (T_dec+1, B, n_mels * n_frames)
         decoder_inputs_parsed = self.prenet(decoder_inputs_parsed) # (T_dec+1, B, prenet_dim)
 
+        # Frame dropout: randomly zero out entire decoder input frames during training
+        # This weakens the autoregressive decoder and forces it to rely on encoder (and z) information
+        if self.training and self.p_decoder_input_dropout > 0:
+            frame_mask = torch.bernoulli(
+                torch.ones(decoder_inputs_parsed.size(0), decoder_inputs_parsed.size(1), 1,
+                           device=decoder_inputs_parsed.device) * (1 - self.p_decoder_input_dropout)
+            )
+            decoder_inputs_parsed = decoder_inputs_parsed * frame_mask
+
         self.initialize_decoder_states(memory, mask=~get_mask_from_lengths(memory_lengths))
 
         mel_outputs: List[Tensor] = []
@@ -762,9 +775,9 @@ class Tacotron2(nn.Module):
             mask = mask.expand(self.n_mel_channels, mask.size(0), mask.size(1)) # (n_mels, B, T_mel)
             mask = mask.permute(1, 0, 2) # (B, n_mels, T_mel)
             
-            outputs[0].data.masked_fill_(mask, 0.0) # mel_outputs
-            outputs[1].data.masked_fill_(mask, 0.0) # mel_outputs_postnet
-            outputs[2].data.masked_fill_(mask[:, 0, :], 1e3) # gate_outputs (padded positions set to high logic)
+            outputs[0] = outputs[0].masked_fill(mask, -11.5129) # mel_outputs
+            outputs[1] = outputs[1].masked_fill(mask, -11.5129) # mel_outputs_postnet
+            outputs[2] = outputs[2].masked_fill(mask[:, 0, :], 1e3) # gate_outputs (padded positions set to high logic)
         return outputs
 
     def forward(self, inputs: Tuple[Tensor, Tensor, Tensor, Tensor]) -> List[Tensor]:
@@ -848,6 +861,39 @@ class Tacotron2(nn.Module):
         
         return audio_output
 
+    @torch.inference_mode()
+    def inference_mel(self, text: Tensor, audio: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        """
+        Generate mel-spectrogram from text conditioned on reference audio.
+
+        Args:
+            text (Tensor): Text sequence tensor (1, T_text).
+            audio (Tensor): Reference mel-spectrogram tensor (1, n_mels, T_mel).
+
+        Returns:
+            Tuple[Tensor, Tensor, Tensor]: mel_outputs, mel_outputs_postnet, alignments
+        """
+        # Encode text
+        embedded_inputs = self.transcript_embedding(text).transpose(1, 2)
+        transcript_outputs = self.encoder.inference(embedded_inputs)
+
+        # Extract prosody from reference audio
+        latent_vector, _, _, _ = self.vae_gst(audio)
+        
+        # Inject prosody
+        latent_vector = latent_vector.unsqueeze(1).expand_as(transcript_outputs)
+        encoder_outputs = transcript_outputs + latent_vector
+        
+        # Decode to mel-spectrogram
+        mel_outputs, _, alignments = self.decoder.inference(encoder_outputs)
+        
+        # Refine mel-spectrogram via postnet
+        mel_outputs_postnet = self.postnet(mel_outputs)
+        mel_outputs_postnet = mel_outputs + mel_outputs_postnet
+        
+        return mel_outputs, mel_outputs_postnet, alignments
+
+
 
 def load_tacotron2_vae_model(
     hparams: Tacotron2VAEHparams,
@@ -882,3 +928,102 @@ def get_model_size_info(model: Tacotron2) -> Dict[str, int]:
     total: int = sum(p.numel() for p in model.parameters())
     trainable: int = sum(p.numel() for p in model.parameters() if p.requires_grad)
     return {"total_params": total, "trainable_params": trainable}
+
+
+def load_pretrained_tacotron2_backbone(
+    model: Tacotron2,
+    pretrained_path: str,
+    device: Optional[torch.device] = None,
+) -> Tacotron2:
+    """
+    Load pretrained NVIDIA Tacotron2 weights into the Tacotron2-VAE model.
+
+    Maps the NVIDIA checkpoint key format (module.X) to the VAE model's key format.
+    Only loads weights for the backbone components (encoder, decoder, postnet, embedding).
+    VAE-specific components (vae_gst) are left randomly initialized.
+
+    If n_symbols differs between pretrained and current model, the embedding weights
+    are partially loaded (only the overlapping rows).
+
+    Args:
+        model (Tacotron2): The Tacotron2-VAE model to load weights into.
+        pretrained_path (str): Path to the NVIDIA Tacotron2 checkpoint file.
+        device (Optional[torch.device]): Target device.
+
+    Returns:
+        Tacotron2: Model with pretrained backbone weights loaded.
+    """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    checkpoint: Dict = torch.load(pretrained_path, map_location="cpu", weights_only=False)
+    pretrained_sd: Dict[str, Tensor] = checkpoint.get("state_dict", checkpoint)
+
+    # Build mapping from NVIDIA keys to VAE model keys
+    # NVIDIA format: "module.encoder.xxx" -> VAE format: "encoder.xxx"
+    # NVIDIA format: "module.embedding.weight" -> VAE format: "transcript_embedding.weight"
+    key_mapping: Dict[str, str] = {}
+    for nvidia_key in pretrained_sd.keys():
+        # Strip "module." prefix (from DataParallel wrapping)
+        if nvidia_key.startswith("module."):
+            clean_key = nvidia_key[len("module."):]
+        else:
+            clean_key = nvidia_key
+
+        # Map "embedding" -> "transcript_embedding"
+        if clean_key.startswith("embedding."):
+            clean_key = "transcript_" + clean_key
+
+        key_mapping[nvidia_key] = clean_key
+
+    model_sd = model.state_dict()
+    loaded_keys: list = []
+    skipped_keys: list = []
+
+    for nvidia_key, vae_key in key_mapping.items():
+        if vae_key not in model_sd:
+            skipped_keys.append(f"{nvidia_key} -> {vae_key} (not in model)")
+            continue
+
+        pretrained_tensor = pretrained_sd[nvidia_key]
+        model_tensor = model_sd[vae_key]
+
+        # Handle shape mismatch for embedding (different n_symbols)
+        if pretrained_tensor.shape != model_tensor.shape:
+            if "transcript_embedding" in vae_key:
+                # Load only overlapping rows
+                n_overlap = min(pretrained_tensor.shape[0], model_tensor.shape[0])
+                model_sd[vae_key][:n_overlap] = pretrained_tensor[:n_overlap]
+                
+                # Initialize new rows using the statistics of the pretrained embeddings
+                if model_tensor.shape[0] > n_overlap:
+                    pt_mean = pretrained_tensor.mean()
+                    pt_std = pretrained_tensor.std()
+                    # Apply N(mean, std) to the newly added phonemes
+                    torch.nn.init.normal_(model_sd[vae_key][n_overlap:], mean=pt_mean.item(), std=pt_std.item())
+                    
+                loaded_keys.append(f"{vae_key} (partial: {n_overlap}/{model_tensor.shape[0]} rows, new initialized with std={pt_std.item():.4f})")
+            else:
+                skipped_keys.append(
+                    f"{nvidia_key} -> {vae_key} (shape mismatch: "
+                    f"{pretrained_tensor.shape} vs {model_tensor.shape})"
+                )
+            continue
+
+        model_sd[vae_key] = pretrained_tensor
+        loaded_keys.append(vae_key)
+
+    model.load_state_dict(model_sd)
+    model = model.to(device)
+
+    print(f"[Pretrained Backbone] Loaded {len(loaded_keys)} weight tensors")
+    print(f"[Pretrained Backbone] Skipped {len(skipped_keys)} weight tensors")
+    if skipped_keys:
+        for sk in skipped_keys[:10]:
+            print(f"  Skipped: {sk}")
+
+    # VAE-specific components that were NOT loaded (kept random init):
+    vae_keys = [k for k in model_sd.keys() if "vae_gst" in k]
+    print(f"[Pretrained Backbone] VAE components ({len(vae_keys)} tensors) kept with random init")
+
+    return model

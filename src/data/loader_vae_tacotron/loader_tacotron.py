@@ -44,44 +44,7 @@ except ImportError:
 MAX_WAV_VALUE: float = 32768.0
 
 
-class TextNormalizerEN:
-    """
-    Normalizer for English text transcripts.
 
-    Architecture:
-        Regex-based number expansion -> Punctuation replacement -> Lowercasing.
-
-    Inputs:
-        text: Raw string.
-
-    Outputs:
-        normalized_text: Cleaned string.
-    """
-    def __init__(self) -> None:
-        """Initialize patterns."""
-        self.number_pattern: re.Pattern = re.compile(r'\d+')
-
-    def _replace_numbers(self, match: Any) -> str:
-        """Expand digits into words."""
-        number: int = int(match.group(0))
-        return num2words(number, lang='en')
-
-    def normalize(self, text: str) -> str:
-        """
-        Normalize input text.
-
-        Args:
-            text (str): Raw text.
-
-        Returns:
-            str: Normalized text.
-        """
-        text = self.number_pattern.sub(self._replace_numbers, text)
-        replaces: Dict[str, str] = {'–': '-', '—': '-', '−': '-', '·': '', '"': '', '\'': ''}
-        for old_char, new_char in replaces.items():
-            text = text.replace(old_char, new_char)
-        text = re.sub(r'\s+', ' ', text).strip()
-        return text.lower()
 
 
 class DatasetLibriSpeechTacotronVAE(Dataset):
@@ -123,7 +86,6 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.metadata_path: Path = self.data_dir / "mels_metadata.csv"
-        self.normalizer: TextNormalizerEN = TextNormalizerEN()
         self.text_processor: Any = text_processor 
         self.files: List[Dict[str, str]] = self._load_files_list()
         self.stft: TacotronSTFT = TacotronSTFT(
@@ -160,6 +122,10 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         """
         if orig_freq is not None and orig_freq != self.stft.sampling_rate:
             audio = torchaudio.functional.resample(audio, orig_freq=orig_freq, new_freq=self.stft.sampling_rate)
+        
+        # Clamp audio to [-1.0, 1.0] to prevent STFT AssertionErrors due to resampling overshoots
+        audio = torch.clamp(audio, -1.0, 1.0)
+
         audio_norm: Tensor = audio.unsqueeze(0) # (1, S)
         melspec: Tensor = self.stft.mel_spectrogram(audio_norm) # (1, n_mels, T)
         return melspec.squeeze(0) # (n_mels, T)
@@ -178,8 +144,7 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         utt_id: str = row.get("utt_id", Path(row["mel_path"]).stem)
         cache_file: Path = self.cache_dir / f"{utt_id}.pt"
 
-        clean_text: str = self.normalizer.normalize(row["text"])
-        sequence_list: List[int] = self.text_processor.text_to_sequence(clean_text)
+        sequence_list: List[int] = self.text_processor.text_to_sequence(row["text"])
 
         text_sequence: Tensor = torch.LongTensor(sequence_list) # (T_text,)
 

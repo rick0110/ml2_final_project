@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import tarfile
+import urllib.request
+from pathlib import Path
+
+# Setup paths
+script_dir = Path(__file__).resolve().parent
+project_root = script_dir.parent.parent
+target_dir = project_root / "data" / "raw"
+
+# Create target dir if it doesn't exist
+target_dir.mkdir(parents=True, exist_ok=True)
+
+dataset_url = "https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2"
+tar_path = target_dir / "LJSpeech-1.1.tar.bz2"
+extract_path = target_dir
+
+def download_progress(count, block_size, total_size):
+    if total_size > 0:
+        percent = min(int(count * block_size * 100 / total_size), 100)
+        sys.stdout.write(f"\rDownloading LJSpeech: {percent}%")
+        sys.stdout.flush()
+
+def main():
+    print(f"Downloading LJSpeech to {tar_path}...")
+    if not tar_path.exists():
+        try:
+            urllib.request.urlretrieve(dataset_url, tar_path, reporthook=download_progress)
+            print("\nDownload complete.")
+        except Exception as e:
+            print(f"\nError downloading file: {e}")
+            sys.exit(1)
+    else:
+        print("\nFile already exists. Skipping download.")
+
+    print(f"Extracting {tar_path} to {extract_path}...")
+    try:
+        with tarfile.open(tar_path, "r:bz2") as tar:
+            tar.extractall(path=extract_path)
+        print("Extraction complete.")
+    except Exception as e:
+        print(f"Error during extraction: {e}")
+        sys.exit(1)
+        
+    print("LJSpeech dataset is ready.")
+
+if __name__ == "__main__":
+    main()
