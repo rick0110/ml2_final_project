@@ -177,11 +177,15 @@ class STFT(torch.nn.Module):
                 n_fft=self.filter_length,
                 dtype=np.float32,
             )
-            approx_nonzero_indices: Tensor = torch.from_numpy(np.where(window_sum > np.finfo(np.float32).tiny)[0])
-            window_sum_t: Tensor = torch.from_numpy(window_sum)
-            
-            inverse_transform[:, :, approx_nonzero_indices] /= window_sum_t[approx_nonzero_indices] # (B, 1, S_padded)
+            device = inverse_transform.device
+            window_sum_t: Tensor = torch.from_numpy(window_sum).to(device)
+            # Only divide where window_sum is above the float32 tiny value to
+            # avoid division-by-zero (or near-zero) at OLA boundaries which
+            # causes audio clipping / NaN values.
+            approx_nonzero_indices: Tensor = (window_sum_t > torch.finfo(torch.float32).tiny).nonzero(as_tuple=True)[0]
+            inverse_transform[:, :, approx_nonzero_indices] /= window_sum_t[approx_nonzero_indices]
             inverse_transform *= float(self.filter_length) / self.hop_length # (B, 1, S_padded)
+
 
         # Trim padding
         inverse_transform = inverse_transform[:, :, int(self.filter_length / 2) :] # (B, 1, S_trimmed)

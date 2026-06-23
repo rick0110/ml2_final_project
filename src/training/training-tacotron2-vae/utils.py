@@ -93,8 +93,8 @@ class TextMelCollate:
             text: Tensor = batch[ids_sorted_decreasing[i]][0]
             text_padded[i, : text.size(0)] = text
 
-        # Mock emotions (fixed to neutral for LibriSpeech)
-        emotions: Tensor = torch.zeros(len(batch), 4, dtype=torch.float32)
+        # Collect emotion vectors from each sample in the batch
+        emotions: Tensor = torch.stack([batch[ids_sorted_decreasing[i]][2] for i in range(len(ids_sorted_decreasing))])  # (B, 4)
 
         # Mel padding calculations
         num_mels: int = batch[0][1].size(0)
@@ -103,7 +103,7 @@ class TextMelCollate:
             max_target_len += self.n_frames_per_step - max_target_len % self.n_frames_per_step
 
         mel_padded: Tensor = torch.FloatTensor(len(batch), num_mels, max_target_len)
-        mel_padded.zero_()
+        mel_padded.fill_(-11.5129)  # Silence in log-mel domain (log(1e-5))
         gate_padded: Tensor = torch.FloatTensor(len(batch), max_target_len)
         gate_padded.zero_()
         output_lengths: Tensor = torch.LongTensor(len(batch))

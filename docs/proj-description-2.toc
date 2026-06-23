@@ -1,29 +1,24 @@
 \babel@toc {english}{}\relax 
-\contentsline {section}{\numberline {1}Repository Structure and Overview}{3}{section.1}%
-\contentsline {subsection}{\numberline {1.1}Top-Level Directory Tree}{3}{subsection.1.1}%
-\contentsline {subsection}{\numberline {1.2}Directory Roles}{3}{subsection.1.2}%
-\contentsline {section}{\numberline {2}Data Pipeline and Preprocessing}{4}{section.2}%
-\contentsline {subsection}{\numberline {2.1}Phase 1: Offline Preprocessing}{4}{subsection.2.1}%
-\contentsline {subsection}{\numberline {2.2}Phase 2: Online Dataset Loading}{4}{subsection.2.2}%
-\contentsline {section}{\numberline {3}Model Architectures}{6}{section.3}%
-\contentsline {subsection}{\numberline {3.1}5.1 Complete System Overview}{6}{subsection.3.1}%
-\contentsline {subsection}{\numberline {3.2}5.2 Tacotron-VAE Module Overview}{6}{subsection.3.2}%
-\contentsline {subsection}{\numberline {3.3}5.3 Text Encoder Breakdown}{7}{subsection.3.3}%
-\contentsline {subsection}{\numberline {3.4}5.4 VAE (Prosody) Breakdown}{7}{subsection.3.4}%
-\contentsline {subsection}{\numberline {3.5}5.5 Location-Sensitive Attention Breakdown}{9}{subsection.3.5}%
-\contentsline {subsection}{\numberline {3.6}5.6 Autoregressive Decoder Breakdown}{10}{subsection.3.6}%
-\contentsline {subsection}{\numberline {3.7}5.7 PostNet Breakdown}{10}{subsection.3.7}%
-\contentsline {subsection}{\numberline {3.8}5.8 WaveGlow Vocoder Overview}{12}{subsection.3.8}%
-\contentsline {subsection}{\numberline {3.9}5.9 WaveGlow Flow Step Breakdown}{12}{subsection.3.9}%
-\contentsline {subsection}{\numberline {3.10}5.10 Layer-by-Layer Dimension Summary}{12}{subsection.3.10}%
-\contentsline {section}{\numberline {4}Loss Functions}{13}{section.4}%
-\contentsline {subsection}{\numberline {4.1}Tacotron2-VAE Losses (\texttt {losses.py})}{13}{subsection.4.1}%
-\contentsline {subsubsection}{\numberline {4.1.1}1. Reconstruction Loss ($\mathcal {L}_{\text {Recon}}$)}{13}{subsubsection.4.1.1}%
-\contentsline {subsubsection}{\numberline {4.1.2}2. Gate Loss ($\mathcal {L}_{\text {Gate}}$)}{13}{subsubsection.4.1.2}%
-\contentsline {subsubsection}{\numberline {4.1.3}3. Kullback-Leibler Divergence ($\mathcal {L}_{\text {KL}}$)}{13}{subsubsection.4.1.3}%
-\contentsline {subsubsection}{\numberline {4.1.4}4. KL Annealing Strategy}{13}{subsubsection.4.1.4}%
-\contentsline {subsection}{\numberline {4.2}WaveGlow Losses (\texttt {glow.py})}{14}{subsection.4.2}%
-\contentsline {section}{\numberline {5}Training Pipeline}{15}{section.5}%
-\contentsline {subsection}{\numberline {5.1}Tacotron2-VAE Training}{15}{subsection.5.1}%
-\contentsline {subsection}{\numberline {5.2}WaveGlow Training}{15}{subsection.5.2}%
-\contentsline {section}{\numberline {6}Hyperparameters and Configurations}{16}{section.6}%
+\contentsline {section}{\numberline {1}Problem Formulation and Objectives}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Linguistic Incompatibility}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Prosodic Transfer and Variational Inference}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Signal Processing Anomalies}{3}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Global System Pipeline}{3}{section.2}%
+\contentsline {section}{\numberline {3}Mathematical and Statistical Foundations}{4}{section.3}%
+\contentsline {subsection}{\numberline {3.1}The Acoustic Domain: STFT and Mel-Spectrograms}{4}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Variational Inference and the ELBO}{5}{subsection.3.2}%
+\contentsline {section}{\numberline {4}Proposed Architecture: Layer-by-Layer Deep Dive}{5}{section.4}%
+\contentsline {subsection}{\numberline {4.1}The Text Encoder}{5}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}The VAE Reference Encoder (Prosody Extraction)}{6}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Autoregressive Decoder and Attention}{7}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}The PostNet}{8}{subsection.4.4}%
+\contentsline {section}{\numberline {5}Challenges in PT-BR Adaptation and Solutions}{9}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Intervention 1: The Phonetic Revolution (Data Processing)}{9}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Intervention 2: Statistical Weight Initialization}{10}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Intervention 3: The Log-Mel Silence Padding Bug}{11}{subsection.5.3}%
+\contentsline {section}{\numberline {6}WaveGlow: Neural Vocoding via Normalizing Flows}{11}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Normalizing Flows and the Invertible Architecture}{11}{subsection.6.1}%
+\contentsline {section}{\numberline {7}Loss Optimization and Preventing Posterior Collapse}{12}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Unmasked MSE and Stop Token Prediction}{12}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}KL Annealing and Free Bits}{13}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Hyperparameter Justification}{13}{subsection.7.3}%

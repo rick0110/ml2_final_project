@@ -131,8 +131,14 @@ class TextMelCollate:
         # Padding
         text_padded: Tensor = torch.nn.utils.rnn.pad_sequence(text_padded_list, batch_first=True) # (B, max_T_text)
         
-        # Pad mel and transpose to (B, n_mels, max_T_mel_padded)
-        mel_padded: Tensor = torch.nn.utils.rnn.pad_sequence(mel_padded_list, batch_first=True).transpose(1, 2) # (B, n_mels, max_T_mel_padded)
+        # Transpose each tensor to (T_mel, n_mels)
+        mel_transposed_list = [mel.transpose(0, 1) for mel in mel_padded_list]
+        
+        # Pad sequence over T_mel dimension: shape (B, max_T_mel_padded, n_mels)
+        mel_padded_temp = torch.nn.utils.rnn.pad_sequence(mel_transposed_list, batch_first=True)
+        
+        # Transpose back to (B, n_mels, max_T_mel_padded)
+        mel_padded: Tensor = mel_padded_temp.transpose(1, 2)
         
         input_lengths: Tensor = torch.IntTensor(input_lengths_list) # (B,)
         output_lengths: Tensor = torch.IntTensor(output_lengths_list) # (B,)

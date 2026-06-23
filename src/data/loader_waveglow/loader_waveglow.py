@@ -70,10 +70,10 @@ def load_wav_to_torch(full_path: str) -> Tuple[Tensor, int]:
     Returns:
         Tuple[Tensor, int]: Audio tensor and sampling rate.
     """
-    sampling_rate: int
-    data: Any
     sampling_rate, data = read(full_path)
-    return torch.from_numpy(data).float(), sampling_rate
+    # Normalize 16-bit signed integer values to [-1.0, 1.0] range
+    tensor = torch.from_numpy(data).float() / 32768.0
+    return tensor, sampling_rate
 
 
 class Mel2Samp(torch.utils.data.Dataset):
@@ -141,6 +141,9 @@ class Mel2Samp(torch.utils.data.Dataset):
         Returns:
             Tensor: Mel-spectrogram.
         """
+        # Clamp audio to [-1.0, 1.0] to prevent STFT AssertionErrors
+        audio = torch.clamp(audio, -1.0, 1.0)
+        
         audio_norm: Tensor = audio.unsqueeze(0) # (1, S)
         melspec: Tensor = self.stft.mel_spectrogram(audio_norm) # (1, n_mels, T)
         return melspec.squeeze(0) # (n_mels, T)
@@ -178,8 +181,25 @@ class Mel2Samp(torch.utils.data.Dataset):
         return (mel, audio)
 
     def __len__(self) -> int:
-        """int: Number of files."""
+        """
+        Return dataset length.
+
+        Returns:
+            int: Number of samples.
+        """
         return len(self.files)
+
+
+def _waveglow_worker_init_fn(worker_id: int) -> None:
+    """
+    Seed each DataLoader worker's Python random state independently.
+
+    Without this, all workers share the same random state forked from the
+    main process, causing correlated segment offsets across workers.
+    """
+    import random as _random
+    seed = torch.initial_seed() % (2**32)
+    _random.seed(seed + worker_id)
 
 
 if __name__ == "__main__":

@@ -464,18 +464,27 @@ def main() -> None:
 
     manifest: List[Dict[str, Any]] = []
 
-    for wav_path in tqdm.tqdm(examples, desc="Processing examples"):
-        res: Optional[Dict[str, Any]] = process_example(
-            wav_path=wav_path,
-            out_root=out_root,
-            mel_transform=mel_transform,
-            target_sr=args.target_sr,
-            text_lookup=text_lookup,
-            min_duration=args.min_duration,
-            max_duration=args.max_duration,
-        )
-        if res is not None:
-            manifest.append(res)
+    from concurrent.futures import ProcessPoolExecutor
+    from functools import partial
+
+    process_fn = partial(
+        process_example,
+        out_root=out_root,
+        mel_transform=mel_transform,
+        target_sr=args.target_sr,
+        text_lookup=text_lookup,
+        min_duration=args.min_duration,
+        max_duration=args.max_duration,
+    )
+
+    with ProcessPoolExecutor() as executor:
+        results = list(tqdm.tqdm(
+            executor.map(process_fn, examples),
+            total=len(examples),
+            desc="Processing examples",
+        ))
+
+    manifest = [r for r in results if r is not None]
 
     if not manifest:
         raise RuntimeError("No examples were kept after duration filtering.")

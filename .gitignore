@@ -232,3 +232,5 @@ _cache/
 _cache_models/
 **/_cache/
 **/_cache_models/
+
+.agents/

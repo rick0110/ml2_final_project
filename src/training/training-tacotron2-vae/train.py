@@ -29,6 +29,7 @@ import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
 from typing import Any, Dict, List, Optional, Tuple
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # Import training utilities
 try:
@@ -77,7 +78,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--iters-per-checkpoint", type=int, default=500)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--learning-rate", type=float, default=1e-5)
     parser.add_argument("--weight-decay", type=float, default=1e-6)
     parser.add_argument("--grad-clip-thresh", type=float, default=1.0)
     parser.add_argument("--num-workers", type=int, default=4)
@@ -86,6 +87,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--anneal-function", type=str, default="logistic")
     parser.add_argument("--checkpoint-path", type=str, default=None)
     parser.add_argument("--resume-experiment", type=str, default=None)
+    parser.add_argument("--pretrained-tacotron2", type=str, default=None,
+                        help="Path to pretrained NVIDIA Tacotron2 checkpoint for finetuning backbone")
     parser.add_argument("--experiment-name", type=str, default=None)
     parser.add_argument(
         "--artifacts-dir",
@@ -175,10 +178,20 @@ def main() -> None:
 
     # Initialize Model, Optimizer, and Loss
     model = load_tacotron2_vae_model(hparams, device=device)
+
+    # Load pretrained Tacotron2 backbone weights if provided
+    if args.pretrained_tacotron2:
+        from models.tacotron2_vae.model import load_pretrained_tacotron2_backbone
+        model = load_pretrained_tacotron2_backbone(model, args.pretrained_tacotron2, device)
+        print(f"Loaded pretrained Tacotron2 backbone from {args.pretrained_tacotron2}")
+
     optimizer: torch.optim.Optimizer = torch.optim.Adam(
         model.parameters(),
         lr=hparams.learning_rate,
         weight_decay=hparams.weight_decay,
+    )
+    scheduler = ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=3, min_lr=1e-6
     )
     criterion: Tacotron2LossVAE = Tacotron2LossVAE(hparams)
 
@@ -201,7 +214,7 @@ def main() -> None:
     tensorboard_logger = TensorBoardLogger(experiment_dir / "logs")
     
     for epoch in range(hparams.epochs):
-        training_metadata = train_epoch(
+        training_metadata, epoch_val_loss, iteration = train_epoch(
             model=model,
             hparams=hparams,
             train_loader=train_loader,
@@ -216,8 +229,12 @@ def main() -> None:
             tensorboard_logger=tensorboard_logger
         )
         
-        # Update global iteration count
-        iteration += len(train_loader)
+        # Update learning rate based on validation loss
+        if epoch_val_loss is not None:
+            scheduler.step(epoch_val_loss)
+            learning_rate = optimizer.param_groups[0]['lr']
+        
+
 
     print(f"Training finished. Experiment dir: {experiment_dir}")
     tensorboard_logger.close()
