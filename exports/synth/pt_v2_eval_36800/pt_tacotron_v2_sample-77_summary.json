@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/pt_tacotron_v2",
+  "checkpoint": "experiments/tacotron2-vae/pt_tacotron_v2/checkpoints/epoch_36800",
+  "iteration": 36800,
+  "text": "Por favor, aguarde enquanto o sistema carrega.",
+  "n_tokens": 45,
+  "reference_audio": "data/raw/tts-portuguese-Corpora/TTS-Portuguese-Corpus/wavs/sample-77.wav",
+  "mel_shape": [
+    1,
+    80,
+    203
+  ],
+  "mel_plot": "exports/synth/pt_v2_eval_36800/pt_tacotron_v2_sample-77_mel.png",
+  "alignment_plot": "exports/synth/pt_v2_eval_36800/pt_tacotron_v2_sample-77_alignment.png"
+}
