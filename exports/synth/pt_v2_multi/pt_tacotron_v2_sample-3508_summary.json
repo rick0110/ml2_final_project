@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/pt_tacotron_v2",
+  "checkpoint": "experiments/tacotron2-vae/pt_tacotron_v2/checkpoints/epoch_29600",
+  "iteration": 29600,
+  "text": "O título de página foi encontrado.",
+  "n_tokens": 34,
+  "reference_audio": "data/raw/tts-portuguese-Corpora/TTS-Portuguese-Corpus/wavs/sample-3508.wav",
+  "mel_shape": [
+    1,
+    80,
+    303
+  ],
+  "mel_plot": "exports/synth/pt_v2_multi/pt_tacotron_v2_sample-3508_mel.png",
+  "alignment_plot": "exports/synth/pt_v2_multi/pt_tacotron_v2_sample-3508_alignment.png"
+}
