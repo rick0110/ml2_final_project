@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/pt_tacotron_v1",
+  "checkpoint": "experiments/tacotron2-vae/pt_tacotron_v1/checkpoints/epoch_600",
+  "iteration": 600,
+  "text": "O título de página foi encontrado.",
+  "n_tokens": 2,
+  "reference_audio": "data/raw/LJSpeech-1.1/wavs/LJ001-0001.wav",
+  "mel_shape": [
+    1,
+    80,
+    181
+  ],
+  "mel_plot": "exports/synth/pt_test/pt_tacotron_v1_LJ001-0001_mel.png",
+  "alignment_plot": "exports/synth/pt_test/pt_tacotron_v1_LJ001-0001_alignment.png"
+}

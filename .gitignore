@@ -221,7 +221,7 @@ __marimo__/
 /data/
 experiments/
 local_weight_models/
-/exports/
+
 .aider*
 package-lock.json
 package.json
