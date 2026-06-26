@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/lj_speech_v1",
+  "checkpoint": "experiments/tacotron2-vae/lj_speech_v1/checkpoints/epoch_1600",
+  "iteration": 1600,
+  "text": "Printing in the only sense with which we are at present concerned.",
+  "n_tokens": 67,
+  "reference_audio": "data/raw/LJSpeech-1.1/wavs/LJ050-0269.wav",
+  "mel_shape": [
+    1,
+    80,
+    144
+  ],
+  "mel_plot": "exports/synth/style_transfer_test/lj_speech_v1_LJ050-0269_mel.png",
+  "alignment_plot": "exports/synth/style_transfer_test/lj_speech_v1_LJ050-0269_alignment.png"
+}

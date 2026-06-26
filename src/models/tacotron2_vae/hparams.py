@@ -137,7 +137,6 @@ class Tacotron2VAEHparams:
     p_attention_dropout: float = 0.1
     p_decoder_dropout: float = 0.1
     p_decoder_input_dropout: float = 0.5  # Reduced from 0.8; standard Tacotron2 uses 0.5
-    p_scheduled_sampling: float = 0.0  # 0.0 = pure teacher forcing; 1.0 = pure inference mode
 
     # Attention parameters
     attention_rnn_dim: int = 1024

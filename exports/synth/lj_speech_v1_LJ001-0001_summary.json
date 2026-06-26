@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/lj_speech_v1",
+  "checkpoint": "experiments/tacotron2-vae/lj_speech_v1/checkpoints/epoch_1200",
+  "iteration": 1200,
+  "text": "Hello, this is a test of the voice synthesis system.",
+  "n_tokens": 53,
+  "reference_audio": "data/raw/LJSpeech-1.1/wavs/LJ001-0001.wav",
+  "mel_shape": [
+    1,
+    80,
+    1000
+  ],
+  "mel_plot": "exports/synth/lj_speech_v1_LJ001-0001_mel.png",
+  "alignment_plot": "exports/synth/lj_speech_v1_LJ001-0001_alignment.png"
+}
