@@ -119,10 +119,14 @@ class Tacotron2VAEHparams:
     z_latent_dim: int = 32  # Latent space dimension (z)
     anneal_function: str = "cyclical"
     anneal_k: float = 0.0025
-    anneal_x0: int = 10000
+    anneal_x0: int = 4000   # Cycle length for cyclical; midpoint for logistic
     anneal_upper: float = 0.2
-    anneal_lag: int = 5000
-    free_bits: float = 0.25  # Minimum KL per latent dimension (prevents posterior collapse)
+    anneal_lag: int = 2000  # Start KL earlier so it regularises from the start
+    free_bits: float = 0.5  # Raised from 0.25 to combat posterior collapse
+
+    # Guided attention loss
+    guided_attention_weight: float = 2.0  # Weight for guided attention loss (encourages monotonic alignment)
+    guided_attention_sigma: float = 0.4   # Gaussian width; larger = more permissive diagonal
 
     # Decoder parameters
     n_frames_per_step: int = 1
@@ -132,7 +136,7 @@ class Tacotron2VAEHparams:
     gate_threshold: float = 0.5
     p_attention_dropout: float = 0.1
     p_decoder_dropout: float = 0.1
-    p_decoder_input_dropout: float = 0.8  # Frame dropout on decoder input (weakens autoregressive decoder)
+    p_decoder_input_dropout: float = 0.5  # Reduced from 0.8; standard Tacotron2 uses 0.5
 
     # Attention parameters
     attention_rnn_dim: int = 1024
@@ -147,11 +151,13 @@ class Tacotron2VAEHparams:
 
     # Optimization Hyperparameters
     use_saved_learning_rate: bool = False
-    learning_rate: float = 1e-5
-    weight_decay: float = 1e-4
+    learning_rate: float = 1e-4  # Raised from 1e-5; was causing plateau
+    weight_decay: float = 1e-6
     grad_clip_thresh: float = 1.0
     batch_size: int = 32
     mask_padding: bool = True
+    warmup_steps: int = 0       # Linear LR warmup; 0 = disabled
+    warmup_start_lr: float = 1e-6  # LR at step 0 when warmup is enabled
 
     def to_dict(self) -> Dict[str, Any]:
         """

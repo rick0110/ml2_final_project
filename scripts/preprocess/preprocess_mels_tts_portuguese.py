@@ -464,27 +464,18 @@ def main() -> None:
 
     manifest: List[Dict[str, Any]] = []
 
-    from concurrent.futures import ProcessPoolExecutor
-    from functools import partial
-
-    process_fn = partial(
-        process_example,
-        out_root=out_root,
-        mel_transform=mel_transform,
-        target_sr=args.target_sr,
-        text_lookup=text_lookup,
-        min_duration=args.min_duration,
-        max_duration=args.max_duration,
-    )
-
-    with ProcessPoolExecutor() as executor:
-        results = list(tqdm.tqdm(
-            executor.map(process_fn, examples),
-            total=len(examples),
-            desc="Processing examples",
-        ))
-
-    manifest = [r for r in results if r is not None]
+    for wav_path in tqdm.tqdm(examples, desc="Processing examples"):
+        result = process_example(
+            wav_path=wav_path,
+            out_root=out_root,
+            mel_transform=mel_transform,
+            target_sr=args.target_sr,
+            text_lookup=text_lookup,
+            min_duration=args.min_duration,
+            max_duration=args.max_duration,
+        )
+        if result is not None:
+            manifest.append(result)
 
     if not manifest:
         raise RuntimeError("No examples were kept after duration filtering.")
@@ -514,13 +505,15 @@ def main() -> None:
     manifest_csv: Path = out_root / "mels_metadata.csv"
     with manifest_csv.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["mel_path", "duration", "text", "source_wav"])
+        writer.writerow(["mel_path", "duration", "text", "utt_id", "source_wav"])
         for row in manifest:
+            utt_id = Path(row["mel_path"]).stem
             writer.writerow(
                 [
                     row["mel_path"],
                     f"{row['duration']:.6f}",
                     row.get("text", ""),
+                    utt_id,
                     row.get("source_wav", ""),
                 ]
             )
