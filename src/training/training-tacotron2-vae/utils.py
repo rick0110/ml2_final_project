@@ -152,6 +152,7 @@ def create_dataloader(
         num_workers=num_workers,
         collate_fn=collate_fn,
         drop_last=shuffle,
+        persistent_workers=num_workers > 0,
     )
 
 

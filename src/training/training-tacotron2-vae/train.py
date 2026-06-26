@@ -46,25 +46,21 @@ sys.path.insert(0, str(PROJECT_ROOT / "src" / "training" / "training-tacotron2-v
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "data" / "loader_vae_tacotron"))
 
 
-try:
-    from losses import Tacotron2LossVAE
-    from models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
-    from models.tacotron2_vae.model import load_tacotron2_vae_model
-    from text_processing import TextProcessor, build_symbols_from_texts
-    from train_utils import (
-        TensorBoardLogger,
-        load_checkpoint,
-        save_checkpoint,
-        save_hparams,
-        train_epoch,
-        find_latest_checkpoint
-    )
-    from loader_tacotron import load_data
-except ImportError:
-    # Handle cases where path insertion didn't cover all imports
-    from src.training.training_tacotron2_vae.losses import Tacotron2LossVAE
-    from src.models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
-    from src.models.tacotron2_vae.model import load_tacotron2_vae_model
+
+from losses import Tacotron2LossVAE
+from models.tacotron2_vae.hparams import Tacotron2VAEHparams, create_hparams
+from models.tacotron2_vae.model import load_tacotron2_vae_model
+from text_processing import TextProcessor, build_symbols_from_texts
+from train_utils import (
+    TensorBoardLogger,
+    load_checkpoint,
+    save_checkpoint,
+    save_hparams,
+    train_epoch,
+    find_latest_checkpoint
+)
+from loader_tacotron import load_data
+
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -84,7 +80,15 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--val-split", type=float, default=0.1)
-    parser.add_argument("--anneal-function", type=str, default="logistic")
+    parser.add_argument("--anneal-function", type=str, default="cyclical")
+    parser.add_argument("--guided-attention-weight", type=float, default=2.0)
+    parser.add_argument("--guided-attention-sigma", type=float, default=0.4)
+    parser.add_argument("--warmup-steps", type=int, default=0,
+                        help="Linear LR warmup over this many steps (0=disabled)")
+    parser.add_argument("--lr-scheduler-patience", type=int, default=20,
+                        help="ReduceLROnPlateau patience in epochs (default 20; set high to effectively disable)")
+    parser.add_argument("--text-cleaner", type=str, default="portuguese_phonetic_cleaners",
+                        help="Text cleaner: 'english_cleaners' for LJSpeech, 'portuguese_phonetic_cleaners' for PT")
     parser.add_argument("--checkpoint-path", type=str, default=None)
     parser.add_argument("--resume-experiment", type=str, default=None)
     parser.add_argument("--pretrained-tacotron2", type=str, default=None,
@@ -130,7 +134,7 @@ def main() -> None:
         texts: List[str] = [row["text"] for row in reader]
 
     symbols: List[str] = build_symbols_from_texts(texts)
-    text_processor: TextProcessor = TextProcessor(symbols=symbols)
+    text_processor: TextProcessor = TextProcessor(symbols=symbols, cleaner_names=[args.text_cleaner])
 
     hparams: Tacotron2VAEHparams = create_hparams(
         {
@@ -142,6 +146,9 @@ def main() -> None:
             "grad_clip_thresh": args.grad_clip_thresh,
             "seed": args.seed,
             "anneal_function": args.anneal_function,
+            "guided_attention_weight": args.guided_attention_weight,
+            "guided_attention_sigma": args.guided_attention_sigma,
+            "warmup_steps": args.warmup_steps,
             "n_symbols": text_processor.n_symbols,
             "training_data": str(train_file),
         }
@@ -191,14 +198,14 @@ def main() -> None:
         weight_decay=hparams.weight_decay,
     )
     scheduler = ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=3, min_lr=1e-6
+        optimizer, mode='min', factor=0.5, patience=args.lr_scheduler_patience, min_lr=1e-6
     )
     criterion: Tacotron2LossVAE = Tacotron2LossVAE(hparams)
 
     iteration: int = 0
     learning_rate: float = hparams.learning_rate
 
-    # Resume from checkpoint if specified
+    # Resume from latest checkpoint in an existing experiment directory
     if args.resume_experiment:
         checkpoint_path: Optional[Path] = find_latest_checkpoint(Path(hparams.checkpoint_dir))
         if checkpoint_path:
@@ -206,13 +213,20 @@ def main() -> None:
             if optimizer_state is not None:
                 optimizer.load_state_dict(optimizer_state)
 
+    # Fine-tune from a specific checkpoint (resets optimizer and iteration for fresh start)
+    elif args.checkpoint_path:
+        model, _, _, _ = load_checkpoint(Path(args.checkpoint_path), model)
+        print(f"Fine-tuning from checkpoint: {args.checkpoint_path}")
+
     torch.backends.cudnn.enabled = hparams.cudnn_enabled
     torch.backends.cudnn.benchmark = hparams.cudnn_benchmark
 
-    # Training Loop
+    # Training Loop — fp32 training for numerical stability
+    # (fp16 AMP causes overflow with random VAE weights producing large mel values)
     model.train()
     tensorboard_logger = TensorBoardLogger(experiment_dir / "logs")
-    
+    scaler = None  # AMP disabled
+
     for epoch in range(hparams.epochs):
         training_metadata, epoch_val_loss, iteration = train_epoch(
             model=model,
@@ -226,7 +240,8 @@ def main() -> None:
             iteration=iteration,
             learning_rate=learning_rate,
             training_metadata=training_metadata,
-            tensorboard_logger=tensorboard_logger
+            tensorboard_logger=tensorboard_logger,
+            scaler=scaler,
         )
         
         # Update learning rate based on validation loss

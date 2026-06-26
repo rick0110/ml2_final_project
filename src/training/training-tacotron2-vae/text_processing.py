@@ -10,10 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Sequence, Optional, Any
 
 from num2words import num2words
-try:
-    from gruut import sentences
-except ImportError:
-    pass
+from gruut import sentences
 
 # Exact NVIDIA Tacotron 2 symbols (148 symbols)
 _pad        = '_'
@@ -114,8 +111,18 @@ def portuguese_phonetic_cleaners(text: str) -> str:
                 
     return " ".join(phoneme_list)
 
+_en_number_re = re.compile(r'\d+')
+
+def english_cleaners(text: str) -> str:
+    """Basic English cleaner: lowercase + number expansion. Character-level output."""
+    text = text.lower().strip()
+    text = re.sub(_en_number_re, lambda m: num2words(int(m.group(0))), text)
+    return text
+
+
 CLEANERS: Dict[str, Any] = {
     "portuguese_phonetic_cleaners": portuguese_phonetic_cleaners,
+    "english_cleaners": english_cleaners,
 }
 
 # ---- TEXT PROCESSOR CLASS ----

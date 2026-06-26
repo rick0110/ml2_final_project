@@ -1,11 +1,14 @@
-apex==0.9.10dev
-librosa==0.11.0
-matplotlib==3.11.0
-num2words==0.5.14
-numpy==2.4.6
-paramiko==5.0.0
-scikit_learn==1.9.0
-scipy==1.17.1
-torch==2.12.0
-torchaudio==2.11.0
-tqdm==4.67.3
+--extra-index-url https://download.pytorch.org/whl/cu118
+
+apex
+librosa
+matplotlib
+num2words
+numpy
+paramiko
+scikit_learn
+scipy
+torch
+torchaudio
+torchcodec
+tqdm

@@ -21,6 +21,8 @@ Tensor Conventions:
     S = number of audio samples
 """
 import csv
+import hashlib
+import pickle
 import re
 import sys
 import torch
@@ -91,11 +93,33 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         self.stft: TacotronSTFT = TacotronSTFT(
             filter_length=1024,
             hop_length=256,
-            win_length=1024, 
-            sampling_rate=22050, 
-            mel_fmin=0.0, 
+            win_length=1024,
+            sampling_rate=22050,
+            mel_fmin=0.0,
             mel_fmax=8000.0
         )
+
+        # Pre-compute all phoneme sequences once; gruut is too slow to call per-item
+        self._sequences: List[List[int]] = self._load_or_compute_sequences()
+
+    def _load_or_compute_sequences(self) -> List[List[int]]:
+        cleaner_key = hashlib.md5(
+            str(getattr(self.text_processor, 'cleaner_names', ['default'])).encode()
+        ).hexdigest()[:8]
+        cache_path = self.data_dir / f"_seq_cache_{cleaner_key}.pkl"
+
+        if cache_path.exists():
+            with open(cache_path, "rb") as f:
+                seqs: List[List[int]] = pickle.load(f)
+            if len(seqs) == len(self.files):
+                return seqs
+
+        print(f"Pre-computing {len(self.files)} phoneme sequences (one-time cost)...")
+        seqs = [self.text_processor.text_to_sequence(row["text"]) for row in self.files]
+        with open(cache_path, "wb") as f:
+            pickle.dump(seqs, f)
+        print("Phoneme sequences cached.")
+        return seqs
 
     def _load_files_list(self) -> List[Dict[str, str]]:
         """Load metadata manifest."""
@@ -144,9 +168,7 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         utt_id: str = row.get("utt_id", Path(row["mel_path"]).stem)
         cache_file: Path = self.cache_dir / f"{utt_id}.pt"
 
-        sequence_list: List[int] = self.text_processor.text_to_sequence(row["text"])
-
-        text_sequence: Tensor = torch.LongTensor(sequence_list) # (T_text,)
+        text_sequence: Tensor = torch.LongTensor(self._sequences[idx])  # (T_text,)
 
         emotion: Tensor = torch.zeros(4, dtype=torch.float32) # (4,)
         emotion[0] = 1.0  # Neutral

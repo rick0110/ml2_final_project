@@ -315,7 +315,8 @@ def train_epoch(
     learning_rate: float,
     training_metadata: Optional[Dict[str, Any]] = None,
     tensorboard_logger: Optional[TensorBoardLogger] = None,
-    accumulation_steps: int = 1
+    accumulation_steps: int = 1,
+    scaler: Optional[torch.cuda.amp.GradScaler] = None,
 ) -> Tuple[Dict[str, Any], Optional[float], int]:
     """
     Run one training epoch.
@@ -332,29 +333,49 @@ def train_epoch(
         iteration (int): Current global iteration.
         learning_rate (float): Current LR.
         training_metadata (Optional[Dict]): Tracking dict for history.
+        scaler (Optional[GradScaler]): AMP gradient scaler; None = fp32 training.
 
     Returns:
         Dict[str, Any]: Updated training metadata.
     """
     model.train()
+    use_amp: bool = scaler is not None and device.type == "cuda"
 
     epoch_val_loss: Optional[float] = None
+    warmup_steps: int = getattr(hparams, 'warmup_steps', 0)
+    warmup_start_lr: float = getattr(hparams, 'warmup_start_lr', 1e-6)
 
     optimizer.zero_grad()
     for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"training", leave=False)):
         model.train()
 
+        # Linear LR warmup: ramp from warmup_start_lr to learning_rate over warmup_steps
+        if warmup_steps > 0 and iteration < warmup_steps:
+            warmup_lr = warmup_start_lr + (learning_rate - warmup_start_lr) * iteration / warmup_steps
+            for pg in optimizer.param_groups:
+                pg['lr'] = warmup_lr
+
         x, y = model.parse_batch(batch, device)
-        y_pred: List[torch.Tensor] = model(x) # [mel, mel_post, gate, align, mu, logvar, z]
 
-        loss, recon_loss, kl_loss, kl_weight = criterion(y_pred, y, iteration)
-        
+        with torch.amp.autocast("cuda", enabled=use_amp):
+            y_pred: List[torch.Tensor] = model(x)  # [mel, mel_post, gate, align, mu, logvar, z]
+
+            # x = (text_padded, input_lengths, mel_padded, output_lengths)
+            loss, recon_loss, kl_loss, kl_weight, guided_attn_loss = criterion(
+                y_pred, y, iteration, output_lengths=x[3], input_lengths=x[1]
+            )
+
         scaled_loss = loss / accumulation_steps
-        scaled_loss.backward()
+        if use_amp:
+            scaler.scale(scaled_loss).backward()
+        else:
+            scaled_loss.backward()
 
-        # Capture gradient norms per layer (only when logging checkpoints/plots to save GPU-CPU sync time)
+        # Capture gradient norms per layer (only at checkpoint steps to avoid GPU-CPU sync overhead)
         layer_grads: List[float] = []
         if iteration % hparams.iters_per_checkpoint == 0 or iteration == 0:
+            if use_amp:
+                scaler.unscale_(optimizer)
             for name, param in model.named_parameters():
                 if param.grad is not None:
                     layer_grads.append(param.grad.norm().item())
@@ -363,10 +384,15 @@ def train_epoch(
         grad_norm = torch.tensor(0.0)
 
         if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(train_loader):
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                model.parameters(), hparams.grad_clip_thresh
-            )
-            optimizer.step()
+            if use_amp:
+                if not (iteration % hparams.iters_per_checkpoint == 0 or iteration == 0):
+                    scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), hparams.grad_clip_thresh)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), hparams.grad_clip_thresh)
+                optimizer.step()
             optimizer.zero_grad()
 
         if iteration % hparams.iters_per_checkpoint == 0:
@@ -384,6 +410,7 @@ def train_epoch(
             training_metadata.setdefault("recon_loss", []).append(recon_loss.item())
             training_metadata.setdefault("kl_loss", []).append(kl_loss.item())
             training_metadata.setdefault("kl_weight", []).append(float(kl_weight))
+            training_metadata.setdefault("guided_attn_loss", []).append(guided_attn_loss.item())
 
             # 2. TensorBoard logging & Heavy validation evaluation: run only every iters_per_checkpoint steps (or step 0)
             if iteration % hparams.iters_per_checkpoint == 0 or iteration == 0:
@@ -396,11 +423,15 @@ def train_epoch(
                 with torch.no_grad():
                     xt, yt = model.parse_batch(test_batch, device)
                     yt_pred: List[torch.Tensor] = model(xt)
-                    test_loss, test_recon, test_kl, _ = criterion(yt_pred, yt, iteration)
-                    
+                    test_loss, test_recon, test_kl, _, test_ga = criterion(
+                        yt_pred, yt, iteration, output_lengths=xt[3], input_lengths=xt[1]
+                    )
+
                     xv, yv = model.parse_batch(val_batch, device)
                     yv_pred: List[torch.Tensor] = model(xv)
-                    val_loss, val_recon, val_kl, _ = criterion(yv_pred, yv, iteration)
+                    val_loss, val_recon, val_kl, _, val_ga = criterion(
+                        yv_pred, yv, iteration, output_lengths=xv[3], input_lengths=xv[1]
+                    )
                     epoch_val_loss = val_loss.item()
 
                     # Generate inference spectrogram for the first item in the batch
@@ -421,23 +452,26 @@ def train_epoch(
                     writer.add_scalar("Loss/Train_Total", reduced_loss, iteration)
                     writer.add_scalar("Loss/Train_Recon", recon_loss.item(), iteration)
                     writer.add_scalar("Loss/Train_KL", kl_loss.item(), iteration)
+                    writer.add_scalar("Loss/Train_GuidedAttn", guided_attn_loss.item(), iteration)
                     writer.add_scalar("LearningRate", learning_rate, iteration)
                     writer.add_scalar("Loss/Train_KL_Weight", kl_weight, iteration)
                     writer.add_scalar("Gradients/Global_Norm", float(grad_norm), iteration)
-                    
+
                     # Log individual layer gradient norms
                     for name, param in model.named_parameters():
                         if param.grad is not None:
                             writer.add_scalar(f"GradientNorms_Layers/{name}", param.grad.norm().item(), iteration)
-                    
+
                     # Log test/validation losses
                     writer.add_scalar("Loss/Test_Total", test_loss.item(), iteration)
                     writer.add_scalar("Loss/Test_Recon", test_recon.item(), iteration)
                     writer.add_scalar("Loss/Test_KL", test_kl.item(), iteration)
+                    writer.add_scalar("Loss/Test_GuidedAttn", test_ga.item(), iteration)
 
                     writer.add_scalar("Loss/Val_Total", val_loss.item(), iteration)
                     writer.add_scalar("Loss/Val_Recon", val_recon.item(), iteration)
                     writer.add_scalar("Loss/Val_KL", val_kl.item(), iteration)
+                    writer.add_scalar("Loss/Val_GuidedAttn", val_ga.item(), iteration)
 
                     # Pair: target and predicted spectrograms
                     fig_spec, (ax_t, ax_p) = plt.subplots(1, 2, figsize=(12, 5))
