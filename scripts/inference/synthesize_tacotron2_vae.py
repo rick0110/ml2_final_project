@@ -74,6 +74,23 @@ def parse_args() -> argparse.Namespace:
                         help="WaveGlow inference sigma (smaller = less noise, more stable)")
     parser.add_argument("--device", type=str, default=None,
                         help="Device: 'cuda' or 'cpu' (default: auto-detect)")
+    parser.add_argument("--gate-threshold", type=float, default=None,
+                        help="Gate stop threshold (default: use value from hparams, typically 0.5). "
+                             "Lower values (e.g. 0.1) stop generation earlier.")
+    parser.add_argument("--max-decoder-steps", type=int, default=None,
+                        help="Override max decoder steps (default: from hparams, typically 1000)")
+    parser.add_argument("--energy-stop-threshold", type=float, default=None,
+                        help="Post-hoc mel energy threshold for silence detection (e.g. -8.0). "
+                             "If set, truncates trailing silence from the output mel.")
+    parser.add_argument("--energy-stop-frames", type=int, default=10,
+                        help="Number of consecutive frames below energy threshold to declare silence (default: 10)")
+    parser.add_argument("--force-monotonic", action="store_true", default=False,
+                        help="Prevent attention from attending to earlier encoder positions (fixes attention looping)")
+    parser.add_argument("--monotonic-window", type=int, default=3,
+                        help="How many encoder positions behind the peak the attention may still revisit (default: 3)")
+    parser.add_argument("--attn-stop-frames", type=int, default=0,
+                        help="Stop when attention peak stays on the last encoder position for N consecutive frames "
+                             "(0=disabled). Use instead of gate threshold for exposure-bias-affected models.")
     return parser.parse_args()
 
 
@@ -183,6 +200,14 @@ def main() -> None:
     model.eval()
     print(f"Model loaded at iteration {iteration}")
 
+    # Override inference stopping parameters if specified
+    if args.gate_threshold is not None:
+        model.decoder.gate_threshold = args.gate_threshold
+        print(f"Gate threshold overridden to {args.gate_threshold}")
+    if args.max_decoder_steps is not None:
+        model.decoder.max_decoder_steps = args.max_decoder_steps
+        print(f"Max decoder steps overridden to {args.max_decoder_steps}")
+
     # Process text
     text_ids = text_processor.text_to_sequence(args.text)
     text_tensor = torch.LongTensor(text_ids).unsqueeze(0).to(device)  # (1, T)
@@ -203,7 +228,33 @@ def main() -> None:
     stem = f"{args.experiment.name}_{style_label}"
 
     print("Running inference...")
-    mel_pre, mel_post, alignments = model.inference_mel(text_tensor, ref_mel)
+    if args.force_monotonic:
+        print(f"Monotonic attention: ON (window={args.monotonic_window})")
+    if args.attn_stop_frames > 0:
+        print(f"Attention-peak stopping: ON (frames={args.attn_stop_frames})")
+    mel_pre, mel_post, alignments = model.inference_mel(
+        text_tensor, ref_mel,
+        force_monotonic=args.force_monotonic,
+        monotonic_window=args.monotonic_window,
+        attn_stop_frames=args.attn_stop_frames,
+    )
+
+    # Energy-based silence truncation (addresses teacher-forcing gate gap)
+    if args.energy_stop_threshold is not None:
+        frame_energy = mel_post.mean(dim=1).squeeze(0)  # (T,)
+        n_frames = frame_energy.shape[0]
+        stop_frame = n_frames  # default: keep all
+        k = args.energy_stop_frames
+        for t in range(n_frames - k + 1):
+            if (frame_energy[t:t+k] < args.energy_stop_threshold).all():
+                stop_frame = t + 1  # keep one frame of transition
+                break
+        if stop_frame < n_frames:
+            print(f"Energy-based stop: truncated {n_frames} → {stop_frame} frames "
+                  f"(threshold={args.energy_stop_threshold}, window={k})")
+            mel_pre = mel_pre[:, :, :stop_frame]
+            mel_post = mel_post[:, :, :stop_frame]
+            alignments = alignments[:, :stop_frame, :]
 
     # Save mel spectrogram plots
     mel_plot_path = args.output_dir / f"{stem}_mel.png"
