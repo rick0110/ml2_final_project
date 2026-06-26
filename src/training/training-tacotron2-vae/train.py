@@ -83,8 +83,6 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--anneal-function", type=str, default="cyclical")
     parser.add_argument("--guided-attention-weight", type=float, default=2.0)
     parser.add_argument("--guided-attention-sigma", type=float, default=0.4)
-    parser.add_argument("--scheduled-sampling", type=float, default=0.0,
-                        help="Fraction of decoder steps to use model's own predictions (0=teacher forcing, 1=inference mode)")
     parser.add_argument("--warmup-steps", type=int, default=0,
                         help="Linear LR warmup over this many steps (0=disabled)")
     parser.add_argument("--lr-scheduler-patience", type=int, default=20,
@@ -150,7 +148,6 @@ def main() -> None:
             "anneal_function": args.anneal_function,
             "guided_attention_weight": args.guided_attention_weight,
             "guided_attention_sigma": args.guided_attention_sigma,
-            "p_scheduled_sampling": args.scheduled_sampling,
             "warmup_steps": args.warmup_steps,
             "n_symbols": text_processor.n_symbols,
             "training_data": str(train_file),

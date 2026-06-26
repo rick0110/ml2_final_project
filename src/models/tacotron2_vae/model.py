@@ -441,7 +441,6 @@ class Decoder(nn.Module):
         self.gate_threshold: float = hparams.gate_threshold
         self.p_attention_dropout: float = hparams.p_attention_dropout
         self.p_decoder_dropout: float = hparams.p_decoder_dropout
-        self.p_scheduled_sampling: float = hparams.p_scheduled_sampling
         self.p_decoder_input_dropout: float = getattr(hparams, 'p_decoder_input_dropout', 0.5)
 
         self.prenet: Prenet = Prenet(
@@ -645,15 +644,7 @@ class Decoder(nn.Module):
         alignments: List[Tensor] = []
         
         while len(mel_outputs) < decoder_inputs_parsed.size(0) - 1:
-            # Scheduled sampling: sometimes feed model's own prediction instead of ground truth
-            if self.training and self.p_scheduled_sampling > 0.0 and len(mel_outputs) > 0:
-                if torch.rand(1, device=decoder_inputs_parsed.device).item() < self.p_scheduled_sampling:
-                    # Use model's previous prediction (no frame dropout, same as inference)
-                    step_input = self.prenet(mel_outputs[-1].detach())
-                else:
-                    step_input = decoder_inputs_parsed[len(mel_outputs)]
-            else:
-                step_input = decoder_inputs_parsed[len(mel_outputs)]
+            step_input: Tensor = decoder_inputs_parsed[len(mel_outputs)]
             mel_output, gate_output, attention_weights = self.decode(step_input)
             mel_outputs.append(mel_output)
             gate_outputs.append(gate_output)
@@ -661,16 +652,11 @@ class Decoder(nn.Module):
 
         return self.parse_decoder_outputs(mel_outputs, gate_outputs, alignments)
 
-    def inference(self, memory: Tensor, force_monotonic: bool = False, monotonic_window: int = 3,
-                  attn_stop_frames: int = 0) -> Tuple[Tensor, Tensor, Tensor]:
+    def inference(self, memory: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Args:
             memory (Tensor): (B, T_text, encoder_dim)
-            force_monotonic (bool): If True, prevent attention from moving backward.
-            monotonic_window (int): Number of positions backward the attention is allowed to revisit.
-            attn_stop_frames (int): Stop when attention peak stays on the last encoder position for
-                this many consecutive frames (0 = disabled). Reliably stops without a trained gate.
-
+        
         Returns:
             Tuple[Tensor, Tensor, Tensor]: mel_outputs, gate_outputs, alignments.
         """
@@ -680,37 +666,13 @@ class Decoder(nn.Module):
         mel_outputs: List[Tensor] = []
         gate_outputs: List[Tensor] = []
         alignments: List[Tensor] = []
-        monotonic_peak: int = 0  # tracks furthest attended encoder position
-        last_enc_pos: int = memory.shape[1] - 1  # index of final encoder token
-        attn_end_count: int = 0  # consecutive frames with peak at last encoder position
-
+        
         while True:
             step_input: Tensor = self.prenet(decoder_input) # (B, prenet_dim)
             mel_output, gate_output, attention_weights = self.decode(step_input)
             mel_outputs.append(mel_output)
             gate_outputs.append(gate_output)
             alignments.append(attention_weights)
-
-            current_peak = int(attention_weights.argmax(dim=-1).max().item())
-
-            if force_monotonic:
-                if current_peak > monotonic_peak:
-                    monotonic_peak = current_peak
-                cutoff = max(0, monotonic_peak - monotonic_window)
-                if cutoff > 0:
-                    mono_mask = torch.zeros(memory.shape[0], memory.shape[1],
-                                           dtype=torch.bool, device=memory.device)
-                    mono_mask[:, :cutoff] = True
-                    self.mask = mono_mask
-
-            # Attention-peak-based stopping: gate alternative for exposure-bias-affected models
-            if attn_stop_frames > 0:
-                if current_peak >= last_enc_pos:
-                    attn_end_count += 1
-                else:
-                    attn_end_count = 0
-                if attn_end_count >= attn_stop_frames:
-                    break
 
             if torch.sigmoid(gate_output).max() > self.gate_threshold:
                 break
@@ -900,18 +862,13 @@ class Tacotron2(nn.Module):
         return audio_output
 
     @torch.inference_mode()
-    def inference_mel(self, text: Tensor, audio: Tensor,
-                      force_monotonic: bool = False, monotonic_window: int = 3,
-                      attn_stop_frames: int = 0) -> Tuple[Tensor, Tensor, Tensor]:
+    def inference_mel(self, text: Tensor, audio: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Generate mel-spectrogram from text conditioned on reference audio.
 
         Args:
             text (Tensor): Text sequence tensor (1, T_text).
             audio (Tensor): Reference mel-spectrogram tensor (1, n_mels, T_mel).
-            force_monotonic (bool): Prevent attention from attending backward (fixes attention looping).
-            monotonic_window (int): How many encoder positions backward the attention may still revisit.
-            attn_stop_frames (int): Stop when attention peak stays on last encoder pos for N frames (0=off).
 
         Returns:
             Tuple[Tensor, Tensor, Tensor]: mel_outputs, mel_outputs_postnet, alignments
@@ -922,21 +879,18 @@ class Tacotron2(nn.Module):
 
         # Extract prosody from reference audio
         latent_vector, _, _, _ = self.vae_gst(audio)
-
+        
         # Inject prosody
         latent_vector = latent_vector.unsqueeze(1).expand_as(transcript_outputs)
         encoder_outputs = transcript_outputs + latent_vector
-
+        
         # Decode to mel-spectrogram
-        mel_outputs, _, alignments = self.decoder.inference(
-            encoder_outputs, force_monotonic=force_monotonic, monotonic_window=monotonic_window,
-            attn_stop_frames=attn_stop_frames,
-        )
-
+        mel_outputs, _, alignments = self.decoder.inference(encoder_outputs)
+        
         # Refine mel-spectrogram via postnet
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
-
+        
         return mel_outputs, mel_outputs_postnet, alignments
 
 

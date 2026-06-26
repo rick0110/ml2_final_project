@@ -217,13 +217,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# data and large model artifacts
+# data
 /data/
 experiments/
 local_weight_models/
-
-# Large binary tensors in exports (keep audio/images, skip .pt files)
-exports/synth/**/*.pt
 
 .aider*
 package-lock.json
