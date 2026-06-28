@@ -163,6 +163,34 @@ def load_waveglow(waveglow_path: Path, device: torch.device):
     return waveglow
 
 
+def griffin_lim_vocoder(mel: Tensor, device: torch.device, n_iter: int = 60) -> Tensor:
+    """Convert log-mel spectrogram to waveform via Griffin-Lim."""
+    SR, N_FFT, HOP, WIN = 22050, 1024, 256, 1024
+    N_MELS, FMIN, FMAX = 80, 0.0, 8000.0
+
+    # Un-log the mel
+    linear_mel = torch.exp(mel.squeeze(0).float().cpu())  # (n_mels, T)
+
+    inv_mel = torchaudio.transforms.InverseMelScale(
+        n_stft=N_FFT // 2 + 1,
+        n_mels=N_MELS,
+        sample_rate=SR,
+        f_min=FMIN,
+        f_max=FMAX,
+        norm=None,
+    )
+    gl = torchaudio.transforms.GriffinLim(
+        n_fft=N_FFT,
+        hop_length=HOP,
+        win_length=WIN,
+        n_iter=n_iter,
+        power=1.0,
+    )
+    spec = inv_mel(linear_mel)   # (n_fft//2+1, T)
+    waveform = gl(spec)          # (T_samples,)
+    return waveform.unsqueeze(0) # (1, T_samples)
+
+
 def main() -> None:
     args = parse_args()
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
@@ -228,7 +256,11 @@ def main() -> None:
         torchaudio.save(str(audio_path), audio.cpu(), 22050)
         print(f"Saved audio: {audio_path}")
     else:
-        print("No WaveGlow provided — use --waveglow to generate audio from mel.")
+        print("No WaveGlow provided — falling back to Griffin-Lim vocoder (lower quality).")
+        audio = griffin_lim_vocoder(mel_post, device)
+        audio_path = args.output_dir / f"{stem}_audio.wav"
+        torchaudio.save(str(audio_path), audio.cpu(), 22050)
+        print(f"Saved audio (Griffin-Lim): {audio_path}")
 
     summary = {
         "experiment": str(args.experiment),

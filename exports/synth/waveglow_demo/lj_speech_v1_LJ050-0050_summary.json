@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/lj_speech_v1",
+  "checkpoint": "experiments/tacotron2-vae/lj_speech_v1/checkpoints/epoch_24000",
+  "iteration": 24000,
+  "text": "The weather is lovely today.",
+  "n_tokens": 29,
+  "reference_audio": "data/raw/LJSpeech-1.1/wavs/LJ050-0050.wav",
+  "mel_shape": [
+    1,
+    80,
+    138
+  ],
+  "mel_plot": "exports/synth/waveglow_demo/lj_speech_v1_LJ050-0050_mel.png",
+  "alignment_plot": "exports/synth/waveglow_demo/lj_speech_v1_LJ050-0050_alignment.png"
+}

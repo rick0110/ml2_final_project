@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Dict, List, Sequence, Optional, Any
 
 from num2words import num2words
-from gruut import sentences
 
 # Exact NVIDIA Tacotron 2 symbols (148 symbols)
 _pad        = '_'
@@ -87,13 +86,14 @@ def portuguese_phonetic_cleaners(text: str) -> str:
     Robust text normalizer + G2P phonemizer using Gruut.
     Returns a space-separated string of phonetic symbols (e.g., "@pt_k @pt_a @pt_z @pt_a").
     """
+    from gruut import sentences  # lazy import: only needed for PT cleaner
     text = text.lower()
     text = expand_abbreviations(text)
     text = re.sub(_currency_re, _expand_currency, text)
     text = re.sub(_currency_re2, _expand_currency2, text)
     text = re.sub(_ordinals_re, _expand_ordinal, text)
     text = re.sub(_number_re, _expand_number, text)
-    
+
     # Convert to phonemes using gruut
     phoneme_list = []
     for sent in sentences(text, lang='pt'):

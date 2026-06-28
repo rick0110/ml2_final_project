@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/lj_speech_v1",
+  "checkpoint": "experiments/tacotron2-vae/lj_speech_v1/checkpoints/epoch_25500",
+  "iteration": 25500,
+  "text": "The results were published yesterday afternoon.",
+  "n_tokens": 48,
+  "reference_audio": null,
+  "mel_shape": [
+    1,
+    80,
+    233
+  ],
+  "mel_plot": "exports/synth/style_transfer_en/lj_speech_v1_neutral_mel.png",
+  "alignment_plot": "exports/synth/style_transfer_en/lj_speech_v1_neutral_alignment.png"
+}
