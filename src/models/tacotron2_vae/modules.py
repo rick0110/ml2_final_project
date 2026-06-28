@@ -102,6 +102,7 @@ class ReferenceEncoder(nn.Module):
             hidden_size=hparams.E // 2,
             batch_first=True,
         )
+        self.attn: nn.Linear = nn.Linear(hparams.E // 2, 1)
         self.n_mels: int = hparams.n_mel_channels
 
     def forward(self, inputs: Tensor) -> Tensor:
@@ -113,26 +114,43 @@ class ReferenceEncoder(nn.Module):
                 Shape: (B, n_mels, T)
 
         Returns:
-            Tensor: Last hidden state of GRU.
+            Tensor: Attention-pooled GRU encoding.
                 Shape: (B, E // 2)
         """
-        batch_size: int = inputs.size(0)
-        # Reshape input: (B, 1, T, n_mels)
-        out: Tensor = inputs.contiguous().view(batch_size, 1, -1, self.n_mels)
+        encoded, _ = self._encode(self._cnn_forward(inputs))
+        return encoded
 
+    def _cnn_forward(self, inputs: Tensor) -> Tensor:
+        batch_size: int = inputs.size(0)
+        out: Tensor = inputs.contiguous().view(batch_size, 1, -1, self.n_mels)
         for conv, bn in zip(self.convs, self.bns):
-            out = conv(out)   # (B, C_i, T_i, n_mels_i)
+            out = conv(out)
             out = bn(out)
             out = F.relu(out)
-
-        # Prepare for GRU: (B, T_last, C_last * n_mels_last)
-        out = out.transpose(1, 2) # (B, T_last, C_last, n_mels_last)
+        out = out.transpose(1, 2)
         T_prime: int = out.size(1)
-        out = out.contiguous().view(batch_size, T_prime, -1) # (B, T_last, input_size)
+        return out.contiguous().view(batch_size, T_prime, -1)
 
-        # Process with GRU
-        _, hidden = self.gru(out) # (1, B, E // 2)
-        return hidden.squeeze(0)  # (B, E // 2)
+    def _encode(self, gru_input: Tensor) -> Tuple[Tensor, Tensor]:
+        out, _ = self.gru(gru_input)           # (B, T', E // 2)
+        scores = self.attn(out)                # (B, T', 1)
+        weights = torch.softmax(scores, dim=1) # (B, T', 1)
+        encoded = (out * weights).sum(dim=1)   # (B, E // 2)
+        return encoded, weights.squeeze(-1)    # (B, T')
+
+    def encode_with_attention(self, inputs: Tensor) -> Tuple[Tensor, Tensor]:
+        """
+        Forward pass retornando o encoding e os pesos de atenção temporal.
+
+        Args:
+            inputs (Tensor): Mel-spectrogram. Shape: (B, n_mels, T)
+
+        Returns:
+            Tuple[Tensor, Tensor]:
+                encoded: Shape (B, E // 2)
+                weights: Pesos de atenção por frame da GRU. Shape (B, T')
+        """
+        return self._encode(self._cnn_forward(inputs))
 
     @staticmethod
     def calculate_channels(length: int, kernel_size: int, stride: int, pad: int, n_convs: int) -> int:
@@ -212,6 +230,13 @@ class VAE_GST(nn.Module):
             return eps * std + mu                  # (B, L)
         return mu  # Return mean during inference
 
+    def _vae_from_enc(self, enc_out: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        mu: Tensor = self.fc1(enc_out)
+        logvar: Tensor = torch.clamp(self.fc2(enc_out), min=-10.0, max=2.0)
+        z: Tensor = self.reparameterize(mu, logvar)
+        style_embed: Tensor = self.fc3(z)
+        return style_embed, mu, logvar, z
+
     def forward(
         self, inputs: Tensor
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -225,19 +250,27 @@ class VAE_GST(nn.Module):
         Returns:
             Tuple[Tensor, Tensor, Tensor, Tensor]: style_embed, mu, logvar, z.
         """
-        # Encode
-        enc_out: Tensor = self.ref_encoder(inputs) # (B, E // 2)
-        
-        # Latent distribution parameters
-        mu: Tensor = self.fc1(enc_out)     # (B, L)
-        logvar: Tensor = self.fc2(enc_out) # (B, L)
-        # Clamp logvar to prevent numerical instability
-        logvar = torch.clamp(logvar, min=-10.0, max=2.0)
-        
-        # Sample z
-        z: Tensor = self.reparameterize(mu, logvar) # (B, L)
-        
-        # Project to style embedding
-        style_embed: Tensor = self.fc3(z) # (B, E)
-        
-        return style_embed, mu, logvar, z
+        enc_out: Tensor = self.ref_encoder(inputs)
+        return self._vae_from_enc(enc_out)
+
+    def forward_with_attention(
+        self, inputs: Tensor
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """
+        Forward pass retornando as saídas do VAE e os pesos de atenção temporal.
+
+        Args:
+            inputs (Tensor): Mel-spectrogram input.
+                Shape: (B, n_mels, T)
+
+        Returns:
+            Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+                style_embed: Shape (B, E)
+                mu: Shape (B, L)
+                logvar: Shape (B, L)
+                z: Shape (B, L)
+                temporal_weights: Pesos de atenção por frame da GRU. Shape (B, T')
+        """
+        enc_out, temporal_weights = self.ref_encoder.encode_with_attention(inputs)
+        style_embed, mu, logvar, z = self._vae_from_enc(enc_out)
+        return style_embed, mu, logvar, z, temporal_weights
