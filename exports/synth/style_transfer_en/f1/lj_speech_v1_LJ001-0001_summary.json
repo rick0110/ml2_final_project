@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/lj_speech_v1",
+  "checkpoint": "experiments/tacotron2-vae/lj_speech_v1/checkpoints/epoch_25500",
+  "iteration": 25500,
+  "text": "The system returned an unexpected error.",
+  "n_tokens": 41,
+  "reference_audio": "data/raw/LJSpeech-1.1/wavs/LJ001-0001.wav",
+  "mel_shape": [
+    1,
+    80,
+    224
+  ],
+  "mel_plot": "exports/synth/style_transfer_en/f1/lj_speech_v1_LJ001-0001_mel.png",
+  "alignment_plot": "exports/synth/style_transfer_en/f1/lj_speech_v1_LJ001-0001_alignment.png"
+}

@@ -221,5 +221,16 @@ __marimo__/
 /data/
 experiments/
 local_weight_models/
-/exports/
+
 .aider*
+package-lock.json
+package.json
+.vscode/
+
+# Caching directories
+_cache/
+_cache_models/
+**/_cache/
+**/_cache_models/
+
+.agents/

@@ -1,0 +1,15 @@
+{
+  "experiment": "experiments/tacotron2-vae/lj_speech_v1",
+  "checkpoint": "experiments/tacotron2-vae/lj_speech_v1/checkpoints/epoch_25500",
+  "iteration": 25500,
+  "text": "The results were published yesterday afternoon.",
+  "n_tokens": 48,
+  "reference_audio": "data/raw/LJSpeech-1.1/wavs/LJ050-0050.wav",
+  "mel_shape": [
+    1,
+    80,
+    233
+  ],
+  "mel_plot": "exports/synth/style_transfer_en/lj_speech_v1_LJ050-0050_mel.png",
+  "alignment_plot": "exports/synth/style_transfer_en/lj_speech_v1_LJ050-0050_alignment.png"
+}
