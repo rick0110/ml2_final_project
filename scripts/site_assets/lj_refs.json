@@ -1,0 +1,29 @@
+{
+ "expressiva": {
+  "utt": "LJ003-0105",
+  "path": "data/processed/LJSpeech-tacotron-vae/mels/LJ003-0105.pt",
+  "text": "he was sent on to Newgate in a coach, handcuffed to a noted house-breaker, who was afterwards cast for death.",
+  "dur": 7.762585,
+  "f0_mean": 201.86267569846166,
+  "f0_std": 80.39338427607069,
+  "rate": 14.041714197010403
+ },
+ "grave_lenta": {
+  "utt": "LJ013-0125",
+  "path": "data/processed/LJSpeech-tacotron-vae/mels/LJ013-0125.pt",
+  "text": "the Junior United Service, the Union, Reform, Colonial, and Erechtheum clubs.",
+  "dur": 7.600045,
+  "f0_mean": 172.5206284713037,
+  "f0_std": 57.044452277431226,
+  "rate": 10.131518958111432
+ },
+ "rapida": {
+  "utt": "LJ032-0145",
+  "path": "data/processed/LJSpeech-tacotron-vae/mels/LJ032-0145.pt",
+  "text": "also bore impressions of the same irregularities that appeared on the barrel of the rifle.",
+  "dur": 4.685941,
+  "f0_mean": 187.29735081528898,
+  "f0_std": 51.98879325601641,
+  "rate": 19.206387788493284
+ }
+}
