@@ -217,28 +217,36 @@ Then, open the provided URL (usually `http://localhost:6006`) in your web browse
 
 ## 8. Diagnostic & Analysis Notebooks
 
-The repository includes state-of-the-art interactive Jupyter notebooks inside the `notebooks/` directory to monitor training visually and analyze data.
+The repository includes interactive Jupyter notebooks inside the `notebooks/` directory to monitor training visually and analyze data. All notebooks are scoped to the project's two supported datasets: **VERBO** (Portuguese emotional speech, `experiments/tacotron2-vae/verbo_v4_f1`) and **LJSpeech** (English, via NVIDIA's official pretrained checkpoints and `data/processed/LJSpeech-tacotron-vae`).
 
-### 1. `tacotron2_vae_demo.ipynb`
-
-- **Purpose:** Live, visual training loop for Tacotron2-VAE.
+### 1. `tacotron2_vae_demo.ipynb` — VERBO
+- **Purpose:** Live, visual training loop for Tacotron2-VAE on VERBO.
 - **Features:** Plots total loss, reconstruction loss, KL loss, and displays the **Target vs. Generated Mel-spectrograms** in real-time.
-- **PCA Diagnostic:** Extracts the latent space `z` across the validation batch and runs SVD to plot the Singular Values, ensuring the VAE is utilizing its latent dimensions properly.
+- **PCA Diagnostic:** Extracts the latent space `z` across the batch and runs SVD to plot the Singular Values, ensuring the VAE is utilizing its latent dimensions properly.
 
-### 2. `waveglow_demo.ipynb`
+### 2. `attention_analysis.ipynb` — VERBO
+- **Purpose:** Interprets the `ReferenceEncoder`'s attention-pooling weights on the trained VERBO model.
+- **Features:** Extracts temporal attention over 7 emotional references (same speaker/sentence), correlates attention with energy/spectral centroid, visualizes style-embedding (`μ`) discriminative dimensions, and runs a causal ablation of the attended frames.
 
-- **Purpose:** Live, visual training loop for WaveGlow.
-- **Features:** Plots the NLL loss and compares the Target Audio Waveform against the conditioned Mel-Spectrogram.
-- **Prior Diagnostic:** Plots a live histogram of the output `z` over a standard normal `N(0,1)` PDF line to verify that the Normalizing Flow is correctly mapping audio to the Gaussian prior.
+### 3. `style_transfer_demo.ipynb` — VERBO
+- **Purpose:** End-to-end emotion style-transfer demo.
+- **Features:** Synthesizes the same sentence conditioned on each of VERBO's 7 emotions (real reference audio → VAE-GST style embedding → Tacotron2 decoder → WaveGlow), with side-by-side playback against the real reference and mel/alignment plots per emotion.
 
-### 3. `spectral_analisys.ipynb`
+### 4. `demo_spectral_analisys.ipynb` — VERBO vs. LJSpeech
+- **Purpose:** Comparative offline dataset analytics.
+- **Features:** Example spectrograms from both datasets, global mel-bin mean/variance overlaid, and **K-Means / PCA / t-SNE** on mel embeddings colored by dataset origin (with Adjusted Rand Index quantifying how spectrally separable the two datasets are).
 
-- **Purpose:** Offline dataset analytics.
-- **Features:**
-  - Instantiates the `TacotronSTFT` engine to visualize waveforms.
-  - Computes Global Mean and Variance across the 80 Mel bins for the entire dataset.
-  - Applies **K-Means Clustering** and visualizes the dataset distribution using **PCA** and **t-SNE** 2D projections.
-  - *Future Ready:* Contains a wrapper function `analyze_dataset()` specifically built to execute this pipeline on the upcoming VERBO dataset.
+### 5. `demo_audio.ipynb` — LJSpeech
+- **Purpose:** Vocoder quality comparison (copy-synthesis).
+- **Features:** Reconstructs a real LJSpeech mel-spectrogram via **Griffin-Lim** vs. **WaveGlow** (NVIDIA, pretrained on LJSpeech), isolating vocoder quality from any acoustic model.
+
+### 6. `demo_vocoder_waveglow.ipynb` — LJSpeech
+- **Purpose:** Live, visual training/fine-tuning loop for WaveGlow on LJSpeech.
+- **Features:** Plots the NLL loss and compares the Target Audio Waveform against the conditioned Mel-Spectrogram; can resume from a local checkpoint or fine-tune from the NVIDIA pretrained checkpoint.
+- **Prior Diagnostic:** Plots a live histogram of the output `z` over a standard normal `N(0,1)` PDF line to verify the Normalizing Flow is correctly mapping audio to the Gaussian prior.
+
+### 7. `testing_nvidia_tarcotron2.ipynb` — LJSpeech
+- **Purpose:** Sanity check against NVIDIA's official pretrained Tacotron2 + WaveGlow (both trained on LJSpeech), downloaded directly via `torch.hub` — a "factory baseline" to compare against the project's own VERBO-trained models.
 
 ---
 
