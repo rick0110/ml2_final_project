@@ -270,6 +270,25 @@ for t in leg.get_texts():
 save(fig, "fig_verbo_latent_scatter.png")
 summary["verbo_pca_evr"] = [round(float(v), 3) for v in evr]
 
+# ================================================== 7b. verbo latent t-SNE
+from sklearn.manifold import TSNE
+
+tsne = TSNE(n_components=2, perplexity=15, init="pca", learning_rate="auto",
+            random_state=42)
+emb = tsne.fit_transform(mus)
+fig, ax = plt.subplots(figsize=(6.6, 5.2))
+for e in EMO_ORDER:
+    idx = [i for i, x in enumerate(emos) if x == e]
+    ax.scatter(emb[idx, 0], emb[idx, 1], s=42, color=EMO_COLORS[e], label=e,
+               edgecolors=SURFACE, linewidths=1.2, zorder=3)
+ax.set_title("t-SNE de μ (16 dims → 2) — VERBO f1", loc="left")
+ax.set_xlabel("dimensão t-SNE 1")
+ax.set_ylabel("dimensão t-SNE 2")
+leg = ax.legend(frameon=False, loc="center left", bbox_to_anchor=(1.01, 0.5))
+for t in leg.get_texts():
+    t.set_color(INK2)
+save(fig, "fig_verbo_latent_tsne.png")
+
 # ================================================== 8. interpolation norms
 ii = json.load(open(ANA / "interp_info.json"))
 fig, axes = plt.subplots(1, 3, figsize=(11.4, 3.2))
