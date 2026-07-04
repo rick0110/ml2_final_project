@@ -163,6 +163,7 @@ def main() -> None:
     args.output_wav.parent.mkdir(parents=True, exist_ok=True)
     if audio.dim() == 3:
         audio = audio.squeeze(0)
+    audio = torch.clamp(audio, -1.0, 1.0)
     torchaudio.save(str(args.output_wav), audio.cpu(), sample_rate=22050)
     print(f"Saved synthesized audio to {args.output_wav}")
 

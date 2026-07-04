@@ -25,7 +25,7 @@ from typing import Tuple, Optional
 
 from pathlib import Path
 import sys
-ROOT_DIR: Path = Path(__file__).parent.parent.parent
+ROOT_DIR: Path = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(ROOT_DIR / "src" / "models" / "tacotron2_vae"))
 
 try:

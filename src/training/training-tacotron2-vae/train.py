@@ -74,7 +74,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--iters-per-checkpoint", type=int, default=500)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--learning-rate", type=float, default=1e-5)
+    parser.add_argument("--learning-rate", type=float, default=1e-4,
+                        help="Default matches hparams.py; 1e-5 was found to cause a training plateau")
     parser.add_argument("--weight-decay", type=float, default=1e-6)
     parser.add_argument("--grad-clip-thresh", type=float, default=1.0)
     parser.add_argument("--num-workers", type=int, default=4)
@@ -100,6 +101,19 @@ def parse_arguments() -> argparse.Namespace:
         default=ARTIFACTS_DIR,
         help="Path with the data, metadata.csv",
     )
+
+    # Model capacity overrides (defaults match the full-size hparams.py, tuned for
+    # multi-hour corpora; pass smaller values for small datasets like VERBO to
+    # reduce overfitting risk and speed up convergence).
+    parser.add_argument("--symbols-embedding-dim", type=int, default=None)
+    parser.add_argument("--encoder-embedding-dim", type=int, default=None)
+    parser.add_argument("--style-dim", type=int, default=None, help="VAE-GST style embedding dim (hparams.E)")
+    parser.add_argument("--z-latent-dim", type=int, default=None)
+    parser.add_argument("--decoder-rnn-dim", type=int, default=None)
+    parser.add_argument("--attention-rnn-dim", type=int, default=None)
+    parser.add_argument("--prenet-dim", type=int, default=None)
+    parser.add_argument("--postnet-embedding-dim", type=int, default=None)
+
     return parser.parse_args()
 
 
@@ -136,23 +150,54 @@ def main() -> None:
     symbols: List[str] = build_symbols_from_texts(texts)
     text_processor: TextProcessor = TextProcessor(symbols=symbols, cleaner_names=[args.text_cleaner])
 
-    hparams: Tacotron2VAEHparams = create_hparams(
-        {
-            "epochs": args.epochs,
-            "iters_per_checkpoint": args.iters_per_checkpoint,
-            "batch_size": args.batch_size,
-            "learning_rate": args.learning_rate,
-            "weight_decay": args.weight_decay,
-            "grad_clip_thresh": args.grad_clip_thresh,
-            "seed": args.seed,
-            "anneal_function": args.anneal_function,
-            "guided_attention_weight": args.guided_attention_weight,
-            "guided_attention_sigma": args.guided_attention_sigma,
-            "warmup_steps": args.warmup_steps,
-            "n_symbols": text_processor.n_symbols,
-            "training_data": str(train_file),
-        }
-    )
+    hparams_overrides: Dict[str, Any] = {
+        "epochs": args.epochs,
+        "iters_per_checkpoint": args.iters_per_checkpoint,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate,
+        "weight_decay": args.weight_decay,
+        "grad_clip_thresh": args.grad_clip_thresh,
+        "seed": args.seed,
+        "anneal_function": args.anneal_function,
+        "guided_attention_weight": args.guided_attention_weight,
+        "guided_attention_sigma": args.guided_attention_sigma,
+        "warmup_steps": args.warmup_steps,
+        "n_symbols": text_processor.n_symbols,
+        "training_data": str(train_file),
+    }
+    if args.symbols_embedding_dim is not None:
+        hparams_overrides["symbols_embedding_dim"] = args.symbols_embedding_dim
+    if args.encoder_embedding_dim is not None:
+        hparams_overrides["encoder_embedding_dim"] = args.encoder_embedding_dim
+    if args.z_latent_dim is not None:
+        hparams_overrides["z_latent_dim"] = args.z_latent_dim
+    if args.decoder_rnn_dim is not None:
+        hparams_overrides["decoder_rnn_dim"] = args.decoder_rnn_dim
+    if args.attention_rnn_dim is not None:
+        hparams_overrides["attention_rnn_dim"] = args.attention_rnn_dim
+    if args.prenet_dim is not None:
+        hparams_overrides["prenet_dim"] = args.prenet_dim
+    if args.postnet_embedding_dim is not None:
+        hparams_overrides["postnet_embedding_dim"] = args.postnet_embedding_dim
+    if args.style_dim is not None:
+        hparams_overrides["E"] = args.style_dim
+        # ReferenceEncoder's GRU hidden size is hardcoded to E // 2 (modules.py);
+        # ref_enc_gru_size must match it exactly or VAE_GST.fc1/fc2 raise a shape
+        # mismatch, so derive it here instead of exposing it as an independent flag.
+        hparams_overrides["ref_enc_gru_size"] = args.style_dim // 2
+
+    hparams: Tacotron2VAEHparams = create_hparams(hparams_overrides)
+
+    # Tacotron2.forward() adds the VAE-GST style embedding directly to the encoder
+    # output (encoder_outputs = transcript_outputs + prosody_outputs), so the two
+    # must share a dimension or the addition raises a shape-mismatch RuntimeError.
+    if hparams.E != hparams.encoder_embedding_dim:
+        raise ValueError(
+            f"hparams.E (style dim, {hparams.E}) must equal hparams.encoder_embedding_dim "
+            f"({hparams.encoder_embedding_dim}): the VAE-GST style embedding is added "
+            f"directly to the encoder output. Pass matching --style-dim and "
+            f"--encoder-embedding-dim."
+        )
 
     experiment_dir: Path = (
         Path(args.resume_experiment)

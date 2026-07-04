@@ -219,7 +219,6 @@ class WN(torch.nn.Module):
         self.n_channels: int = n_channels
         self.in_layers: torch.nn.ModuleList = torch.nn.ModuleList()
         self.res_skip_layers: torch.nn.ModuleList = torch.nn.ModuleList()
-        self.cond_layers: torch.nn.ModuleList = torch.nn.ModuleList()
 
         self.start: torch.nn.Conv1d = torch.nn.utils.weight_norm(
             torch.nn.Conv1d(n_in_channels, n_channels, 1), name='weight'
@@ -230,21 +229,24 @@ class WN(torch.nn.Module):
         self.end.weight.data.zero_()
         self.end.bias.data.zero_()
 
+        # Single conv producing conditioning for all layers at once (matches the
+        # original NVIDIA WaveGlow architecture used by publicly released
+        # checkpoints, e.g. waveglow_256channels_ljs_v3.pt), sliced per-layer in
+        # forward() below instead of using one small Conv1d per layer.
+        self.cond_layer: torch.nn.Conv1d = torch.nn.utils.weight_norm(
+            torch.nn.Conv1d(n_mel_channels, 2*n_channels*n_layers, 1),
+            name='weight'
+        )
+
         for i in range(n_layers):
             dilation: int = 2 ** i
             padding: int = int((kernel_size*dilation - dilation)/2)
-            
+
             in_layer: torch.nn.Conv1d = torch.nn.utils.weight_norm(
                 torch.nn.Conv1d(n_channels, 2*n_channels, kernel_size, dilation=dilation, padding=padding),
                 name='weight'
             )
             self.in_layers.append(in_layer)
-
-            cond_layer: torch.nn.Conv1d = torch.nn.utils.weight_norm(
-                torch.nn.Conv1d(n_mel_channels, 2*n_channels, 1),
-                name='weight'
-            )
-            self.cond_layers.append(cond_layer)
 
             res_skip_channels: int = 2*n_channels if i < n_layers - 1 else n_channels
             res_skip_layer: torch.nn.Conv1d = torch.nn.utils.weight_norm(
@@ -265,13 +267,15 @@ class WN(torch.nn.Module):
         """
         audio, spect = forward_input
         audio = self.start(audio)  # (B, n_channels, T_groups)
+        spect = self.cond_layer(spect)  # (B, 2*n_channels*n_layers, T_groups)
 
         output: Tensor = torch.zeros_like(audio) # (B, n_channels, T_groups)
 
         for i in range(self.n_layers):
+            spect_offset: int = i * 2 * self.n_channels
             acts: Tensor = fused_add_tanh_sigmoid_multiply(
                 self.in_layers[i](audio),  # (B, 2*n_channels, T_groups)
-                self.cond_layers[i](spect),  # (B, 2*n_channels, T_groups)
+                spect[:, spect_offset:spect_offset + 2*self.n_channels, :],  # (B, 2*n_channels, T_groups)
                 torch.IntTensor([self.n_channels]))  # (B, n_channels, T_groups)
 
             res_skip_acts: Tensor = self.res_skip_layers[i](acts)  # (B, res_skip_channels, T_groups)
@@ -492,7 +496,7 @@ class WaveGlow(torch.nn.Module):
         for WN_block in waveglow.WN:
             WN_block.start = torch.nn.utils.remove_weight_norm(WN_block.start)
             WN_block.in_layers = remove(WN_block.in_layers)
-            WN_block.cond_layers = remove(WN_block.cond_layers)
+            WN_block.cond_layer = torch.nn.utils.remove_weight_norm(WN_block.cond_layer)
             WN_block.res_skip_layers = remove(WN_block.res_skip_layers)
         return waveglow
 

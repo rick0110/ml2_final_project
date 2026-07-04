@@ -1,6 +1,9 @@
 --extra-index-url https://download.pytorch.org/whl/cu118
 
 apex
+gruut
+gruut-lang-pt
+inflect
 librosa
 matplotlib
 num2words
@@ -8,6 +11,7 @@ numpy
 paramiko
 scikit_learn
 scipy
+tensorboard
 torch
 torchaudio
 torchcodec
