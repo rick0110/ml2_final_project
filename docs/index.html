@@ -853,6 +853,19 @@
       dimensões mais influentes (z5 × z12) já separam tristeza e desgosto do resto.
     </figcaption>
   </figure>
+  <figure class="figure">
+    <img src="assets/img/fig_verbo_latent_tsne.png" alt="t-SNE do vetor latente mu das 98 falas do VERBO f1, colorido por emoção" loading="lazy">
+    <figcaption>
+      t-SNE de μ (16 → 2 dims; perplexidade 15, init PCA, seed 42) das 98 falas.
+      A projeção não linear confirma a estrutura: <b>tristeza</b> forma um cluster
+      fechado, <b>desgosto</b> e <b>neutro</b> se agrupam, <b>medo</b> se divide em
+      subgrupos, e as emoções de alta ativação — <b>alegria, raiva e surpresa</b> —
+      se misturam entre si (a mesma confusão que aparece na entropia da atenção da
+      seção 5: seus padrões prosódicos são parecidos). Vale o aviso padrão do t-SNE:
+      distâncias entre clusters e tamanhos não têm interpretação quantitativa — use o
+      PCA acima para leitura de variância; o t-SNE serve para ver vizinhanças.
+    </figcaption>
+  </figure>
 
   <h3>Manipulando as dimensões mais influentes</h3>
   <p>
