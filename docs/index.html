@@ -153,6 +153,13 @@
     color: var(--ink); font-size: 1.02rem; white-space: nowrap;
   }
   .diagram-svg { width: 100%; height: auto; }
+  .steplbl {
+    font-size: 0.78rem; letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--blue); font-weight: 700; margin: 0 0 10px;
+  }
+  .card p.expl { font-size: 0.92rem; margin: 10px 0 0; }
+  .flw { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .flwd { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
   footer {
     border-top: 1px solid var(--grid); background: var(--surface);
     padding: 28px 0 40px; font-size: 0.88rem;
@@ -184,7 +191,8 @@
 </header>
 
 <nav class="toc"><div class="wrap">
-  <a href="#arquitetura">Arquitetura</a>
+  <a href="#modelo">O modelo</a>
+  <a href="#arquitetura">A mudança</a>
   <a href="#treinamento">Treinamento</a>
   <a href="#lj">LJSpeech: estilo</a>
   <a href="#atencao">Análise da atenção</a>
@@ -195,9 +203,269 @@
 
 <main class="wrap">
 
+<!-- ============================================================ MODELO -->
+<section id="modelo">
+  <h2><span class="kicker">1 · O modelo</span> Do texto à forma de onda, em quatro passos</h2>
+  <p>
+    O sistema é um Tacotron&nbsp;2 condicionado a estilo por um VAE. Antes de entrar
+    na mudança que esta página estuda, vale montar o modelo por partes:
+  </p>
+
+  <div class="card">
+    <p class="steplbl">Passo 1 — Visão geral: um TTS sequence-to-sequence</p>
+    <svg class="diagram-svg" viewBox="0 0 960 118" role="img" aria-label="Pipeline geral: sequência de texto, encoder, atenção, decoder, WaveGlow">
+      <defs>
+        <marker id="arrhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+      <rect class="box" x="20" y="25" width="150" height="58" rx="10"/>
+      <text class="lbl" x="95" y="50" text-anchor="middle">Sequência de texto</text>
+      <text class="sub2" x="95" y="69" text-anchor="middle">caracteres / fonemas</text>
+      <path class="flw" d="M170 54 H 213" marker-end="url(#arrhead)"/>
+      <rect class="box" x="215" y="25" width="130" height="58" rx="10"/>
+      <text class="lbl" x="280" y="50" text-anchor="middle">Encoder</text>
+      <text class="sub2" x="280" y="69" text-anchor="middle">texto → memória</text>
+      <path class="flw" d="M345 54 H 388" marker-end="url(#arrhead)"/>
+      <rect class="box" x="390" y="25" width="130" height="58" rx="10"/>
+      <text class="lbl" x="455" y="50" text-anchor="middle">Atenção</text>
+      <text class="sub2" x="455" y="69" text-anchor="middle">alinha texto ↔ áudio</text>
+      <path class="flw" d="M520 54 H 563" marker-end="url(#arrhead)"/>
+      <rect class="box" x="565" y="25" width="130" height="58" rx="10"/>
+      <text class="lbl" x="630" y="50" text-anchor="middle">Decoder</text>
+      <text class="sub2" x="630" y="69" text-anchor="middle">mel, quadro a quadro</text>
+      <path class="flw" d="M695 54 H 738" marker-end="url(#arrhead)"/>
+      <rect class="box" x="740" y="25" width="130" height="58" rx="10"/>
+      <text class="lbl" x="805" y="50" text-anchor="middle">WaveGlow</text>
+      <text class="sub2" x="805" y="69" text-anchor="middle">vocoder (congelado)</text>
+      <path class="flw" d="M870 54 H 905" marker-end="url(#arrhead)"/>
+      <path d="M912 54 q 5 -14 10 0 q 5 14 10 0 q 5 -14 10 0" stroke="var(--blue)" stroke-width="2" fill="none"/>
+      <text class="tiny" x="928" y="82" text-anchor="middle">áudio</text>
+    </svg>
+    <p class="expl">
+      O encoder transforma a sequência de símbolos numa “memória”; a atenção do decoder
+      decide, a cada quadro de áudio, <em>qual trecho do texto ler</em>; o decoder gera o
+      mel-espectrograma autoregressivamente; o WaveGlow (pré-treinado pela NVIDIA,
+      congelado) converte mel em forma de onda.
+    </p>
+  </div>
+
+  <div class="card">
+    <p class="steplbl">Passo 2 — O estilo entra: um VAE sobre o áudio de referência</p>
+    <svg class="diagram-svg" viewBox="0 0 960 208" role="img" aria-label="Mesmo pipeline com o ramo do VAE somando o vetor de estilo às saídas do encoder">
+      <rect class="box" x="180" y="15" width="170" height="52" rx="10"/>
+      <text class="lbl" x="265" y="38" text-anchor="middle">Mel de referência</text>
+      <text class="sub2" x="265" y="56" text-anchor="middle">(80 × T)</text>
+      <path class="flw" d="M350 41 H 393" marker-end="url(#arrhead)"/>
+      <rect class="box-hl" x="395" y="15" width="200" height="52" rx="10"/>
+      <text class="lbl" x="495" y="38" text-anchor="middle">VAE (ref. encoder)</text>
+      <text class="sub2" x="495" y="56" text-anchor="middle">z → vetor de estilo e</text>
+      <path class="flw" d="M470 67 L 418 116" marker-end="url(#arrhead)"/>
+      <rect class="box" x="20" y="120" width="150" height="58" rx="10"/>
+      <text class="lbl" x="95" y="145" text-anchor="middle">Sequência de texto</text>
+      <path class="flw" d="M170 149 H 218" marker-end="url(#arrhead)"/>
+      <rect class="box" x="220" y="120" width="130" height="58" rx="10"/>
+      <text class="lbl" x="285" y="153" text-anchor="middle">Encoder</text>
+      <path class="flw" d="M350 149 H 388" marker-end="url(#arrhead)"/>
+      <circle cx="410" cy="149" r="15" fill="var(--bg)" stroke="var(--blue)" stroke-width="2"/>
+      <text x="410" y="155" text-anchor="middle" font-size="18" fill="var(--ink)">+</text>
+      <path class="flw" d="M425 149 H 463" marker-end="url(#arrhead)"/>
+      <rect class="box" x="465" y="120" width="120" height="58" rx="10"/>
+      <text class="lbl" x="525" y="153" text-anchor="middle">Atenção</text>
+      <path class="flw" d="M585 149 H 623" marker-end="url(#arrhead)"/>
+      <rect class="box" x="625" y="120" width="120" height="58" rx="10"/>
+      <text class="lbl" x="685" y="153" text-anchor="middle">Decoder</text>
+      <path class="flw" d="M745 149 H 783" marker-end="url(#arrhead)"/>
+      <rect class="box" x="785" y="120" width="130" height="58" rx="10"/>
+      <text class="lbl" x="850" y="153" text-anchor="middle">WaveGlow</text>
+      <text class="tiny" x="410" y="196" text-anchor="middle">e é somado a cada posição da memória do encoder</text>
+    </svg>
+    <p class="expl">
+      Um segundo encoder — o <em>reference encoder</em> do VAE — lê um áudio de
+      referência e o comprime num vetor latente z de baixa dimensão (32 no LJ, 16 no
+      VERBO). O z vira um vetor de estilo <b>e</b>, somado a todas as posições da saída
+      do encoder de texto: o mesmo texto pode ser falado com o ritmo, registro e emoção
+      do áudio de referência. No treino, a referência é o próprio alvo (auto-encoding do
+      estilo); na inferência, qualquer áudio serve de referência — é a transferência de
+      estilo das seções 4 e 6.
+    </p>
+  </div>
+
+  <div class="card">
+    <p class="steplbl">Passo 3 — Dentro do encoder de texto</p>
+    <svg class="diagram-svg" viewBox="0 0 960 215" role="img" aria-label="Encoder detalhado: embedding de caracteres, três convoluções, BiLSTM">
+      <rect class="box" x="620" y="20" width="190" height="50" rx="10" opacity="0.75"/>
+      <text class="lbl" x="715" y="42" text-anchor="middle">VAE</text>
+      <text class="sub2" x="715" y="59" text-anchor="middle">mel de referência → e</text>
+      <path class="flw" d="M715 70 L 744 131" marker-end="url(#arrhead)"/>
+      <rect class="box" x="20" y="125" width="140" height="58" rx="10"/>
+      <text class="lbl" x="90" y="150" text-anchor="middle">Sequência</text>
+      <text class="sub2" x="90" y="169" text-anchor="middle">de texto</text>
+      <path class="flw" d="M160 154 H 198" marker-end="url(#arrhead)"/>
+      <rect class="box-hl" x="200" y="125" width="170" height="58" rx="10"/>
+      <text class="lbl" x="285" y="150" text-anchor="middle">Embedding</text>
+      <text class="sub2" x="285" y="169" text-anchor="middle">512 dims (LJ) / 256</text>
+      <path class="flw" d="M370 154 H 408" marker-end="url(#arrhead)"/>
+      <rect class="box-hl" x="410" y="125" width="140" height="58" rx="10"/>
+      <text class="lbl" x="480" y="150" text-anchor="middle">3× Conv1d</text>
+      <text class="sub2" x="480" y="169" text-anchor="middle">k=5 + BN + ReLU</text>
+      <path class="flw" d="M550 154 H 588" marker-end="url(#arrhead)"/>
+      <rect class="box-hl" x="590" y="125" width="120" height="58" rx="10"/>
+      <text class="lbl" x="650" y="150" text-anchor="middle">BiLSTM</text>
+      <text class="sub2" x="650" y="169" text-anchor="middle">256 + 256</text>
+      <path class="flw" d="M710 154 H 730" marker-end="url(#arrhead)"/>
+      <circle cx="746" cy="154" r="15" fill="var(--bg)" stroke="var(--blue)" stroke-width="2"/>
+      <text x="746" y="160" text-anchor="middle" font-size="18" fill="var(--ink)">+</text>
+      <path class="flw" d="M761 154 H 781" marker-end="url(#arrhead)"/>
+      <rect class="box" x="783" y="125" width="160" height="58" rx="10" opacity="0.75"/>
+      <text class="sub2" x="863" y="150" text-anchor="middle">Atenção · Decoder</text>
+      <text class="sub2" x="863" y="169" text-anchor="middle">· WaveGlow</text>
+    </svg>
+    <p class="expl">
+      Cada símbolo (caractere no LJSpeech; fonema IPA no VERBO) vira um embedding;
+      as três convoluções capturam contexto local (janela de 5 símbolos) e a BiLSTM
+      lê a frase inteira nos dois sentidos, produzindo uma memória com contexto global
+      — é sobre ela que o vetor de estilo é somado.
+    </p>
+  </div>
+
+  <div class="card">
+    <p class="steplbl">Passo 4 — Dentro da atenção e do decoder</p>
+    <svg class="diagram-svg" viewBox="0 0 960 260" role="img" aria-label="Decoder detalhado: atenção sensível à localização, prenet, LSTMs, gate, postnet">
+      <rect class="box" x="20" y="85" width="180" height="58" rx="10"/>
+      <text class="lbl" x="110" y="110" text-anchor="middle">Memória</text>
+      <text class="sub2" x="110" y="129" text-anchor="middle">saídas do encoder + e</text>
+      <path class="flw" d="M200 114 H 243" marker-end="url(#arrhead)"/>
+      <rect class="box-hl" x="245" y="75" width="215" height="78" rx="10"/>
+      <text class="lbl" x="352" y="100" text-anchor="middle">Atenção sensível à</text>
+      <text class="lbl" x="352" y="118" text-anchor="middle">localização</text>
+      <text class="sub2" x="352" y="138" text-anchor="middle">conteúdo + posição (32 filtros, k=31)</text>
+      <path class="flwd" d="M390 153 C 390 190, 315 190, 315 156" marker-end="url(#arrhead)"/>
+      <text class="tiny" x="352" y="204" text-anchor="middle">αₜ₋₁ acumulados (posição)</text>
+      <path class="flw" d="M460 114 H 503" marker-end="url(#arrhead)"/>
+      <text class="tiny" x="481" y="103" text-anchor="middle">cₜ</text>
+      <rect class="box" x="505" y="65" width="200" height="98" rx="10"/>
+      <text class="lbl" x="605" y="90" text-anchor="middle">Prenet (2 camadas)</text>
+      <text class="lbl" x="605" y="112" text-anchor="middle">LSTM atenção (1024)</text>
+      <text class="lbl" x="605" y="134" text-anchor="middle">LSTM decoder (1024)</text>
+      <text class="sub2" x="605" y="153" text-anchor="middle">→ projeção linear: quadro mel</text>
+      <path class="flwd" d="M645 163 C 645 215, 530 215, 530 166" marker-end="url(#arrhead)"/>
+      <text class="tiny" x="592" y="229" text-anchor="middle">quadro t−1 → prenet (autoregressivo)</text>
+      <path class="flw" d="M705 96 H 748" marker-end="url(#arrhead)"/>
+      <rect class="box" x="750" y="67" width="150" height="58" rx="10"/>
+      <text class="lbl" x="825" y="92" text-anchor="middle">Postnet</text>
+      <text class="sub2" x="825" y="111" text-anchor="middle">5 convs, residual</text>
+      <path class="flw" d="M825 125 V 138" marker-end="url(#arrhead)"/>
+      <text class="tiny" x="825" y="155" text-anchor="middle">mel final → WaveGlow</text>
+      <path class="flw" d="M705 140 C 732 140, 722 192, 748 192" marker-end="url(#arrhead)"/>
+      <rect class="box" x="750" y="170" width="150" height="44" rx="10"/>
+      <text class="lbl" x="825" y="189" text-anchor="middle">Gate</text>
+      <text class="sub2" x="825" y="206" text-anchor="middle">parar? (sigmoide)</text>
+    </svg>
+    <p class="expl">
+      A cada passo, a atenção compara o estado do decoder com a memória
+      (<em>conteúdo</em>) e também olha <em>onde</em> as atenções anteriores estavam
+      (<em>localização</em>, via convolução sobre os αₜ acumulados), produz pesos αₜ
+      sobre os símbolos e entrega um contexto cₜ; o decoder consome cₜ e o quadro
+      anterior para emitir o próximo quadro mel e um sinal de parada (gate).
+    </p>
+  </div>
+
+  <h3>O problema: desalinhamento severo no início do treino</h3>
+  <p>
+    A matriz de alinhamento A (quadros mel × símbolos do texto) precisa virar uma
+    <b>diagonal aproximadamente monótona</b> — ler o texto na ordem, a velocidade
+    quase constante. Só que nada na atenção por conteúdo garante isso, e nos primeiros
+    treinos o alinhamento simplesmente não fechava:
+  </p>
+  <ul>
+    <li><b>Começo difuso.</b> Com pesos iniciais aleatórios, o softmax da atenção é
+      quase uniforme: o contexto cₜ é uma média do texto inteiro, igual para todos os
+      quadros.</li>
+    <li><b>O atalho do teacher forcing.</b> No treino o decoder recebe o quadro real
+      anterior; como a fala é localmente suave, ele consegue reduzir bastante a perda
+      só extrapolando os quadros anteriores — e o vetor de estilo <b>e</b> do VAE, somado
+      à memória inteira, dá ainda mais informação global que não depende de alinhar.
+      Sobra pouco gradiente para ensinar a atenção a ler o texto.</li>
+    <li><b>Ovo e galinha.</b> Prever o quadro certo exige atender ao fonema certo, mas
+      aprender onde atender exige que a previsão já dependa do texto. Sem um empurrão,
+      o modelo fica preso no ótimo local “ignorar o texto”: na inferência (sem teacher
+      forcing) isso vira palavras repetidas ou puladas, balbucio e gate que nunca
+      dispara — o áudio corre até o limite de passos do decoder.</li>
+  </ul>
+  <div class="card">
+    <div class="grid2">
+      <div>
+        <svg viewBox="0 0 150 150" style="width:130px;height:130px;display:block;margin:0 auto" role="img" aria-label="Matriz de atenção difusa">
+          <rect x="10" y="10" width="130" height="130" fill="var(--bg)" stroke="var(--grid)"/>
+          <circle cx="45" cy="50" r="9" fill="var(--muted)" opacity="0.5"/>
+          <circle cx="80" cy="40" r="12" fill="var(--muted)" opacity="0.35"/>
+          <circle cx="60" cy="95" r="14" fill="var(--muted)" opacity="0.4"/>
+          <circle cx="105" cy="75" r="10" fill="var(--muted)" opacity="0.5"/>
+          <circle cx="35" cy="120" r="8" fill="var(--muted)" opacity="0.4"/>
+          <circle cx="115" cy="115" r="11" fill="var(--muted)" opacity="0.35"/>
+          <rect x="10" y="60" width="130" height="12" fill="var(--muted)" opacity="0.18"/>
+        </svg>
+        <p class="legendnote" style="text-align:center">Sem guia: atenção difusa/quebrada —
+        repetições, pulos, balbucio</p>
+      </div>
+      <div>
+        <svg viewBox="0 0 150 150" style="width:130px;height:130px;display:block;margin:0 auto" role="img" aria-label="Matriz de atenção diagonal">
+          <rect x="10" y="10" width="130" height="130" fill="var(--bg)" stroke="var(--grid)"/>
+          <polygon points="10,140 28,140 140,28 140,10 122,10 10,122" fill="var(--blue)" opacity="0.75"/>
+        </svg>
+        <p class="legendnote" style="text-align:center">Com a perda-guia: diagonal monótona —
+        uma passada pelo texto</p>
+      </div>
+    </div>
+  </div>
+  <p>
+    A solução foi introduzir uma <b>perda de atenção guiada</b> (guided attention,
+    Tachibana et al. 2017): penalizar a massa de atenção que fica longe da diagonal
+    normalizada, com uma máscara gaussiana W:
+  </p>
+  <div class="formula">
+    L<sub>ga</sub> = média<sub>t,n</sub> [ A<sub>t,n</sub> · W<sub>t,n</sub> ],
+    &nbsp;&nbsp; W<sub>t,n</sub> = 1 − exp( −(n/N − t/T)² / 2σ² )
+  </div>
+  <p>
+    W vale ~0 sobre a diagonal (atender o símbolo n/N no instante t/T proporcional
+    não custa nada) e cresce ao afastar-se dela; σ controla a folga. Não força um
+    caminho exato — só torna caro “ler fora de ordem”, quebrando o ótimo local.
+    Nos modelos LJ usamos λ&nbsp;=&nbsp;2 e σ&nbsp;=&nbsp;0,4 (folga generosa); no VERBO, com só
+    98 falas, o problema era muito mais severo e foi preciso um prior fortíssimo:
+    λ&nbsp;=&nbsp;50 e σ&nbsp;=&nbsp;0,2.
+  </p>
+
+  <h3>As perdas de treinamento</h3>
+  <div class="formula">
+    L = L<sub>mel</sub> + L<sub>gate</sub> + β(passo)·L<sub>KL</sub> + λ·L<sub>ga</sub>
+  </div>
+  <ul>
+    <li><b>L<sub>mel</sub></b> — MSE entre o mel previsto e o real, duas vezes: na saída
+      do decoder e após o postnet (residual). Mascarada nos quadros de padding.</li>
+    <li><b>L<sub>gate</sub></b> — entropia cruzada binária no sinal de parada; sem ela o
+      decoder não sabe terminar a frase.</li>
+    <li><b>L<sub>KL</sub></b> — divergência KL entre o posterior q(z|mel) e o prior
+      N(0,&nbsp;I), calculada por dimensão com <em>free bits</em> de 0,5 (só penaliza a
+      dimensão acima do piso — uma tentativa de evitar o colapso do posterior).</li>
+    <li><b>β(passo)</b> — annealing <em>cíclico</em>: após 2000 passos de espera, β sobe
+      em rampa até 0,2 a cada ciclo de 4000 passos. Se o KL entrasse com peso cheio
+      desde o início, a saída mais fácil seria zerar o latente imediatamente
+      (<em>KL vanishing</em>).</li>
+    <li><b>L<sub>ga</sub></b> — a perda de atenção guiada acima (λ = 2 no LJ, 50 no VERBO).</li>
+  </ul>
+  <div class="callout warn">
+    <p><b>Spoiler honesto:</b> mesmo com free bits e annealing cíclico, o baseline
+    colapsou o posterior (seção 7) — o clamp do free bits zera o gradiente abaixo do
+    piso e não impede dimensões mortas. O que manteve o latente vivo foi a mudança
+    estrutural no reference encoder, apresentada a seguir.</p>
+  </div>
+</section>
+
 <!-- ============================================================ ARQUITETURA -->
 <section id="arquitetura">
-  <h2><span class="kicker">1 · A mudança</span> Do último estado da GRU à atenção temporal</h2>
+  <h2><span class="kicker">2 · A mudança</span> Do último estado da GRU à atenção temporal</h2>
   <p>
     No Tacotron2-VAE, o <em>reference encoder</em> comprime o mel-espectrograma de
     referência (80&nbsp;canais × T&nbsp;quadros) com 6 convoluções de stride&nbsp;2
@@ -316,13 +584,13 @@
     O custo é desprezível (E/2&nbsp;+&nbsp;1 parâmetros a mais) e o ganho é duplo:
     o gradiente flui para <b>todas</b> as janelas do áudio de referência (não só pela
     cadeia recorrente até o último estado) e os pesos αₜ formam um
-    <b>mapa de atenção temporal legível</b>, analisado na seção 4.
+    <b>mapa de atenção temporal legível</b>, analisado na seção 5.
   </p>
 </section>
 
 <!-- ============================================================ TREINAMENTO -->
 <section id="treinamento">
-  <h2><span class="kicker">2 · Experimentos</span> Hiperparâmetros e processo de treinamento</h2>
+  <h2><span class="kicker">3 · Experimentos</span> Hiperparâmetros e processo de treinamento</h2>
   <p>
     Os dois modelos LJSpeech compartilham a mesma arquitetura (exceto o pooling) e foram
     treinados no mesmo corpus (13.100 falas, ~23,9&nbsp;h, uma locutora, inglês).
@@ -376,7 +644,7 @@
     <img src="assets/img/fig_lj_curves.png" alt="Curvas de perda de reconstrução e KL por checkpoint para os dois modelos LJ" loading="lazy">
     <figcaption>
       Perdas por checkpoint na amostra fixa. O baseline reconstrói um pouco melhor
-      (0,596 vs. 0,708 no melhor ponto) — mas a seção 6 mostra que ele consegue isso
+      (0,596 vs. 0,708 no melhor ponto) — mas a seção 7 mostra que ele consegue isso
       <em>ignorando o latente</em> (posterior colapsado): o decoder aprende a ler só o texto.
       O modelo com atenção paga um pequeno preço de reconstrução para manter um espaço
       de estilo informativo. A KL de ambos fica presa perto do piso de free&nbsp;bits (0,5),
@@ -408,7 +676,7 @@
 
 <!-- ============================================================ LJ STYLE -->
 <section id="lj">
-  <h2><span class="kicker">3 · LJSpeech</span> Transferência de estilo: baseline vs. atenção</h2>
+  <h2><span class="kicker">4 · LJSpeech</span> Transferência de estilo: baseline vs. atenção</h2>
   <p>
     O LJSpeech não tem rótulos de estilo, então escolhemos três referências com prosódia
     contrastante por medição direta (F0 via YIN e taxa de fala em caracteres/s sobre
@@ -449,7 +717,7 @@
 
   <div class="callout">
     <p><b>O que ouvir:</b> nos áudios do <b>baseline</b>, trocar a referência quase
-    não muda a fala — consequência direta do posterior colapsado (seção 6): o vetor
+    não muda a fala — consequência direta do posterior colapsado (seção 7): o vetor
     de estilo é praticamente constante (‖μ‖ ≈ 0,5 e variância ~0,004 por dimensão
     em todo o corpus). No modelo com <b>atenção</b>, ritmo e contorno de F0
     acompanham a referência de forma audível.</p>
@@ -458,7 +726,7 @@
 
 <!-- ============================================================ ATENÇÃO -->
 <section id="atencao">
-  <h2><span class="kicker">4 · Interpretabilidade</span> Como a atenção muda com o estilo</h2>
+  <h2><span class="kicker">5 · Interpretabilidade</span> Como a atenção muda com o estilo</h2>
   <p>
     Cada peso αₜ cobre uma janela de ~0,74&nbsp;s do áudio de referência
     (64 quadros mel × hop de 256 a 22.050&nbsp;Hz). Sobrepondo a curva de αₜ ao
@@ -519,7 +787,7 @@
 
 <!-- ============================================================ VERBO -->
 <section id="verbo">
-  <h2><span class="kicker">5 · VERBO f1</span> Transferência de emoção em português</h2>
+  <h2><span class="kicker">6 · VERBO f1</span> Transferência de emoção em português</h2>
   <p>
     Referências: a frase “Os bombeiros estão equipados com uma arma.” gravada pela
     locutora f1 em cada emoção. Frase sintetizada (não vista no treino):
@@ -556,7 +824,7 @@
 
 <!-- ============================================================ LATENTE -->
 <section id="latente">
-  <h2><span class="kicker">6 · Espaço latente</span> Dimensões influentes e manipulação direta</h2>
+  <h2><span class="kicker">7 · Espaço latente</span> Dimensões influentes e manipulação direta</h2>
   <p>
     Para achar as dimensões de z que realmente carregam estilo, calculamos μ para
     um conjunto de falas (400 do LJSpeech; as 98 do VERBO) e medimos a
@@ -629,7 +897,7 @@
 
 <!-- ============================================================ INTERP -->
 <section id="interp">
-  <h2><span class="kicker">7 · Interpolação</span> Por que interpolar na esfera, não na reta</h2>
+  <h2><span class="kicker">8 · Interpolação</span> Por que interpolar na esfera, não na reta</h2>
   <p>
     Queremos criar estilos intermediários entre duas referências A e B interpolando
     seus vetores latentes. A forma ingênua é a interpolação linear (<b>lerp</b>):
