@@ -1,0 +1,153 @@
+\documentclass[twocolumn,a4paper,10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+% babel português indisponível nesta instalação do TeX Live; nomes definidos manualmente
+\renewcommand{\figurename}{Figura}
+\AtBeginDocument{\renewcommand{\refname}{Referências}}
+\usepackage[margin=1.8cm,top=2cm,bottom=1.8cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage[font=small,skip=3pt]{caption}
+\usepackage{tikz}
+\usetikzlibrary{positioning, calc}
+\usepackage{microtype}
+\usepackage{titlesec}
+\usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!50!black]{hyperref}
+
+\setlength{\columnsep}{0.7cm}
+\setlength{\parskip}{1pt}
+\setlength{\textfloatsep}{8pt}
+\setlength{\dbltextfloatsep}{9pt}
+\titlespacing*{\section}{0pt}{6pt}{3pt}
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.6em}{}
+
+\title{\vspace{-1.2cm}\Large\textbf{Síntese de Fala com Tacotron2-VAE:\\ Atenção Temporal Interpretável no \textit{Reference Encoder}}}
+\author{\normalsize Beatriz Nunes \quad Herivelton Siqueira \quad Richard Viana\\[2pt]
+\small Machine Learning II --- IMPA Tech\\
+\small Professores: Francisco Ganacim e Daniel Silveira Yukimura Lopez}
+\date{\small Julho de 2026}
+
+\begin{document}
+
+\twocolumn[
+\maketitle
+\vspace{-0.9cm}
+\begin{center}
+\begin{minipage}{0.92\textwidth}
+\small\textbf{Resumo ---} Implementamos um sistema de síntese de fala (\textit{Text-to-Speech}) baseado no Tacotron2 com um \textit{Variational Autoencoder} (VAE) para modelagem de prosódia. A contribuição central do trabalho é substituir o \textit{pooling} usual do \textit{reference encoder} (último estado da GRU) por um \textit{pooling} por \textbf{atenção temporal}, tornando o condicionamento de estilo interpretável e evitando o colapso do posterior. Treinamos três modelos --- \textit{baseline} e variante com atenção no LJSpeech (inglês) e uma variante em português no corpus emocional VERBO --- e avaliamos transferência de estilo e de emoção, interpretabilidade dos pesos de atenção, manipulação direta do espaço latente e interpolação esférica (\textit{slerp}) versus linear (\textit{lerp}). Página do projeto: \url{https://rick0110.github.io/ml2_final_project}.
+\end{minipage}
+\end{center}
+\vspace{0.5cm}
+]
+
+\section{Introdução}
+Sistemas de TTS tradicionais produzem fala inteligível, porém com entonação pouco natural. O Tacotron2-VAE \cite{hsu,zhang} ataca esse problema comprimindo um \textbf{áudio de referência} em um vetor latente $z$ que captura características globais de estilo (ritmo, tom, velocidade) e condiciona a síntese. Na prática, contudo, esse latente frequentemente ``morre'': o modelo aprende a reconstruir o espectrograma ignorando $z$ (\textit{posterior collapse}). Este trabalho investiga uma mudança estrutural simples no \textit{reference encoder} --- atenção temporal no lugar do último estado da GRU --- e mostra que ela mantém o espaço de estilo vivo e, como subproduto, produz um mapa de atenção legível sobre o áudio de referência.
+
+\section{Arquitetura}
+O sistema (Fig.~\ref{fig:pipeline}) segue o Tacotron2 \cite{shen,nvidiataco} em quatro passos: (i) um \textit{text encoder} (embedding de símbolos + 3 camadas Conv1d + BiLSTM) extrai representações linguísticas; (ii) uma atenção sensível à localização alinha texto e áudio no decoder; (iii) um decoder autoregressivo prevê o Mel-espectrograma quadro a quadro; (iv) o vocoder \textbf{WaveGlow} \cite{waveglow} (pré-treinado e congelado) converte o espectrograma em forma de onda.
+
+Em paralelo, o \textit{reference encoder} processa o Mel-espectrograma de referência com 6 convoluções 2D de \textit{stride} 2 (a primeira é uma CoordConv), reduzindo $80\times T$ para $\sim 128\times(T/64)$, seguidas de uma GRU. O resultado é projetado nos parâmetros $(\mu,\sigma)$ do posterior; amostra-se $z$ (32 dims no LJ, 16 no VERBO), que é convertido em um vetor de estilo somado a todas as posições da memória do \textit{text encoder}.
+
+\begin{figure*}[t]
+    \centering
+    \resizebox{0.88\textwidth}{!}{%
+    \begin{tikzpicture}[
+        box/.style={rectangle, draw=black!25, rounded corners=6pt, fill=black!3, minimum height=1.35cm, text centered, font=\small\bfseries, align=center, inner xsep=10pt},
+        boxhl/.style={box, draw=refblue, line width=1.1pt, fill=refblue!4},
+        arrow/.style={->, >=stealth, semithick, draw=black!45}
+    ]
+    \definecolor{refblue}{RGB}{37,99,235}
+    % linha superior (ramo de estilo)
+    \node[box, minimum width=4.2cm] (mel) at (6.6,0) {Mel de referência\\{\scriptsize\mdseries\color{black!60}(80 $\times$ T)}};
+    \node[boxhl, minimum width=5cm] (vae) at (12.4,0) {VAE (ref.\ encoder)\\{\scriptsize\mdseries\color{black!60}$z \rightarrow$ vetor de estilo $e$}};
+    % linha inferior (pipeline principal)
+    \node[box, minimum width=3.7cm] (texto) at (2.4,-2.7) {Sequência de texto};
+    \node[box, minimum width=3.2cm] (encoder) at (7.1,-2.7) {Encoder};
+    \node[circle, draw=refblue, thick, fill=white, inner sep=1.5pt, font=\normalsize] (soma) at (10.2,-2.7) {$+$};
+    \node[box, minimum width=3cm] (atencao) at (13.1,-2.7) {Atenção};
+    \node[box, minimum width=3cm] (decoder) at (17.1,-2.7) {Decoder};
+    \node[box, minimum width=3.2cm] (waveglow) at (21.2,-2.7) {WaveGlow};
+    % setas
+    \draw[arrow] (mel) -- (vae);
+    \draw[arrow] ([xshift=-0.7cm]vae.south) -- ($(soma.north)+(0.18,0.06)$);
+    \draw[arrow] (texto) -- (encoder);
+    \draw[arrow] (encoder) -- (soma);
+    \draw[arrow] (soma) -- (atencao);
+    \draw[arrow] (atencao) -- (decoder);
+    \draw[arrow] (decoder) -- (waveglow);
+    \end{tikzpicture}%
+    }
+    \caption{\small Arquitetura do sistema: o VAE comprime o Mel de referência no vetor de estilo $e$, somado ($+$) a cada posição da memória do \textit{encoder}; atenção e decoder geram o Mel-espectrograma, convertido em áudio pelo WaveGlow.}
+    \label{fig:pipeline}
+\end{figure*}
+
+\section{A mudança: atenção temporal}
+No \textit{baseline} \cite{skerry}, o resumo do áudio de referência é apenas o \textbf{último estado da GRU} --- um vetor opaco, no qual o gradiente favorece as janelas finais. Propomos um \textit{pooling} por atenção sobre todos os estados $h_t$:
+\begin{equation*}
+s_t = w^{\top} h_t + b, \qquad \alpha = \mathrm{softmax}(s), \qquad e = \textstyle\sum_t \alpha_t h_t,
+\end{equation*}
+implementado com uma camada linear de \textit{score} e um softmax no tempo ($E/2+1$ parâmetros). Os ganhos são dois: o gradiente flui para \textbf{todas} as janelas temporais ($\sim$0,74\,s cada), e os pesos $\alpha_t$ formam um mapa de atenção legível --- sabemos \emph{quais trechos} do áudio de referência definem o estilo.
+
+\section{Dados e pré-processamento}
+Foram usados dois corpora: \textbf{LJSpeech~1.1} (13.100 falas, $\sim$23,9\,h, locutora única, inglês) e \textbf{VERBO} (locutora f1: 98 falas, $\sim$4,7\,min, português, 7 emoções). Todo áudio é reamostrado para 22.050\,Hz e convertido em Mel-espectrogramas de 80 canais (FFT 1024, \textit{hop} 256, $f_{\max}=8$\,kHz). O texto usa \textit{english\_cleaners} (caracteres) no LJ e fonemas IPA via \textit{gruut} no VERBO.
+
+\section{Treinamento}
+A perda total combina quatro termos:
+\begin{equation*}
+\mathcal{L} = \mathcal{L}_{\text{mel}} + \mathcal{L}_{\text{gate}} + \beta(\text{passo})\,\mathcal{L}_{\text{KL}} + \lambda\,\mathcal{L}_{\text{GA}},
+\end{equation*}
+onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, mascarado no \textit{padding}), $\mathcal{L}_{\text{gate}}$ é a entropia cruzada do sinal de parada, $\mathcal{L}_{\text{KL}}$ é a divergência KL com \textit{free bits} de 0,5 e $\mathcal{L}_{\text{GA}}$ é a perda de \textbf{atenção guiada} \cite{tachibana}, que penaliza massa de atenção longe da diagonal e resolve o desalinhamento severo do início do treino (LJ: $\lambda=2{,}0$, $\sigma=0{,}4$; VERBO: $\lambda=50$, $\sigma=0{,}2$, um prior forte para o corpus minúsculo). O \textit{KL annealing} é cíclico ($\beta$ em rampa de 0 a 0,2 a cada 4.000 passos), mitigando o \textit{KL vanishing}. Otimização com Adam ($lr=10^{-4}$). Três modelos (Fig.~\ref{fig:curvas}): LJ \textit{baseline} (11,2 mil iterações), LJ atenção (35,5 mil) e VERBO (9,5 mil), com 28,9M (LJ) e 7,7M (VERBO) parâmetros.
+
+\section{Resultados e experimentos}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_tb_curves}
+    \caption{Perda total (treino vs. validação): \textit{overfitting} esperado no VERBO, com só 98 falas.}
+    \label{fig:curvas}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_latent_var}
+    \caption{Variância de $\mu$ por dimensão do latente: posterior colapsado no \textit{baseline} (escala $\sim$100$\times$ menor); com atenção, 32/32 (LJ) e 15/16 (VERBO) dimensões ativas.}
+    \label{fig:latvar}
+\end{figure}
+
+\textbf{Colapso do posterior.} O \textit{baseline} atinge reconstrução melhor (0,596 vs. 0,722), mas ignorando o latente: a variância máxima entre as 32 dimensões de $z$ é 0,004 --- nenhuma ativa. Com atenção, \textbf{32/32} dimensões têm variância $>0{,}1$ no LJ e \textbf{15/16} no VERBO (Fig.~\ref{fig:latvar}). Ou seja, o \textit{baseline} ``reconstrói melhor'' precisamente porque colapsou o espaço de estilo.
+
+\textbf{Transferência de estilo (LJSpeech).} Sintetizamos duas frases condicionadas a três referências de prosódia contrastante: grave/lenta (F0 $173\pm57$\,Hz; 10,1 caract./s), expressiva e rápida (19,2 caract./s). O \textit{baseline} produz áudios praticamente idênticos entre referências; o modelo com atenção muda ritmo e F0 de forma audível e consistente com a referência.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.78\columnwidth]{fig_lj_attention}
+    \caption{Pesos de atenção temporal (linha laranja, janelas de $\sim$0,74\,s) sobre o Mel-espectrograma de três referências do LJSpeech.}
+    \label{fig:attn}
+\end{figure}
+
+\textbf{Interpretabilidade da atenção.} No LJ, os pesos $\alpha_t$ são não-uniformes e privilegiam regiões vozeadas com F0 marcado (Fig.~\ref{fig:attn}). No VERBO, a \textbf{entropia normalizada} da atenção correlaciona-se com a emoção da referência: alegria 0,99, raiva 0,99 e surpresa 0,98 (atenção quase uniforme --- pistas espalhadas) contra tristeza 0,67, neutro 0,70 e desgosto 0,76 (atenção concentrada, tipicamente no final). A correlação com a energia do sinal é fraca ($|r|\le 0{,}38$): a atenção não é um mero detector de volume.
+
+\textbf{Transferência de emoção em português.} Condicionando a síntese às 7 referências emocionais do VERBO, ritmo e registro mudam consistentemente com a emoção. Limitações: $\sim$4,7\,min de dados e vocoder treinado em inglês geram artefatos --- o objetivo é estudar o espaço de estilo, não produção.
+
+\textbf{Manipulação direta do latente.} Movendo uma única dimensão influente a $\pm 3\sigma$ (referência fixa), os modelos com atenção produzem mudanças \emph{graduais e audíveis} de ritmo/registro; no \textit{baseline}, $\pm 3\sigma$ de uma dimensão morta ($\sigma\approx0{,}06$) não muda nada.
+
+\textbf{Interpolação: esfera, não reta.} Em alta dimensão, a massa do prior gaussiano concentra-se numa casca de raio $\sqrt{L}$. A \textit{lerp} entre dois códigos ($\theta=80^{\circ}$ no LJ atenção) atravessa o interior da casca e em $t=0{,}25$--$0{,}50$ o áudio perde definição harmônica (espectros ``lavados''); a \textit{slerp} \cite{white} caminha pelo arco e preserva a qualidade em todo o caminho. No \textit{baseline} ($\theta=14^{\circ}$), \textit{lerp} e \textit{slerp} coincidem --- o caso degenerado.
+
+\section{Conclusão}
+A troca do \textit{pooling} do \textit{reference encoder} por atenção temporal foi suficiente para manter o latente do VAE informativo onde \textit{free bits} e \textit{KL annealing} sozinhos falharam, habilitando transferência real de estilo (LJSpeech) e de emoção (VERBO). Os pesos de atenção são interpretáveis e seguem padrões previsíveis por emoção; a geometria esférica do prior deve ser respeitada (\textit{slerp} $>$ \textit{lerp}). Continuação natural: corpora maiores de português, vocoder treinado no idioma e avaliação perceptual formal (MOS).
+
+\begin{thebibliography}{9}\footnotesize\setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}
+\bibitem{hsu} Hsu, W.-N. et al. \textit{Hierarchical Generative Modeling for Controllable Speech Synthesis}. ICLR, 2019.
+\bibitem{zhang} Zhang, Y.-J., Pan, S., He, L., Ling, Z.-H. \textit{Learning Latent Representations for Style Control and Transfer in End-to-End Speech Synthesis}. ICASSP, 2019. arXiv:1812.04342.
+\bibitem{shen} Shen, J. et al. \textit{Natural TTS Synthesis by Conditioning WaveNet on Mel Spectrogram Predictions}. ICASSP, 2018. arXiv:1712.05884.
+\bibitem{nvidiataco} NVIDIA. \textit{Tacotron 2} (implementação de referência). \url{https://github.com/NVIDIA/tacotron2}.
+\bibitem{waveglow} NVIDIA. \textit{WaveGlow} (código e \textit{checkpoint} LJS 256 canais). \url{https://github.com/NVIDIA/waveglow}; \url{https://catalog.ngc.nvidia.com/orgs/nvidia/models/waveglow_ljs_256channels}.
+\bibitem{skerry} Skerry-Ryan, R.J. et al. \textit{Towards End-to-End Prosody Transfer for Expressive Speech Synthesis with Tacotron}. ICML, 2018.
+\bibitem{tachibana} Tachibana, H. et al. \textit{Efficiently Trainable Text-to-Speech System Based on Deep Convolutional Networks with Guided Attention}. 2017.
+\bibitem{white} White, T. \textit{Sampling Generative Networks}. 2016.
+\end{thebibliography}
+
+\end{document}
