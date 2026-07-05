@@ -37,14 +37,14 @@
 \vspace{-0.9cm}
 \begin{center}
 \begin{minipage}{0.92\textwidth}
-\small\textbf{Resumo ---} Implementamos um sistema de síntese de fala (\textit{Text-to-Speech}) baseado no Tacotron2 com um \textit{Variational Autoencoder} (VAE) para modelagem de prosódia. A contribuição central do trabalho é substituir o \textit{pooling} usual do \textit{reference encoder} (último estado da GRU) por um \textit{pooling} por \textbf{atenção temporal}, tornando o condicionamento de estilo interpretável e evitando o colapso do posterior. Treinamos três modelos --- \textit{baseline} e variante com atenção no LJSpeech (inglês) e uma variante em português no corpus emocional VERBO --- e avaliamos transferência de estilo e de emoção, interpretabilidade dos pesos de atenção, manipulação direta do espaço latente e interpolação esférica (\textit{slerp}) versus linear (\textit{lerp}). Página do projeto: \url{https://rick0110.github.io/ml2_final_project}.
+\small\textbf{Resumo ---} Implementamos um sistema de síntese de fala (\textit{Text-to-Speech}) baseado no Tacotron2 com um \textit{Variational Autoencoder} (VAE) para modelagem de prosódia. A contribuição central do trabalho é substituir o \textit{pooling} usual do \textit{reference encoder} (último estado da GRU) por um \textit{pooling} por \textbf{atenção temporal}, tornando o condicionamento de estilo interpretável, além de produzir um modelo especificamente para o português a partir do corpus emocional VERBO. Treinamos três modelos --- \textit{baseline} e variante com atenção no LJSpeech (inglês), e a variante em português no VERBO --- e avaliamos transferência de estilo e de emoção, interpretabilidade dos pesos de atenção, manipulação direta do espaço latente e interpolação esférica (\textit{slerp}) versus linear (\textit{lerp}). Página do projeto: \url{https://rick0110.github.io/ml2_final_project}.
 \end{minipage}
 \end{center}
-\vspace{0.5cm}
+\vspace{0.3cm}
 ]
 
 \section{Introdução}
-Sistemas de TTS tradicionais produzem fala inteligível, porém com entonação pouco natural. O Tacotron2-VAE \cite{hsu,zhang} ataca esse problema comprimindo um \textbf{áudio de referência} em um vetor latente $z$ que captura características globais de estilo (ritmo, tom, velocidade) e condiciona a síntese. Na prática, contudo, esse latente frequentemente ``morre'': o modelo aprende a reconstruir o espectrograma ignorando $z$ (\textit{posterior collapse}). Este trabalho investiga uma mudança estrutural simples no \textit{reference encoder} --- atenção temporal no lugar do último estado da GRU --- e mostra que ela mantém o espaço de estilo vivo e, como subproduto, produz um mapa de atenção legível sobre o áudio de referência.
+Sistemas de TTS tradicionais produzem fala inteligível, porém com entonação pouco natural. O Tacotron2-VAE \cite{hsu,zhang} ataca esse problema comprimindo um \textbf{áudio de referência} em um vetor latente $z$ que captura características globais de estilo (ritmo, tom, velocidade) e condiciona a síntese. Na prática, contudo, esse latente frequentemente ``morre'': o modelo aprende a reconstruir o espectrograma ignorando $z$ (\textit{posterior collapse}). Este trabalho, então, implementa métodos para evitar o colapso e investiga uma mudança estrutural simples no \textit{reference encoder} --- atenção temporal em vez do último estado da GRU --- para tornar o latente informativo e interpretável, respectivamente. Em paralelo, tivemos problemas de alinhamento na atenção do decoder e por isso introduzimos a perda de atenção guiada, ausente no artigo de referência \cite{zhang}.
 
 \section{Arquitetura}
 O sistema (Fig.~\ref{fig:pipeline}) segue o Tacotron2 \cite{shen,nvidiataco} em quatro passos: (i) um \textit{text encoder} (embedding de símbolos + 3 camadas Conv1d + BiLSTM) extrai representações linguísticas; (ii) uma atenção sensível à localização alinha texto e áudio no decoder; (iii) um decoder autoregressivo prevê o Mel-espectrograma quadro a quadro; (iv) o vocoder \textbf{WaveGlow} \cite{waveglow} (pré-treinado e congelado) converte o espectrograma em forma de onda.
@@ -99,7 +99,7 @@ A perda total combina quatro termos:
 \begin{equation*}
 \mathcal{L} = \mathcal{L}_{\text{mel}} + \mathcal{L}_{\text{gate}} + \beta(\text{passo})\,\mathcal{L}_{\text{KL}} + \lambda\,\mathcal{L}_{\text{GA}},
 \end{equation*}
-onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, mascarado no \textit{padding}), $\mathcal{L}_{\text{gate}}$ é a entropia cruzada do sinal de parada, $\mathcal{L}_{\text{KL}}$ é a divergência KL com \textit{free bits} de 0,5 e $\mathcal{L}_{\text{GA}}$ é a perda de \textbf{atenção guiada} \cite{tachibana}, que penaliza massa de atenção longe da diagonal e resolve o desalinhamento severo do início do treino (LJ: $\lambda=2{,}0$, $\sigma=0{,}4$; VERBO: $\lambda=50$, $\sigma=0{,}2$, um prior forte para o corpus minúsculo). O \textit{KL annealing} é cíclico ($\beta$ em rampa de 0 a 0,2 a cada 4.000 passos), mitigando o \textit{KL vanishing}. Otimização com Adam ($lr=10^{-4}$). Três modelos (Fig.~\ref{fig:curvas}): LJ \textit{baseline} (11,2 mil iterações), LJ atenção (35,5 mil) e VERBO (9,5 mil), com 28,9M (LJ) e 7,7M (VERBO) parâmetros.
+onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, mascarado no \textit{padding}), $\mathcal{L}_{\text{gate}}$ é a entropia cruzada do sinal de parada, $\mathcal{L}_{\text{KL}}$ é a divergência KL com \textit{free bits} de 0,5 e $\mathcal{L}_{\text{GA}}$ é a perda de \textbf{atenção guiada} \cite{tachibana}, que penaliza massa de atenção longe da diagonal e resolve o desalinhamento severo do início do treino (LJ: $\lambda=2{,}0$, $\sigma=0{,}4$; VERBO: $\lambda=50$, $\sigma=0{,}2$, um prior forte para o corpus minúsculo). O \textit{KL annealing} é cíclico ($\beta$ em rampa de 0 a 0,2 a cada 4.000 passos), mitigando o \textit{KL vanishing}. Otimização com Adam ($lr=10^{-4}$); três modelos (Fig.~\ref{fig:curvas}): LJ \textit{baseline} (11,2 mil iterações), LJ atenção (35,5 mil) e VERBO (9,5 mil), com 28,9M e 7,7M parâmetros.
 
 \section{Resultados e experimentos}
 
@@ -117,13 +117,11 @@ onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, m
     \label{fig:latvar}
 \end{figure}
 
-\textbf{Colapso do posterior.} O \textit{baseline} atinge reconstrução melhor (0,596 vs. 0,722), mas ignorando o latente: a variância máxima entre as 32 dimensões de $z$ é 0,004 --- nenhuma ativa. Com atenção, \textbf{32/32} dimensões têm variância $>0{,}1$ no LJ e \textbf{15/16} no VERBO (Fig.~\ref{fig:latvar}). Ou seja, o \textit{baseline} ``reconstrói melhor'' precisamente porque colapsou o espaço de estilo.
-
 \textbf{Transferência de estilo (LJSpeech).} Sintetizamos duas frases condicionadas a três referências de prosódia contrastante: grave/lenta (F0 $173\pm57$\,Hz; 10,1 caract./s), expressiva e rápida (19,2 caract./s). O \textit{baseline} produz áudios praticamente idênticos entre referências; o modelo com atenção muda ritmo e F0 de forma audível e consistente com a referência.
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.78\columnwidth]{fig_lj_attention}
+    \includegraphics[width=0.72\columnwidth]{fig_lj_attention}
     \caption{Pesos de atenção temporal (linha laranja, janelas de $\sim$0,74\,s) sobre o Mel-espectrograma de três referências do LJSpeech.}
     \label{fig:attn}
 \end{figure}
@@ -137,7 +135,7 @@ onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, m
 \textbf{Interpolação: esfera, não reta.} Em alta dimensão, a massa do prior gaussiano concentra-se numa casca de raio $\sqrt{L}$. A \textit{lerp} entre dois códigos ($\theta=80^{\circ}$ no LJ atenção) atravessa o interior da casca e em $t=0{,}25$--$0{,}50$ o áudio perde definição harmônica (espectros ``lavados''); a \textit{slerp} \cite{white} caminha pelo arco e preserva a qualidade em todo o caminho. No \textit{baseline} ($\theta=14^{\circ}$), \textit{lerp} e \textit{slerp} coincidem --- o caso degenerado.
 
 \section{Conclusão}
-A troca do \textit{pooling} do \textit{reference encoder} por atenção temporal foi suficiente para manter o latente do VAE informativo onde \textit{free bits} e \textit{KL annealing} sozinhos falharam, habilitando transferência real de estilo (LJSpeech) e de emoção (VERBO). Os pesos de atenção são interpretáveis e seguem padrões previsíveis por emoção; a geometria esférica do prior deve ser respeitada (\textit{slerp} $>$ \textit{lerp}). Continuação natural: corpora maiores de português, vocoder treinado no idioma e avaliação perceptual formal (MOS).
+A troca do \textit{pooling} do \textit{reference encoder} por atenção temporal foi suficiente para tornar o modelo interpretável, e a introdução da perda de alinhamento sobre a atenção sensível à localização tornou o treinamento mais estável e robusto contra o desalinhamento temporal da fala. Os pesos de atenção são interpretáveis e seguem padrões previsíveis por emoção; a geometria esférica do prior deve ser respeitada (\textit{slerp} $>$ \textit{lerp}). Continuação natural: corpora maiores de português e um modelo não autoregressivo capaz de operar em tempo real.
 
 \begin{thebibliography}{9}\footnotesize\setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}
 \bibitem{hsu} Hsu, W.-N. et al. \textit{Hierarchical Generative Modeling for Controllable Speech Synthesis}. ICLR, 2019.
