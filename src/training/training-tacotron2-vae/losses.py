@@ -77,6 +77,7 @@ class Tacotron2LossVAE(nn.Module):
         self.free_bits: float = getattr(hparams, 'free_bits', 0.5)
         self.guided_attention_weight: float = getattr(hparams, 'guided_attention_weight', 2.0)
         self.guided_attention_sigma: float = getattr(hparams, 'guided_attention_sigma', 0.4)
+        self.gate_positive_weight: float = getattr(hparams, 'gate_positive_weight', 1.0)
 
         # Pre-instantiate loss functions to avoid re-creation every forward pass
         self.mse_loss = nn.MSELoss(reduction='none')
@@ -212,6 +213,10 @@ class Tacotron2LossVAE(nn.Module):
         # --- Reconstruction losses (masked over valid frames only) ---
         mel_loss_raw: Tensor = self.mse_loss(mel_out, mel_target) + self.mse_loss(mel_out_postnet, mel_target)  # (B, n_mels, T)
         gate_loss_raw: Tensor = self.bce_loss(gate_out, gate_target)  # (B, T)
+        if self.gate_positive_weight != 1.0:
+            # Equivalent to BCEWithLogitsLoss(pos_weight=w) for binary targets:
+            # scales only the stop-frame terms, countering the stop/continue imbalance
+            gate_loss_raw = gate_loss_raw * (1.0 + (self.gate_positive_weight - 1.0) * gate_target)
 
         if output_lengths is not None:
             mask = get_mask_from_lengths(output_lengths).to(mel_out.device)  # (B, T) — True for valid positions

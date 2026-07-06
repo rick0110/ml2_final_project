@@ -128,6 +128,9 @@ class Tacotron2VAEHparams:
     guided_attention_weight: float = 2.0  # Weight for guided attention loss (encourages monotonic alignment)
     guided_attention_sigma: float = 0.4   # Gaussian width; larger = more permissive diagonal
 
+    # Gate (stop token) loss
+    gate_positive_weight: float = 1.0  # BCE pos_weight for the stop frame; >1 counters the ~1:250 stop/continue imbalance when the gate never fires
+
     # Decoder parameters
     n_frames_per_step: int = 1
     decoder_rnn_dim: int = 1024

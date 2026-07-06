@@ -153,6 +153,7 @@ def create_dataloader(
         collate_fn=collate_fn,
         drop_last=shuffle,
         persistent_workers=num_workers > 0,
+        pin_memory=True,
     )
 
 

@@ -1,0 +1,17 @@
+{
+  "audio_path": "data/raw/libriSpeech-pt/mls_portuguese_opus/dev/audio/4067/3313/4067_3313_000000.wav",
+  "checkpoint_path": "experiments/phase_1/fix_gradient_flows_3/checkpoints/epoch_0014.pt",
+  "reference_mel_path": "exports/mel/4067_3313_000000_reference_mel.pt",
+  "reference_mel_shape": [
+    80,
+    876
+  ],
+  "sample_rate": 22050,
+  "checkpoint_epoch": 14,
+  "predicted_mel_path": "exports/mel/4067_3313_000000_predicted_mel.pt",
+  "predicted_mel_shape": [
+    80,
+    877
+  ],
+  "mel_comparison_plot_path": "exports/mel/4067_3313_000000_target_vs_generated_mel.png"
+}

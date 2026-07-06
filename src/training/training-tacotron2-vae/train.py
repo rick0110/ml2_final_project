@@ -84,6 +84,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--anneal-function", type=str, default="cyclical")
     parser.add_argument("--guided-attention-weight", type=float, default=2.0)
     parser.add_argument("--guided-attention-sigma", type=float, default=0.4)
+    parser.add_argument("--gate-positive-weight", type=float, default=1.0,
+                        help="BCE pos_weight for the stop frame (>1 counters the ~1:250 stop/continue imbalance)")
     parser.add_argument("--warmup-steps", type=int, default=0,
                         help="Linear LR warmup over this many steps (0=disabled)")
     parser.add_argument("--lr-scheduler-patience", type=int, default=20,
@@ -161,6 +163,7 @@ def main() -> None:
         "anneal_function": args.anneal_function,
         "guided_attention_weight": args.guided_attention_weight,
         "guided_attention_sigma": args.guided_attention_sigma,
+        "gate_positive_weight": args.gate_positive_weight,
         "warmup_steps": args.warmup_steps,
         "n_symbols": text_processor.n_symbols,
         "training_data": str(train_file),
@@ -265,12 +268,16 @@ def main() -> None:
 
     torch.backends.cudnn.enabled = hparams.cudnn_enabled
     torch.backends.cudnn.benchmark = hparams.cudnn_benchmark
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
-    # Training Loop — fp32 training for numerical stability
-    # (fp16 AMP causes overflow with random VAE weights producing large mel values)
+    # Training Loop — bf16 autocast (fp16 AMP overflows with random VAE weights
+    # producing large mel values; bf16 keeps the fp32 exponent range, so no
+    # GradScaler is needed — the disabled scaler below is a pass-through that
+    # just satisfies train_epoch's use_amp gate)
     model.train()
     tensorboard_logger = TensorBoardLogger(experiment_dir / "logs")
-    scaler = None  # AMP disabled
+    scaler = torch.amp.GradScaler("cuda", enabled=False)
 
     for epoch in range(hparams.epochs):
         training_metadata, epoch_val_loss, iteration = train_epoch(
