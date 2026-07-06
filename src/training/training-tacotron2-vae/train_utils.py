@@ -349,15 +349,19 @@ def train_epoch(
     for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"training", leave=False)):
         model.train()
 
-        # Linear LR warmup: ramp from warmup_start_lr to learning_rate over warmup_steps
+        # Linear LR warmup: ramp from warmup_start_lr to the configured base LR.
+        # The target must be hparams.learning_rate (fixed), not the learning_rate
+        # argument: train.py refreshes that argument from the optimizer after every
+        # epoch, so when epochs are shorter than the warmup the ramp target would
+        # collapse to the current warmup LR and freeze training near zero.
         if warmup_steps > 0 and iteration < warmup_steps:
-            warmup_lr = warmup_start_lr + (learning_rate - warmup_start_lr) * iteration / warmup_steps
+            warmup_lr = warmup_start_lr + (hparams.learning_rate - warmup_start_lr) * iteration / warmup_steps
             for pg in optimizer.param_groups:
                 pg['lr'] = warmup_lr
 
         x, y = model.parse_batch(batch, device)
 
-        with torch.amp.autocast("cuda", enabled=use_amp):
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16, enabled=use_amp):
             y_pred: List[torch.Tensor] = model(x)  # [mel, mel_post, gate, align, mu, logvar, z]
 
             # x = (text_padded, input_lengths, mel_padded, output_lengths)

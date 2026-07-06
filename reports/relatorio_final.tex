@@ -121,12 +121,12 @@ onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, m
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.72\columnwidth]{fig_lj_attention}
-    \caption{Pesos de atenção do \textit{reference encoder} (linha laranja, um peso por bloco da varredura do espectrograma) para três referências do LJSpeech.}
+    \includegraphics[width=\columnwidth]{fig_verbo_attn_stats}
+    \caption{VERBO: entropia normalizada da atenção por emoção (esquerda) e correlação de Pearson entre $\alpha_t$ e a energia do mel no bloco correspondente (direita).}
     \label{fig:attn}
 \end{figure}
 
-\textbf{Interpretabilidade da atenção.} No LJ, os pesos $\alpha_t$ são não-uniformes e concentram-se em bandas específicas do espectro (Fig.~\ref{fig:attn}). No VERBO, a \textbf{entropia normalizada} da atenção correlaciona-se com a emoção da referência: alegria 0,99, raiva 0,99 e surpresa 0,98 (atenção quase uniforme --- energia em banda larga) contra tristeza 0,67, neutro 0,70 e desgosto 0,76 (atenção concentrada em poucas bandas, tipicamente as agudas). A correlação com a energia do bloco é fraca ($|r|\le 0{,}38$): a atenção não é um mero detector de volume.
+\textbf{Interpretabilidade da atenção.} No LJ, os pesos $\alpha_t$ são não-uniformes e concentram-se em bandas específicas do espectro. No VERBO, a \textbf{entropia normalizada} da atenção correlaciona-se com a emoção da referência (Fig.~\ref{fig:attn}): alegria 0,99, raiva 0,99 e surpresa 0,98 (atenção quase uniforme --- energia em banda larga) contra tristeza 0,67, neutro 0,70 e desgosto 0,76 (atenção concentrada em poucas bandas, tipicamente as agudas). A correlação com a energia do bloco é fraca ($|r|\le 0{,}38$): a atenção não é um mero detector de volume.
 
 \textbf{Transferência de emoção em português.} Condicionando a síntese às 7 referências emocionais do VERBO, ritmo e registro mudam consistentemente com a emoção. Limitações: $\sim$4,7\,min de dados e vocoder treinado em inglês geram artefatos --- o objetivo é estudar o espaço de estilo, não produção.
 
