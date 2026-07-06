@@ -458,8 +458,10 @@
   <div class="callout warn">
     <p><b>Spoiler honesto:</b> mesmo com free bits e annealing cíclico, o baseline
     colapsou o posterior (seção 7) — o clamp do free bits zera o gradiente abaixo do
-    piso e não impede dimensões mortas. O que manteve o latente vivo foi a mudança
-    estrutural no reference encoder, apresentada a seguir.</p>
+    piso e não impede dimensões mortas. Nos dois treinos com atenção (LJ e VERBO) o
+    latente permaneceu ativo; como esses treinos também diferem do baseline em número
+    de iterações e grad clip (seção 3), essa comparação isolada não separa o efeito do
+    <em>pooling</em> por atenção, apresentado a seguir, dos demais fatores de treino.</p>
   </div>
 </section>
 
@@ -736,14 +738,12 @@
   </p>
 
   <h3>LJSpeech (modelo com atenção)</h3>
-  <figure class="figure">
-    <img src="assets/img/fig_lj_attention.png" alt="Espectrogramas das três referências LJ com a curva de atenção sobreposta" loading="lazy">
-    <figcaption>
-      A atenção é tudo menos uniforme: privilegia bandas específicas do espectro e
-      mantém peso alto nos últimos blocos da varredura (as bandas agudas) — o viés
-      da GRU, agora <em>visível e quantificável</em> em vez de implícito.
-    </figcaption>
-  </figure>
+  <p>
+    Os pesos α<sub>t</sub> são tudo menos uniformes: privilegiam bandas específicas
+    do espectro e mantêm peso alto nos últimos blocos da varredura (as bandas
+    agudas) — o viés da GRU, agora <em>visível e quantificável</em> em vez de
+    implícito.
+  </p>
 
   <h3>VERBO: a atenção reage à emoção</h3>
   <p>
@@ -751,14 +751,6 @@
     permite comparar a atenção entre estilos com texto idêntico. Agregando as 98 falas
     da locutora f1 (14 por emoção, posição na varredura normalizada):
   </p>
-  <figure class="figure">
-    <img src="assets/img/fig_verbo_attn_heatmap.png" alt="Mapa de calor da densidade média de atenção por emoção ao longo da varredura do espectrograma" loading="lazy">
-    <figcaption>
-      Densidade média de atenção (1,0 = uniforme) ao longo da varredura
-      (graves → agudos). Em todas as emoções a massa cresce na metade aguda do
-      espectro, mas o padrão difere fortemente entre emoções.
-    </figcaption>
-  </figure>
   <figure class="figure">
     <img src="assets/img/fig_verbo_attn_stats.png" alt="Entropia normalizada da atenção e correlação com energia por emoção" loading="lazy">
     <figcaption>
@@ -776,14 +768,6 @@
     diferencia. A correlação com a energia bruta é fraca e ruidosa (|r| ≤ 0,38):
     a atenção <em>não</em> é um simples detector de volume.</p>
   </div>
-  <figure class="figure">
-    <img src="assets/img/fig_verbo_attention_examples.png" alt="Exemplos individuais: espectrograma e atenção para alegria, tristeza e raiva na mesma frase" loading="lazy">
-    <figcaption>
-      A mesma frase (“Os bombeiros estão equipados com uma arma.”) em três emoções:
-      em alegria e raiva os pesos ficam próximos do uniforme; em tristeza o último
-      bloco da varredura (bandas mais agudas) domina.
-    </figcaption>
-  </figure>
 </section>
 
 <!-- ============================================================ VERBO -->

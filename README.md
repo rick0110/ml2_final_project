@@ -1,286 +1,167 @@
-# 🎙️ Cross-Lingual Emotion Voice Conversion System
-### *Powered by Tacotron2-VAE and WaveGlow*
+# Tacotron2-VAE — Síntese de fala com prosódia interpretável
+
+**Projeto final de ML2 (IMPA Tech)** · [Página do projeto](https://rick0110.github.io/ml2_final_project) · [Relatório (PDF)](reports/relatorio_final.pdf)
+
+Sistema de síntese de fala (*Text-to-Speech*) baseado no **Tacotron 2** com um **VAE** para modelagem de prosódia. A contribuição central do trabalho é substituir o *pooling* usual do *reference encoder* (último estado da GRU) por um ***pooling* por atenção espectral**, tornando o condicionamento de estilo interpretável — além de produzir um modelo especificamente para o português a partir do corpus emocional VERBO.
 
 ---
 
-## 📖 Table of Contents
-1. [Project Overview](#1-project-overview)
-2. [Repository Structure](#2-repository-structure)
-3. [Data Pipeline & Preprocessing](#3-data-pipeline--preprocessing)
-4. [System Architecture](#4-system-architecture)
-   - [Macro Pipeline](#41-macro-pipeline)
-   - [Tacotron2-VAE Acoustic Model](#42-tacotron2-vae-acoustic-model)
-   - [WaveGlow Neural Vocoder](#43-waveglow-neural-vocoder)
-5. [Loss Functions & Objectives](#5-loss-functions--objectives)
-6. [Training Workflows](#6-training-workflows)
-7. [TensorBoard Integration](#7-tensorboard-integration)
-8. [Diagnostic & Analysis Notebooks](#8-diagnostic--analysis-notebooks)
-9. [Installation & Quickstart](#9-installation--quickstart)
+## 1. O problema e a contribuição
 
----
+No Tacotron2-VAE, um *reference encoder* comprime um áudio de referência em um vetor latente `z` que captura características globais de estilo (ritmo, tom, velocidade) e condiciona a síntese. Na prática esse latente frequentemente "morre": o modelo aprende a reconstruir o espectrograma ignorando `z` (*posterior collapse*).
 
-## 1. Project Overview
+Este trabalho:
 
-The **ML2 Final Project** repository implements a highly expressive, stable, two-stage framework for cross-lingual emotion voice conversion.
+1. **Implementa métodos contra o colapso do posterior** — *free bits* (0,5 nats/dim) e *KL annealing* cíclico;
+2. **Troca o *pooling* do *reference encoder*** — em vez de usar só o último estado da GRU, uma atenção aprende pesos αₜ sobre todos os blocos da varredura do espectrograma (bandas de canais mel, dos graves aos agudos):
 
-By leveraging a **Variational Autoencoder (VAE)** infused with a Global Style Token (GST) nested inside a **Tacotron2** acoustic model, the system effectively disentangles linguistic content (from text) from speaker prosody and emotion (from reference audio). The generated acoustic features are then inverted into high-fidelity audio waveforms in real-time using **WaveGlow**, a flow-based generative network.
+   ```
+   sₜ = wᵀhₜ + b        α = softmax(s)        e = Σ αₜ hₜ
+   ```
 
-**Supported Datasets:**
-- LibriSpeech-PT (Portuguese)
-- LibriSpeech-EN (English)
-- TTS Portuguese Corpus
-- VERBO (Emotion/Affective Dataset)
+   O custo é desprezível (E/2 + 1 parâmetros) e os pesos αₜ formam um **mapa de atenção legível sobre o espectro**;
+3. **Adiciona a perda de atenção guiada** (Tachibana et al. 2017) sobre a atenção *location-sensitive* do decoder — ausente no artigo de referência (Zhang et al. 2019) — para resolver o desalinhamento severo do início do treino.
 
----
+## 2. Resultados obtidos
 
-## 2. Repository Structure
+Três modelos treinados: *baseline* (último estado da GRU) e variante com atenção no **LJSpeech** (inglês), e a variante em português no **VERBO** (locutora f1).
 
-The project is heavily modularized to separate data storage, isolated neural network definitions, and independent training orchestrators.
+| | LJ *baseline* | LJ atenção | VERBO f1 |
+|---|---|---|---|
+| Iterações | 11,2 mil | 35,5 mil | 9,5 mil |
+| Parâmetros | 28,9M | 28,9M | 7,7M |
+| Latente z | 32 | 32 | 16 |
+| Dimensões ativas do latente | **0/32** (var. máx. 0,004) | **32/32** | **15/16** |
+
+- **Colapso do posterior:** o *baseline* reconstrói um pouco melhor (0,596 vs. 0,722) mas às custas de um latente morto; com o *pooling* por atenção o latente permanece informativo.
+- **Transferência de estilo (LJSpeech):** condicionado a três referências de prosódia contrastante (grave/lenta, expressiva, rápida), o *baseline* produz áudios praticamente idênticos; o modelo com atenção muda ritmo e F0 de forma audível e consistente com a referência.
+- **Interpretabilidade da atenção:** os pesos αₜ concentram-se em bandas específicas do espectro. No VERBO, a **entropia normalizada** da atenção correlaciona-se com a emoção da referência: alegria 0,99, raiva 0,99 e surpresa 0,98 (atenção quase uniforme — energia em banda larga) contra tristeza 0,67, neutro 0,70 e desgosto 0,76 (atenção concentrada em poucas bandas). A correlação com a energia do bloco é fraca (|r| ≤ 0,38): a atenção não é um mero detector de volume.
+- **Transferência de emoção em português:** condicionando a síntese às 7 referências emocionais do VERBO, ritmo e registro mudam consistentemente com a emoção. Limitações: ~4,7 min de dados e vocoder treinado em inglês geram artefatos — o objetivo é estudar o espaço de estilo, não produção.
+- **Manipulação direta do latente:** mover uma única dimensão influente a ±3σ produz mudanças graduais e audíveis de ritmo/registro; no *baseline*, ±3σ de uma dimensão morta não muda nada.
+- **Interpolação esférica:** em alta dimensão a massa do prior gaussiano concentra-se numa casca de raio √L. A *lerp* atravessa o interior da casca (áudio perde definição harmônica em t = 0,25–0,50); a *slerp* caminha pelo arco e preserva a qualidade. No *baseline* (θ = 14°) os dois caminhos coincidem — o caso degenerado.
+
+Áudios, figuras e análises completas: [rick0110.github.io/ml2_final_project](https://rick0110.github.io/ml2_final_project).
+
+## 3. Arquitetura
+
+```
+Texto ──► Encoder (embedding + 3×Conv1d + BiLSTM) ──►(+)──► Atenção ──► Decoder ──► Postnet ──► WaveGlow ──► áudio
+                                                      ▲    location-    autoregressivo
+Mel de referência ──► Reference encoder (VAE) ──► e ──┘    sensitive    + gate de parada
+                      6×Conv2d (1ª CoordConv) + GRU
+                      + pooling por atenção → μ, σ → z
+```
+
+- **Text encoder:** embedding de símbolos → 3 convoluções 1D (k=5) → BiLSTM.
+- **Reference encoder:** 6 convoluções 2D de *stride* 2 (a primeira é uma CoordConv) reduzem o mel 80×T; uma GRU percorre o resultado em T′ = T/64 blocos (bandas do espectro) e o *pooling* por atenção resume os estados em um vetor, projetado em (μ, log σ²); amostra-se `z`, convertido em vetor de estilo **e** somado a todas as posições da memória do encoder.
+- **Decoder:** atenção *location-sensitive* (conteúdo + posição via convolução sobre os αₜ acumulados), prenet, 2 LSTMs, projeção para o quadro mel e para o *gate* de parada; postnet residual de 5 convoluções.
+- **Vocoder:** WaveGlow 256ch pré-treinado pela NVIDIA (congelado, σ = 0,6).
+
+## 4. Perdas de treinamento
+
+```
+L = L_mel + L_gate + β(passo)·L_KL + λ·L_GA
+```
+
+| Perda | Descrição |
+|---|---|
+| `L_mel` | MSE do mel (decoder + postnet), mascarada no *padding* |
+| `L_gate` | Entropia cruzada binária do sinal de parada |
+| `L_KL` | KL com *free bits* de 0,5 nats/dimensão |
+| `β(passo)` | *Annealing* cíclico: rampa 0 → 0,2 a cada 4.000 passos, após 2.000 de espera |
+| `L_GA` | Atenção guiada: penaliza massa de atenção longe da diagonal (LJ: λ=2,0, σ=0,4; VERBO: λ=50, σ=0,2) |
+
+## 5. Dados
+
+| Corpus | Falas | Duração | Idioma | Entrada de texto |
+|---|---|---|---|---|
+| LJSpeech 1.1 | 13.100 | ~23,9 h | inglês | caracteres (`english_cleaners`) |
+| VERBO (locutora f1) | 98 | ~4,7 min | português, 7 emoções | fonemas IPA (`gruut`) |
+
+Áudio: 22.050 Hz, 80 canais mel, FFT 1024, *hop* 256, f_max 8 kHz.
+
+## 6. Como treinar
+
+```bash
+# 1. Pré-processar o corpus (exemplo: VERBO)
+python scripts/preprocess/preprocess_Verbo.py \
+  --input-dir data/raw/VERBO-Dataset \
+  --out-dir data/processed/VERBO/mels
+
+# 2. Treinar (receita do modelo VERBO do relatório — rede reduzida)
+python src/training/training-tacotron2-vae/train.py \
+  --batch-size 16 --learning-rate 1e-4 --grad-clip-thresh 1.0 \
+  --anneal-function cyclical \
+  --guided-attention-weight 50.0 --guided-attention-sigma 0.2 \
+  --text-cleaner portuguese_phonetic_cleaners \
+  --artifacts-dir data/processed/VERBO \
+  --symbols-embedding-dim 256 --encoder-embedding-dim 256 --style-dim 256 \
+  --z-latent-dim 16 --decoder-rnn-dim 512 --attention-rnn-dim 512 \
+  --prenet-dim 128 --postnet-embedding-dim 256 \
+  --experiment-name meu_experimento
+```
+
+O modelo do relatório usa apenas a locutora f1 do VERBO. Para os modelos LJSpeech, use `--text-cleaner english_cleaners` e as dimensões cheias (defaults de `hparams.py`).
+
+### TensorBoard
+
+```bash
+tensorboard --logdir experiments/<experimento>/logs
+```
+
+Loga perdas (treino/val/teste, com KL e atenção guiada separadas), espectrograma alvo vs. predito por inferência, valores singulares do latente (diagnóstico de colapso) e normas de gradiente por camada.
+
+## 7. Estrutura do repositório
 
 ```text
 ml2_final_project/
 ├── data/
-│   ├── raw/                             # Original, unmodified audio corpora
-│   └── processed/                       # Serialized .pt tensors and metadata CSV manifests
-├── scripts/
-│   ├── download_datasets/               # Shell/Python corpus fetchers
-│   ├── inference/                       # Audio generation utilities
-│   ├── preprocess/                      # Normalization & Mel-spectrogram extraction scripts
-│   └── utils/                           # Model analysis and utility scripts
+│   ├── raw/                       # Corpora originais (LJSpeech, VERBO, ...)
+│   └── processed/                 # Tensores .pt + manifestos mels_metadata.csv
 ├── src/
-│   ├── data/                            # PyTorch Datasets and DataLoaders
-│   │   ├── loader_vae_tacotron/         # TextMelCollate and dynamic STFT loaders
-│   │   └── loader_waveglow/             # Mel2Samp dataloaders
-│   ├── models/                          # Neural Network Architecture
-│   │   ├── tacotron2_vae/               # Encoder, Decoder, Postnet, VAE, and Attention
-│   │   └── waveglow/                    # Invertible Convolutions and Affine Coupling flows
-│   └── training/                        # Checkpointing, loops, and distributed setups
-│       ├── training-tacotron2-vae/
-│       └── training-waveglow/
-├── notebooks/                           # Interactive Jupyter demos and spectral analysis
-├── experiments/                         # Output artifacts, tensorboard logs, plots, checkpoints
-└── remote_access/                       # SSH automation/configs for cluster training
+│   ├── data/                      # Datasets e DataLoaders (loader_vae_tacotron, loader_waveglow)
+│   ├── models/
+│   │   ├── tacotron2_vae/         # Encoder, decoder, atenção, VAE-GST, hparams
+│   │   └── waveglow/              # Vocoder (usado congelado, pré-treinado pela NVIDIA)
+│   └── training/
+│       └── training-tacotron2-vae/  # train.py, perdas, loop de treino, TensorBoard
+├── scripts/
+│   ├── preprocess/                # Extração de mel-espectrogramas por corpus
+│   ├── inference/                 # Utilitários de síntese
+│   └── site_assets/               # Geração das figuras/áudios da página do projeto
+├── notebooks/                     # Demos e análises (ver abaixo)
+├── experiments/                   # Checkpoints, hparams.json, logs TensorBoard
+├── docs/                          # Página do projeto (GitHub Pages)
+└── reports/                       # Relatório final (LaTeX + PDF)
 ```
 
----
+## 8. Notebooks
 
-## 3. Data Pipeline & Preprocessing
+| Notebook | O que faz |
+|---|---|
+| `tacotron2_vae_demo.ipynb` | Loop de treino ao vivo no VERBO com dashboard (mel alvo vs. gerado, perdas, PCA do latente) |
+| `attention_analysis.ipynb` | Análise dos pesos de atenção do *reference encoder* por emoção |
+| `attention_deep_analysis.ipynb` | Análise aprofundada da atenção do *reference encoder* |
+| `style_transfer_demo.ipynb` | Transferência de emoção ponta a ponta: 7 referências do VERBO → síntese + playback |
+| `demo_spectral_analisys.ipynb` | Estatísticas espectrais comparativas VERBO vs. LJSpeech (PCA/t-SNE) |
+| `demo_audio.ipynb` | Comparação de vocoders por cópia-síntese: Griffin-Lim vs. WaveGlow |
+| `demo_vocoder_waveglow.ipynb` | Loop de treino/fine-tuning do WaveGlow (exploratório; o projeto usa o checkpoint NVIDIA congelado) |
+| `testing_nvidia_tarcotron2.ipynb` | Sanidade: Tacotron2 + WaveGlow oficiais da NVIDIA via `torch.hub` |
 
-The pipeline ensures identical frequency resolution across the Acoustic Model and the Vocoder to prevent mismatch artifacts during inference.
-
-### 3.1. Offline Preprocessing (`scripts/preprocess/`)
-
-1. **Discovery:** Scripts recursively search for transcript files (e.g., `*.trans.txt`).
-2. **Resampling:** Audio is loaded via `torchaudio`, converted to mono, and resampled to the target rate (`22050 Hz` or `16000 Hz`).
-3. **Feature Extraction:** Standardized 80-bin Mel-spectrograms are extracted.
-4. **Filtering:** Utterances outside the 0.3s – 10.0s bounds are discarded to prevent Out-Of-Memory (OOM) errors.
-5. **Serialization:** Saved as individual `.pt` dictionaries alongside a central `mels_metadata.csv` manifest.
-
-### 3.2. Online Loading (`src/data/`)
-
-- **Tacotron Loader:** Reads the manifest, dynamically recomputes the STFT on the GPU during the `__getitem__` call to ensure gradient detachment, and applies Text Normalization (Regex + `num2words`). It also injects a `[4]-dim` Emotion Tensor for affective conditioning.
-- **WaveGlow Loader:** `Mel2Samp` slices random fixed-length audio segments (e.g., 8000 samples) and returns `(mel_spectrogram, audio_waveform)` pairs.
-
----
-
-## 4. System Architecture
-
-### 4.1. Macro Pipeline
-
-```mermaid
-graph LR
-    A[Input Text] --> C(Tacotron2-VAE)
-    B[Reference Audio] --> C
-    C -->|Predicted Mel-Spectrogram| D(WaveGlow Vocoder)
-    D --> E[High-Fidelity Audio]
-
-    style C fill:#d4edda,stroke:#28a745,stroke-width:2px
-    style D fill:#f8d7da,stroke:#dc3545,stroke-width:2px
-```
-
-### 4.2. Tacotron2-VAE Acoustic Model
-
-The Acoustic Model transforms text to Mel-spectrograms while cloning the target prosody.
-
-1. **Text Encoder:**
-   - Character Embedding (Dim: 512).
-   - 3x 1D Convolutional Layers (k=5) + BatchNorm + ReLU + 50% Dropout.
-   - Bidirectional LSTM (Hidden: 256/direction → 512).
-
-2. **VAE Prosody Extractor:**
-   - Reference Encoder (2D Convs → GRU) maps the 80-bin target mel to a 256-dim vector.
-   - Splitting outputs μ and log σ² (Dim: 32).
-   - Reparameterization Trick: `z = μ + σ ⊙ ε`.
-   - Linear projection to `E_style` (Dim: 512), which is added to the Text Embeddings.
-
-3. **Location-Sensitive Attention:** Forces monotonic alignment by convolving over previous attention weights (Location Layer Conv1d k=31).
-
-4. **Autoregressive Decoder:**
-   - 2-Layer Prenet (Dim: 256) acting as an information bottleneck.
-   - 2x LSTMCells (Dim: 1024) processing attention context.
-   - Linear projections output the next Mel frame and a Stop Token probability.
-
-5. **PostNet:** A 5-layer 1D Convolutional network predicting a residual to smooth the decoder's output.
-
-### 4.3. WaveGlow Neural Vocoder
-
-WaveGlow acts as an invertible Normalizing Flow, maximizing the exact log-likelihood of the data.
-
-- **Prior:** Starts with `z ~ N(0, I)`.
-- **Conditioning:** The Mel-spectrogram is upsampled via Transposed Convolutions to match the audio sampling rate.
-- **Flow Steps (x12):**
-  - **Invertible 1x1 Convolution:** Mixes channel dimensions. Weight matrix initialized via QR decomposition.
-  - **Affine Coupling Layer (WaveNet):**
-    - Splits audio channels into `x_a` and `x_b`.
-    - `x_a` and the Mel-spectrogram condition a dilated, non-causal WaveNet (8 layers).
-    - Outputs scale (`log s`) and translation (`t`).
-    - Transform: `x_b' = x_b ⊙ exp(log s) + t`.
-
----
-
-## 5. Loss Functions & Objectives
-
-### 5.1. Tacotron2-VAE
-
-The loss combines L2 reconstruction, Binary Cross-Entropy, and KL Divergence:
-
-1. **Reconstruction Loss:**  
-   `L_Recon = || Mel_target - Mel_dec ||² + || Mel_target - Mel_post ||²`
-
-2. **Gate Loss:** `BCEWithLogits` for the stop token.
-
-3. **KL Divergence:**  
-   `-0.5 * Σ(1 + log(σ²) - μ² - σ²)`
-
-4. **KL Annealing:** Uses a logistic schedule to prevent posterior collapse early in training.
-
-- `Total Loss = L_Recon + L_Gate + w_KL(step) * L_KL`
-
-### 5.2. WaveGlow
-
-Trained using Negative Log-Likelihood (NLL) derived from the change of variables theorem:
-
-- `L_NLL = 1 / (B * C * T) * (Σ z² / (2σ²) - Σ log s - Σ log |det W|)`
-
----
-
-## 6. Training Workflows
-
-Because of the architectural complexity, the two systems are trained independently.
-
-### Phase 1: Tacotron2-VAE Training
-
-Trains the prosody extraction and the text-to-mel alignment.
+## 9. Instalação
 
 ```bash
-python src/training/training-tacotron2-vae/train.py \
-    --epochs 300 \
-    --batch-size 32 \
-    --learning-rate 1e-3 \
-    --artifacts-dir data/processed/libriSpeech-en-tacotron-vae \
-    --experiment-name v1_tacotron
-```
-
-### Phase 2: WaveGlow Training (Distributed)
-
-Requires significant compute. Implements Distributed Data Parallel (DDP) and NVIDIA Apex FP16 Mixed Precision (`O1`).
-
-```bash
-python -m torch.distributed.launch --nproc_per_node=2 \
-    src/training/training-waveglow/train.py \
-    -c src/models/waveglow/config.json \
-    --checkpoints_dir experiments/waveglow/checkpoints
-```
-
----
-
-## 7. TensorBoard Integration
-
-To monitor the training process of the Tacotron2-VAE acoustic model, TensorBoard logging is fully integrated.
-
-### How to use TensorBoard
-During or after training, you can launch TensorBoard pointing to the `logs` folder created within your experiment directory.
-```bash
-tensorboard --logdir experiments/<your_experiment_name>/logs
-```
-Then, open the provided URL (usually `http://localhost:6006`) in your web browser.
-
-### What TensorBoard Shows
-- **Losses:** Tracks `Total Loss`, `Reconstruction Loss` (L1/L2), and `KL Loss` separately for the Training, Validation, and Test datasets.
-- **Spectrograms (`Spectrograms/Target_vs_Predicted`):** Shows a side-by-side visual comparison of the target mel-spectrogram vs. the predicted mel-spectrogram at each step.
-- **Latent Space PCA (`PCA/Singular_Values`):** Displays a bar graph of the singular values computed from the PCA of the latent variable `z` generated by the test dataset, allowing you to monitor the dimensionality and utilization of the latent space.
-- **Gradient Norms:** 
-  - A histogram/bar chart of gradient norms distribution across the model layers (`Gradients/Norms_Distribution`).
-  - A page (`GradientNorms_Layers`) showing the scalar gradient norm value for each individual layer at each step, helping you diagnose vanishing or exploding gradients.
-
----
-
-## 8. Diagnostic & Analysis Notebooks
-
-The repository includes interactive Jupyter notebooks inside the `notebooks/` directory to monitor training visually and analyze data. All notebooks are scoped to the project's two supported datasets: **VERBO** (Portuguese emotional speech, `experiments/tacotron2-vae/verbo_v4_f1`) and **LJSpeech** (English, via NVIDIA's official pretrained checkpoints and `data/processed/LJSpeech-tacotron-vae`).
-
-### 1. `tacotron2_vae_demo.ipynb` — VERBO
-- **Purpose:** Live, visual training loop for Tacotron2-VAE on VERBO.
-- **Features:** Plots total loss, reconstruction loss, KL loss, and displays the **Target vs. Generated Mel-spectrograms** in real-time.
-- **PCA Diagnostic:** Extracts the latent space `z` across the batch and runs SVD to plot the Singular Values, ensuring the VAE is utilizing its latent dimensions properly.
-
-### 2. `attention_analysis.ipynb` — VERBO
-- **Purpose:** Interprets the `ReferenceEncoder`'s attention-pooling weights on the trained VERBO model.
-- **Features:** Extracts temporal attention over 7 emotional references (same speaker/sentence), correlates attention with energy/spectral centroid, visualizes style-embedding (`μ`) discriminative dimensions, and runs a causal ablation of the attended frames.
-
-### 3. `style_transfer_demo.ipynb` — VERBO
-- **Purpose:** End-to-end emotion style-transfer demo.
-- **Features:** Synthesizes the same sentence conditioned on each of VERBO's 7 emotions (real reference audio → VAE-GST style embedding → Tacotron2 decoder → WaveGlow), with side-by-side playback against the real reference and mel/alignment plots per emotion.
-
-### 4. `demo_spectral_analisys.ipynb` — VERBO vs. LJSpeech
-- **Purpose:** Comparative offline dataset analytics.
-- **Features:** Example spectrograms from both datasets, global mel-bin mean/variance overlaid, and **K-Means / PCA / t-SNE** on mel embeddings colored by dataset origin (with Adjusted Rand Index quantifying how spectrally separable the two datasets are).
-
-### 5. `demo_audio.ipynb` — LJSpeech
-- **Purpose:** Vocoder quality comparison (copy-synthesis).
-- **Features:** Reconstructs a real LJSpeech mel-spectrogram via **Griffin-Lim** vs. **WaveGlow** (NVIDIA, pretrained on LJSpeech), isolating vocoder quality from any acoustic model.
-
-### 6. `demo_vocoder_waveglow.ipynb` — LJSpeech
-- **Purpose:** Live, visual training/fine-tuning loop for WaveGlow on LJSpeech.
-- **Features:** Plots the NLL loss and compares the Target Audio Waveform against the conditioned Mel-Spectrogram; can resume from a local checkpoint or fine-tune from the NVIDIA pretrained checkpoint.
-- **Prior Diagnostic:** Plots a live histogram of the output `z` over a standard normal `N(0,1)` PDF line to verify the Normalizing Flow is correctly mapping audio to the Gaussian prior.
-
-### 7. `testing_nvidia_tarcotron2.ipynb` — LJSpeech
-- **Purpose:** Sanity check against NVIDIA's official pretrained Tacotron2 + WaveGlow (both trained on LJSpeech), downloaded directly via `torch.hub` — a "factory baseline" to compare against the project's own VERBO-trained models.
-
----
-
-## 9. Installation & Quickstart
-
-### Prerequisites
-
-- Python 3.10+
-- CUDA 11.8+ / CuDNN
-- NVIDIA APEX (Required for WaveGlow FP16 training)
-
-### Setup
-
-```bash
-# 1. Clone the repository
 git clone https://github.com/rick0110/ml2_final_project.git
 cd ml2_final_project
-git checkout merge/preparing_merge_vae_tacotron
-
-# 2. Setup Virtual Environment
-python -m venv .venv
-source .venv/bin/activate
-
-# 3. Install Requirements
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# 4. Initialize Directories
 bash initialize_directories.sh
 ```
 
-### Data Preparation Example
+Requisitos: Python 3.10+, GPU CUDA para treino.
 
-```bash
-python scripts/preprocess/preprocess_libri-Speech-en_vaeTacotron.py \
-  --input-dir data/raw/libriSpeech-en \
-  --out-dir data/processed/libriSpeech-en-tacotron-vae
-```
+## Créditos
+
+**Discentes:** Beatriz Nunes, Herivelton Siqueira, Richard Viana · **Professores:** Francisco Ganacim, Daniel Silveira Yukimura Lopez · **IMPA Tech**, julho de 2026.
+
+**Referências principais:** Hsu et al. 2019 (Tacotron2-VAE) · Zhang et al. 2019 (VAE-TTS) · Shen et al. 2018 (Tacotron 2) · Skerry-Ryan et al. 2018 (*reference encoder*) · Prenger et al. 2019 (WaveGlow) · Tachibana et al. 2017 (atenção guiada) · White 2016 (*slerp*) · Torres Neto et al. 2018 (corpus VERBO).
