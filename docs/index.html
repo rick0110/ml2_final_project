@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tacotron2-VAE — Atenção Temporal Interpretável no Reference Encoder</title>
+<title>Tacotron2-VAE — Atenção Espectral Interpretável no Reference Encoder</title>
 <style>
   :root {
     --bg: #f9f9f7;
@@ -172,11 +172,11 @@
 
 <header class="hero">
   <div class="wrap">
-    <h1>Atenção temporal interpretável no <em>reference encoder</em> do Tacotron2-VAE</h1>
+    <h1>Atenção espectral interpretável no <em>reference encoder</em> do Tacotron2-VAE</h1>
     <p class="subtitle">
       Comparamos duas formas de resumir o áudio de referência em um vetor de estilo:
-      o <b>último estado da GRU</b> (baseline) versus um <b>pooling por atenção temporal</b>
-      cujo peso por janela de tempo é inspecionável. Três modelos treinados:
+      o <b>último estado da GRU</b> (baseline) versus um <b>pooling por atenção</b>
+      cujo peso por banda do espectro é inspecionável. Três modelos treinados:
       dois no LJSpeech (inglês) e um no corpus emocional VERBO (pt-BR, locutora f1).
       A página inclui áudios de transferência de estilo, análise da atenção por emoção,
       manipulação do espaço latente e interpolação esférica vs. linear.
@@ -465,12 +465,13 @@
 
 <!-- ============================================================ ARQUITETURA -->
 <section id="arquitetura">
-  <h2><span class="kicker">2 · A mudança</span> Do último estado da GRU à atenção temporal</h2>
+  <h2><span class="kicker">2 · A mudança</span> Do último estado da GRU ao pooling por atenção</h2>
   <p>
     No Tacotron2-VAE, o <em>reference encoder</em> comprime o mel-espectrograma de
     referência (80&nbsp;canais × T&nbsp;quadros) com 6 convoluções de stride&nbsp;2
-    (a primeira é uma CoordConv) e passa a sequência resultante — uma janela a cada
-    <b>64 quadros ≈ 0,74&nbsp;s</b> — por uma GRU. O que muda entre os modelos é
+    (a primeira é uma CoordConv) e percorre o resultado com uma GRU em
+    <b>T′&nbsp;=&nbsp;T/64 blocos</b> — cada bloco cobre uma banda de canais mel,
+    dos graves aos agudos. O que muda entre os modelos é
     <b>como a sequência de estados h₁…h<sub>T′</sub> vira um único vetor</b> que alimenta
     o VAE (μ, log&nbsp;σ²):
   </p>
@@ -504,7 +505,7 @@
       <path class="flow" d="M384 59 H 426"/>
       <rect class="box" x="428" y="30" width="130" height="58" rx="10"/>
       <text class="lbl" x="493" y="54" text-anchor="middle">GRU</text>
-      <text class="sub2" x="493" y="73" text-anchor="middle">T′ = T/64 janelas</text>
+      <text class="sub2" x="493" y="73" text-anchor="middle">T′ = T/64 blocos</text>
       <path class="flow" d="M558 59 H 600"/>
       <!-- hidden states -->
       <g>
@@ -517,7 +518,7 @@
         <text class="sub2" x="671" y="65" text-anchor="middle">h₂</text>
         <text class="sub2" x="719" y="65" text-anchor="middle">h₃</text>
         <text class="sub2" x="807" y="65" text-anchor="middle">h<tspan baseline-shift="sub" font-size="9">T′</tspan></text>
-        <text class="tiny" x="716" y="102" text-anchor="middle">um estado a cada ~0,74 s de áudio</text>
+        <text class="tiny" x="716" y="102" text-anchor="middle">um estado por banda do espectro (graves → agudos)</text>
       </g>
 
       <!-- BEFORE -->
@@ -539,12 +540,12 @@
       </g>
       <text class="tiny" x="40" y="320">e = h<tspan baseline-shift="sub" font-size="9">T′</tspan></text>
       <text class="sub2" x="40" y="352">✗ um único vetor opaco: nada diz</text>
-      <text class="sub2" x="40" y="371">quais trechos do áudio definiram o estilo</text>
-      <text class="sub2" x="40" y="390">✗ viés de recência da GRU domina</text>
+      <text class="sub2" x="40" y="371">quais faixas do espectro definiram o estilo</text>
+      <text class="sub2" x="40" y="390">✗ os últimos estados (bandas agudas) dominam</text>
 
       <!-- AFTER -->
       <rect class="box-hl" x="500" y="150" width="440" height="284" rx="12"/>
-      <text class="lbl" x="520" y="180">Depois — atenção temporal</text>
+      <text class="lbl" x="520" y="180">Depois — pooling por atenção</text>
       <text class="sub2" x="520" y="200">soma ponderada de todos os estados</text>
       <g>
         <rect class="cell" x="540" y="228" width="42" height="42" rx="8"/>
@@ -567,7 +568,7 @@
         <text class="sub2" x="847" y="264" text-anchor="middle">z ∈ ℝ³² (LJ) / ℝ¹⁶</text>
       </g>
       <text class="tiny" x="520" y="366">sₜ = wᵀhₜ + b&nbsp;&nbsp;&nbsp;α = softmax(s)&nbsp;&nbsp;&nbsp;e = Σ αₜ hₜ</text>
-      <text class="sub2" x="520" y="392">✓ αₜ diz quanto cada janela de ~0,74 s</text>
+      <text class="sub2" x="520" y="392">✓ αₜ diz quanto cada banda do espectro</text>
       <text class="sub2" x="520" y="411">contribuiu para o vetor de estilo</text>
     </svg>
   </div>
@@ -582,9 +583,9 @@
 <span class="hl-add">+ encoded = (out * weights).sum(1)   # (B, E//2)      Σ αₜ hₜ</span></code></pre>
   <p>
     O custo é desprezível (E/2&nbsp;+&nbsp;1 parâmetros a mais) e o ganho é duplo:
-    o gradiente flui para <b>todas</b> as janelas do áudio de referência (não só pela
+    o gradiente flui para <b>todos</b> os blocos da varredura do espectrograma (não só pela
     cadeia recorrente até o último estado) e os pesos αₜ formam um
-    <b>mapa de atenção temporal legível</b>, analisado na seção 5.
+    <b>mapa de atenção legível sobre o espectro</b>, analisado na seção 5.
   </p>
 </section>
 
@@ -606,7 +607,7 @@
       <th>Hiperparâmetro</th><th>LJ baseline</th><th>LJ atenção</th><th>VERBO f1 (v4)</th>
     </tr></thead>
     <tbody>
-      <tr class="diff"><td>Pooling do reference encoder</td><td>último estado da GRU</td><td>atenção temporal</td><td>atenção temporal</td></tr>
+      <tr class="diff"><td>Pooling do reference encoder</td><td>último estado da GRU</td><td>pooling por atenção</td><td>pooling por atenção</td></tr>
       <tr class="diff"><td>Dataset</td><td>LJSpeech (13.100 falas)</td><td>LJSpeech (13.100 falas)</td><td>VERBO f1 (98 falas, 7 emoções)</td></tr>
       <tr class="diff"><td>Entrada de texto (cleaner)</td><td>english_cleaners (caracteres)</td><td>english_cleaners (caracteres)</td><td>portuguese_phonetic (fonemas IPA)</td></tr>
       <tr class="diff"><td>Iterações treinadas</td><td>11.200</td><td>35.500</td><td>9.500</td></tr>
@@ -728,9 +729,9 @@
 <section id="atencao">
   <h2><span class="kicker">5 · Interpretabilidade</span> Como a atenção muda com o estilo</h2>
   <p>
-    Cada peso αₜ cobre uma janela de ~0,74&nbsp;s do áudio de referência
-    (64 quadros mel × hop de 256 a 22.050&nbsp;Hz). Sobrepondo a curva de αₜ ao
-    espectrograma, vemos <b>quais trechos o modelo usou para definir o estilo</b> —
+    Cada peso αₜ cobre um bloco da varredura do espectrograma — uma banda de
+    canais mel (T′&nbsp;=&nbsp;T/64 blocos, dos graves aos agudos). Traçando a curva
+    de αₜ, vemos <b>quais faixas do espectro o modelo usou para definir o estilo</b> —
     exatamente a informação que o baseline não fornece.
   </p>
 
@@ -738,10 +739,9 @@
   <figure class="figure">
     <img src="assets/img/fig_lj_attention.png" alt="Espectrogramas das três referências LJ com a curva de atenção sobreposta" loading="lazy">
     <figcaption>
-      A atenção é tudo menos uniforme: privilegia janelas específicas (em geral regiões
-      vozeadas com contorno de F0 marcado) e mantém peso alto nas janelas finais — um
-      resquício do viés de recência da GRU, agora <em>visível e quantificável</em> em
-      vez de implícito.
+      A atenção é tudo menos uniforme: privilegia bandas específicas do espectro e
+      mantém peso alto nos últimos blocos da varredura (as bandas agudas) — o viés
+      da GRU, agora <em>visível e quantificável</em> em vez de implícito.
     </figcaption>
   </figure>
 
@@ -749,38 +749,39 @@
   <p>
     O VERBO é um corpus paralelo — as mesmas frases gravadas nas 7 emoções — o que
     permite comparar a atenção entre estilos com texto idêntico. Agregando as 98 falas
-    da locutora f1 (14 por emoção, tempo normalizado):
+    da locutora f1 (14 por emoção, posição na varredura normalizada):
   </p>
   <figure class="figure">
-    <img src="assets/img/fig_verbo_attn_heatmap.png" alt="Mapa de calor da densidade média de atenção por emoção ao longo do tempo normalizado" loading="lazy">
+    <img src="assets/img/fig_verbo_attn_heatmap.png" alt="Mapa de calor da densidade média de atenção por emoção ao longo da varredura do espectrograma" loading="lazy">
     <figcaption>
-      Densidade média de atenção (1,0 = uniforme). Em todas as emoções a massa cresce
-      na segunda metade do áudio, mas o padrão difere fortemente entre emoções.
+      Densidade média de atenção (1,0 = uniforme) ao longo da varredura
+      (graves → agudos). Em todas as emoções a massa cresce na metade aguda do
+      espectro, mas o padrão difere fortemente entre emoções.
     </figcaption>
   </figure>
   <figure class="figure">
     <img src="assets/img/fig_verbo_attn_stats.png" alt="Entropia normalizada da atenção e correlação com energia por emoção" loading="lazy">
     <figcaption>
       Esquerda: entropia normalizada (1,0 = atenção uniforme; barras = média ± desvio).
-      Direita: correlação de Pearson entre αₜ e a energia média do mel na mesma janela.
+      Direita: correlação de Pearson entre αₜ e a energia média do mel no mesmo bloco.
     </figcaption>
   </figure>
   <div class="callout">
     <p><b>Leitura:</b> nas emoções de alta ativação — <b>alegria (0,99)</b>,
     <b>raiva (0,99)</b> e <b>surpresa (0,98)</b> — a atenção é quase uniforme:
-    as pistas prosódicas (F0 e energia elevadas) estão espalhadas pela fala inteira,
-    e o modelo integra tudo. Já em <b>tristeza (0,67)</b>, <b>neutro (0,70)</b> e
-    <b>desgosto (0,76)</b> a atenção se concentra em poucas janelas, tipicamente no
-    final do enunciado — onde ficam o alongamento silábico e o contorno descendente
-    característicos de fala triste/neutra. A correlação com a energia bruta é fraca e
-    ruidosa (|r| ≤ 0,38): a atenção <em>não</em> é um simples detector de volume.</p>
+    a energia dessas emoções se espalha em banda larga, com pistas prosódicas por
+    todo o espectro, e o modelo integra tudo. Já em <b>tristeza (0,67)</b>,
+    <b>neutro (0,70)</b> e <b>desgosto (0,76)</b> a atenção se concentra em poucas
+    bandas, tipicamente as mais agudas — onde o espectro dessas emoções mais se
+    diferencia. A correlação com a energia bruta é fraca e ruidosa (|r| ≤ 0,38):
+    a atenção <em>não</em> é um simples detector de volume.</p>
   </div>
   <figure class="figure">
     <img src="assets/img/fig_verbo_attention_examples.png" alt="Exemplos individuais: espectrograma e atenção para alegria, tristeza e raiva na mesma frase" loading="lazy">
     <figcaption>
       A mesma frase (“Os bombeiros estão equipados com uma arma.”) em três emoções:
-      em alegria e raiva os pesos ficam próximos do uniforme; em tristeza a última
-      janela domina.
+      em alegria e raiva os pesos ficam próximos do uniforme; em tristeza o último
+      bloco da varredura (bandas mais agudas) domina.
     </figcaption>
   </figure>
 </section>
