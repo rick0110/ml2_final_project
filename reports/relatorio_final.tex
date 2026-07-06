@@ -24,7 +24,7 @@
 \titlespacing*{\section}{0pt}{6pt}{3pt}
 \titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.6em}{}
 
-\title{\vspace{-1.2cm}\Large\textbf{Síntese de Fala com Tacotron2-VAE:\\ Atenção Temporal Interpretável no \textit{Reference Encoder}}}
+\title{\vspace{-1.2cm}\Large\textbf{Síntese de Fala com Tacotron2-VAE:\\ Atenção Espectral Interpretável no \textit{Reference Encoder}}}
 \author{\normalsize Beatriz Nunes \quad Herivelton Siqueira \quad Richard Viana\\[2pt]
 \small Machine Learning II --- IMPA Tech\\
 \small Professores: Francisco Ganacim e Daniel Silveira Yukimura Lopez}
@@ -37,14 +37,14 @@
 \vspace{-0.9cm}
 \begin{center}
 \begin{minipage}{0.92\textwidth}
-\small\textbf{Resumo ---} Implementamos um sistema de síntese de fala (\textit{Text-to-Speech}) baseado no Tacotron2 com um \textit{Variational Autoencoder} (VAE) para modelagem de prosódia. A contribuição central do trabalho é substituir o \textit{pooling} usual do \textit{reference encoder} (último estado da GRU) por um \textit{pooling} por \textbf{atenção temporal}, tornando o condicionamento de estilo interpretável, além de produzir um modelo especificamente para o português a partir do corpus emocional VERBO. Treinamos três modelos --- \textit{baseline} e variante com atenção no LJSpeech (inglês), e a variante em português no VERBO --- e avaliamos transferência de estilo e de emoção, interpretabilidade dos pesos de atenção, manipulação direta do espaço latente e interpolação esférica (\textit{slerp}) versus linear (\textit{lerp}). Página do projeto: \url{https://rick0110.github.io/ml2_final_project}.
+\small\textbf{Resumo ---} Implementamos um sistema de síntese de fala (\textit{Text-to-Speech}) baseado no Tacotron2 com um \textit{Variational Autoencoder} (VAE) para modelagem de prosódia. A contribuição central do trabalho é substituir o \textit{pooling} usual do \textit{reference encoder} (último estado da GRU) por um \textit{pooling} por \textbf{atenção espectral}, tornando o condicionamento de estilo interpretável, além de produzir um modelo especificamente para o português a partir do corpus emocional VERBO. Treinamos três modelos --- \textit{baseline} e variante com atenção no LJSpeech (inglês), e a variante em português no VERBO --- e avaliamos transferência de estilo e de emoção, interpretabilidade dos pesos de atenção, manipulação direta do espaço latente e interpolação esférica (\textit{slerp}) versus linear (\textit{lerp}). Página do projeto: \url{https://rick0110.github.io/ml2_final_project}.
 \end{minipage}
 \end{center}
 \vspace{0.3cm}
 ]
 
 \section{Introdução}
-Sistemas de TTS tradicionais produzem fala inteligível, porém com entonação pouco natural. O Tacotron2-VAE \cite{hsu,zhang} ataca esse problema comprimindo um \textbf{áudio de referência} em um vetor latente $z$ que captura características globais de estilo (ritmo, tom, velocidade) e condiciona a síntese. Na prática, contudo, esse latente frequentemente ``morre'': o modelo aprende a reconstruir o espectrograma ignorando $z$ (\textit{posterior collapse}). Este trabalho, então, implementa métodos para evitar o colapso e investiga uma mudança estrutural simples no \textit{reference encoder} --- atenção temporal em vez do último estado da GRU --- para tornar o latente informativo e interpretável, respectivamente. Em paralelo, tivemos problemas de alinhamento na atenção do decoder e por isso introduzimos a perda de atenção guiada, ausente no artigo de referência \cite{zhang}.
+Sistemas de TTS tradicionais produzem fala inteligível, porém com entonação pouco natural. O Tacotron2-VAE \cite{hsu,zhang} ataca esse problema comprimindo um \textbf{áudio de referência} em um vetor latente $z$ que captura características globais de estilo (ritmo, tom, velocidade) e condiciona a síntese. Na prática, contudo, esse latente frequentemente ``morre'': o modelo aprende a reconstruir o espectrograma ignorando $z$ (\textit{posterior collapse}). Este trabalho, então, implementa métodos para evitar o colapso e investiga uma mudança estrutural simples no \textit{reference encoder} --- atenção em vez do último estado da GRU --- para tornar o latente informativo e interpretável, respectivamente. Em paralelo, tivemos problemas de alinhamento na atenção do decoder e por isso introduzimos a perda de atenção guiada, ausente no artigo de referência \cite{zhang}.
 
 \section{Arquitetura}
 O sistema (Fig.~\ref{fig:pipeline}) segue o Tacotron2 \cite{shen,nvidiataco} em quatro passos: (i) um \textit{text encoder} (embedding de símbolos + 3 camadas Conv1d + BiLSTM) extrai representações linguísticas; (ii) uma atenção sensível à localização alinha texto e áudio no decoder; (iii) um decoder autoregressivo prevê o Mel-espectrograma quadro a quadro; (iv) o vocoder \textbf{WaveGlow} \cite{waveglow} (pré-treinado e congelado) converte o espectrograma em forma de onda.
@@ -84,12 +84,12 @@ Em paralelo, o \textit{reference encoder} processa o Mel-espectrograma de refer�
     \label{fig:pipeline}
 \end{figure*}
 
-\section{A mudança: atenção temporal}
-No \textit{baseline} \cite{skerry}, o resumo do áudio de referência é apenas o \textbf{último estado da GRU} --- um vetor opaco, no qual o gradiente favorece as janelas finais. Propomos um \textit{pooling} por atenção sobre todos os estados $h_t$:
+\section{A mudança: atenção espectral}
+No \textit{baseline} \cite{skerry}, o resumo do áudio de referência é apenas o \textbf{último estado da GRU} --- um vetor opaco, no qual o gradiente favorece os últimos estados da varredura. Propomos um \textit{pooling} por atenção sobre todos os estados $h_t$:
 \begin{equation*}
 s_t = w^{\top} h_t + b, \qquad \alpha = \mathrm{softmax}(s), \qquad e = \textstyle\sum_t \alpha_t h_t,
 \end{equation*}
-implementado com uma camada linear de \textit{score} e um softmax no tempo ($E/2+1$ parâmetros). Os ganhos são dois: o gradiente flui para \textbf{todas} as janelas temporais ($\sim$0,74\,s cada), e os pesos $\alpha_t$ formam um mapa de atenção legível --- sabemos \emph{quais trechos} do áudio de referência definem o estilo.
+implementado com uma camada linear de \textit{score} e um softmax sobre os $T'$ estados ($E/2+1$ parâmetros). Os ganhos são dois: o gradiente flui para \textbf{todos} os blocos da varredura do espectrograma (bandas de canais mel, dos graves aos agudos), e os pesos $\alpha_t$ formam um mapa legível --- sabemos \emph{quais faixas do espectro} da referência definem o estilo.
 
 \section{Dados e pré-processamento}
 Foram usados dois corpora: \textbf{LJSpeech~1.1} (13.100 falas, $\sim$23,9\,h, locutora única, inglês) e \textbf{VERBO} (locutora f1: 98 falas, $\sim$4,7\,min, português, 7 emoções). Todo áudio é reamostrado para 22.050\,Hz e convertido em Mel-espectrogramas de 80 canais (FFT 1024, \textit{hop} 256, $f_{\max}=8$\,kHz). O texto usa \textit{english\_cleaners} (caracteres) no LJ e fonemas IPA via \textit{gruut} no VERBO.
@@ -122,11 +122,11 @@ onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, m
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.72\columnwidth]{fig_lj_attention}
-    \caption{Pesos de atenção temporal (linha laranja, janelas de $\sim$0,74\,s) sobre o Mel-espectrograma de três referências do LJSpeech.}
+    \caption{Pesos de atenção do \textit{reference encoder} (linha laranja, um peso por bloco da varredura do espectrograma) para três referências do LJSpeech.}
     \label{fig:attn}
 \end{figure}
 
-\textbf{Interpretabilidade da atenção.} No LJ, os pesos $\alpha_t$ são não-uniformes e privilegiam regiões vozeadas com F0 marcado (Fig.~\ref{fig:attn}). No VERBO, a \textbf{entropia normalizada} da atenção correlaciona-se com a emoção da referência: alegria 0,99, raiva 0,99 e surpresa 0,98 (atenção quase uniforme --- pistas espalhadas) contra tristeza 0,67, neutro 0,70 e desgosto 0,76 (atenção concentrada, tipicamente no final). A correlação com a energia do sinal é fraca ($|r|\le 0{,}38$): a atenção não é um mero detector de volume.
+\textbf{Interpretabilidade da atenção.} No LJ, os pesos $\alpha_t$ são não-uniformes e concentram-se em bandas específicas do espectro (Fig.~\ref{fig:attn}). No VERBO, a \textbf{entropia normalizada} da atenção correlaciona-se com a emoção da referência: alegria 0,99, raiva 0,99 e surpresa 0,98 (atenção quase uniforme --- energia em banda larga) contra tristeza 0,67, neutro 0,70 e desgosto 0,76 (atenção concentrada em poucas bandas, tipicamente as agudas). A correlação com a energia do bloco é fraca ($|r|\le 0{,}38$): a atenção não é um mero detector de volume.
 
 \textbf{Transferência de emoção em português.} Condicionando a síntese às 7 referências emocionais do VERBO, ritmo e registro mudam consistentemente com a emoção. Limitações: $\sim$4,7\,min de dados e vocoder treinado em inglês geram artefatos --- o objetivo é estudar o espaço de estilo, não produção.
 
@@ -135,7 +135,7 @@ onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, m
 \textbf{Interpolação: esfera, não reta.} Em alta dimensão, a massa do prior gaussiano concentra-se numa casca de raio $\sqrt{L}$. A \textit{lerp} entre dois códigos ($\theta=80^{\circ}$ no LJ atenção) atravessa o interior da casca e em $t=0{,}25$--$0{,}50$ o áudio perde definição harmônica (espectros ``lavados''); a \textit{slerp} \cite{white} caminha pelo arco e preserva a qualidade em todo o caminho. No \textit{baseline} ($\theta=14^{\circ}$), \textit{lerp} e \textit{slerp} coincidem --- o caso degenerado.
 
 \section{Conclusão}
-A troca do \textit{pooling} do \textit{reference encoder} por atenção temporal foi suficiente para tornar o modelo interpretável, e a introdução da perda de alinhamento sobre a atenção sensível à localização tornou o treinamento mais estável e robusto contra o desalinhamento temporal da fala. Os pesos de atenção são interpretáveis e seguem padrões previsíveis por emoção; a geometria esférica do prior deve ser respeitada (\textit{slerp} $>$ \textit{lerp}). Continuação natural: corpora maiores de português e um modelo não autoregressivo capaz de operar em tempo real.
+A troca do \textit{pooling} do \textit{reference encoder} por atenção espectral foi suficiente para tornar o modelo interpretável, e a introdução da perda de alinhamento sobre a atenção sensível à localização tornou o treinamento mais estável e robusto contra o desalinhamento temporal da fala. Os pesos de atenção são interpretáveis e seguem padrões previsíveis por emoção; a geometria esférica do prior deve ser respeitada (\textit{slerp} $>$ \textit{lerp}). Continuação natural: corpora maiores de português e um modelo não autoregressivo capaz de operar em tempo real.
 
 \begin{thebibliography}{9}\footnotesize\setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}
 \bibitem{hsu} Hsu, W.-N. et al. \textit{Hierarchical Generative Modeling for Controllable Speech Synthesis}. ICLR, 2019.
