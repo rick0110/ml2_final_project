@@ -302,6 +302,15 @@ def get_singular_values_of_latent_covariance(
     }
 
 
+def append_metrics(hparams: Tacotron2VAEHparams, record: Dict[str, Any]) -> None:
+    """Append one JSON line to <experiment_dir>/metrics.jsonl (read by the progress dashboard)."""
+    experiment_dir = getattr(hparams, "experiment_dir", None)
+    if experiment_dir is None:
+        return
+    with open(Path(experiment_dir) / "metrics.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+
+
 def train_epoch(
     model: Tacotron2,
     hparams: Tacotron2VAEHparams,
@@ -377,12 +386,18 @@ def train_epoch(
 
         # Capture gradient norms per layer (only at checkpoint steps to avoid GPU-CPU sync overhead)
         layer_grads: List[float] = []
+        group_grads: Dict[str, float] = {}
         if iteration % hparams.iters_per_checkpoint == 0 or iteration == 0:
             if use_amp:
                 scaler.unscale_(optimizer)
+            group_sq: Dict[str, float] = defaultdict(float)
             for name, param in model.named_parameters():
                 if param.grad is not None:
-                    layer_grads.append(param.grad.norm().item())
+                    g = param.grad.float().norm().item()
+                    layer_grads.append(g)
+                    group = "decoder.attention" if name.startswith("decoder.attention") else name.split(".")[0]
+                    group_sq[group] += g * g
+            group_grads = {k: round(math.sqrt(v), 5) for k, v in group_sq.items()}
 
         reduced_loss: float = loss.item()
         grad_norm = torch.tensor(0.0)
@@ -410,6 +425,13 @@ def train_epoch(
                 saved = sorted(Path(hparams.checkpoint_dir).glob("epoch_*"), key=lambda f: int(f.name.split("_")[1]))
                 for stale in saved[:-keep_last]:
                     stale.unlink()
+
+        if iteration % 25 == 0:
+            append_metrics(hparams, {
+                "it": iteration, "loss": reduced_loss, "recon": recon_loss.item(), "kl": kl_loss.item(),
+                "kl_weight": float(kl_weight), "guided_attn": guided_attn_loss.item(),
+                "grad_norm": float(grad_norm), "lr": optimizer.param_groups[0]["lr"],
+            })
 
         # Diagnostic analysis and plotting
         if training_metadata is not None:
@@ -447,10 +469,37 @@ def train_epoch(
                     # Generate inference spectrogram for the first item in the batch
                     infer_text = xt[0][0].unsqueeze(0)
                     infer_audio = yt[0][0].unsqueeze(0)
-                    _, mel_outputs_postnet, _ = model.inference_mel(infer_text, infer_audio)
-                    mel_pred: np.ndarray = mel_outputs_postnet[0].cpu().numpy() # (n_mels, T)
+                    infer_text = infer_text[:, : int(xt[1][0])]
+                    infer_audio = infer_audio[:, :, : int(xt[3][0])]
+                    _, mel_outputs_postnet, infer_align = model.inference_mel(infer_text, infer_audio)
+                    mel_pred: np.ndarray = mel_outputs_postnet[0].float().cpu().numpy() # (n_mels, T)
+                    _, _, _, _, ref_attn = model.vae_gst.forward_with_attention(infer_audio)
 
-                mel_target: np.ndarray = yt[0][0].cpu().numpy()   # (n_mels, T)
+                mel_target: np.ndarray = infer_audio[0].float().cpu().numpy()   # (n_mels, T)
+                align_np: np.ndarray = infer_align[0].float().cpu().numpy()      # (T_mel, T_text)
+
+                # Machine-readable snapshot + figure for the progress dashboard
+                mu_var: np.ndarray = singular_values_info["latent_vectors"].var(axis=0)
+                append_metrics(hparams, {
+                    "it": iteration, "eval": True,
+                    "val_loss": val_loss.item(), "val_recon": val_recon.item(), "val_kl": val_kl.item(),
+                    "test_loss": test_loss.item(), "test_recon": test_recon.item(),
+                    "latent_var": [round(float(v), 5) for v in mu_var],
+                    "active_dims": int((mu_var > 0.01).sum()),
+                    "align_peak": float(align_np.max(axis=1).mean()),
+                    "infer_frames": int(mel_pred.shape[1]), "target_frames": int(mel_target.shape[1]),
+                    "ref_attention": [round(float(v), 4) for v in ref_attn[0].float().cpu().numpy()],
+                    "grad_norms": group_grads,
+                })
+                samples_dir = Path(hparams.experiment_dir) / "samples"
+                samples_dir.mkdir(exist_ok=True)
+                fig_s, axes = plt.subplots(1, 3, figsize=(15, 3.6))
+                axes[0].imshow(mel_target, aspect="auto", origin="lower"); axes[0].set_title("Mel alvo")
+                axes[1].imshow(mel_pred, aspect="auto", origin="lower"); axes[1].set_title(f"Mel gerado (inferencia, passo {iteration})")
+                axes[2].imshow(align_np.T, aspect="auto", origin="lower"); axes[2].set_title("Alinhamento texto x audio")
+                fig_s.tight_layout()
+                fig_s.savefig(samples_dir / f"step_{iteration:06d}.png", dpi=70)
+                plt.close(fig_s)
 
 
                 if tensorboard_logger:
