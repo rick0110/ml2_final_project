@@ -13,6 +13,10 @@ BUCKET="$(curl -s -H 'Metadata-Flavor: Google' \
   http://metadata.google.internal/computeMetadata/v1/instance/attributes/bucket)"
 STAGE=${STAGE:?set STAGE to en, pt or verbo}
 MAX_STEPS=${MAX_STEPS:-6000}
+# A value in gs://$BUCKET/control/max_steps_$STAGE overrides MAX_STEPS, so a run can be
+# shortened or extended without editing the queued job (takes effect on the next start).
+override=$(gsutil -q cat "gs://$BUCKET/control/max_steps_$STAGE" 2>/dev/null || true)
+[ -n "$override" ] && MAX_STEPS=$override
 cd /work/repo
 
 # The Deep Learning VM image ships PyTorch for one specific interpreter: find it
@@ -54,7 +58,7 @@ case "$STAGE" in
     fi
     gsutil -q cp "gs://$BUCKET/experiments/en_vae_v1/checkpoints/final" ckpt/en_final
     INIT="--checkpoint-path ckpt/en_final"
-    EXTRA="--batch-size 48 --val-split 0.04 --guided-attention-weight 5.0 --guided-attention-sigma 0.3"
+    EXTRA="--batch-size 80 --val-split 0.04 --guided-attention-weight 5.0 --guided-attention-sigma 0.3"
     ;;
   verbo)
     EXP=verbo_vae_v1; DATA=data/processed/VERBO; CLEANER=portuguese_phonetic_cleaners

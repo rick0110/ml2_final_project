@@ -80,6 +80,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--anneal-upper", type=float, default=None, help="Maximum KL weight")
     parser.add_argument("--anneal-lag", type=int, default=None, help="Steps before the KL weight starts ramping")
     parser.add_argument("--free-bits", type=float, default=None, help="KL floor per latent dimension (nats)")
+    parser.add_argument("--decoder-input-dropout", type=float, default=None,
+                        help="Probability of zeroing a whole teacher-forced decoder input frame during training")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-4,
                         help="Default matches hparams.py; 1e-5 was found to cause a training plateau")
@@ -180,6 +182,8 @@ def main() -> None:
     for name in ("anneal_upper", "anneal_lag", "free_bits"):
         if getattr(args, name) is not None:
             hparams_overrides[name] = getattr(args, name)
+    if args.decoder_input_dropout is not None:
+        hparams_overrides["p_decoder_input_dropout"] = args.decoder_input_dropout
     if args.symbols_embedding_dim is not None:
         hparams_overrides["symbols_embedding_dim"] = args.symbols_embedding_dim
     if args.encoder_embedding_dim is not None:
