@@ -10,10 +10,21 @@ MAX_STEPS=${MAX_STEPS:-6000}
 
 cd /work
 nvidia-smi
+# Find the Python that ships with PyTorch on the Deep Learning VM image and put it first on PATH
+for cand in /opt/conda/bin /opt/python/bin /usr/local/bin /usr/bin; do
+  for exe in python python3; do
+    if [ -x "$cand/$exe" ] && "$cand/$exe" -c "import torch" 2>/dev/null; then
+      mkdir -p /work/bin && ln -sf "$cand/$exe" /work/bin/python
+      export PATH="/work/bin:$cand:$PATH"
+      break 2
+    fi
+  done
+done
+python -c "import sys, torch; print(sys.executable, torch.__version__, 'cuda', torch.cuda.is_available())"
 [ -d repo ] || git clone -b "$BRANCH" https://github.com/rick0110/ml2_final_project repo
 cd repo
 git fetch origin "$BRANCH" && git reset --hard "origin/$BRANCH"
-pip install -q gruut gruut-lang-pt num2words inflect librosa soundfile tensorboard matplotlib scikit-learn tqdm
+python -m pip install -q gruut gruut-lang-pt num2words inflect librosa soundfile tensorboard matplotlib scikit-learn tqdm
 
 command -v bzip2 >/dev/null || (apt-get update -qq && apt-get install -y -qq bzip2)
 mkdir -p data/raw data/processed ckpt
