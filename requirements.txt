@@ -1,18 +1,22 @@
 --extra-index-url https://download.pytorch.org/whl/cu118
 
-apex
+# Treino, síntese e avaliação
+torch
+numpy
+scipy
+librosa
+soundfile
 gruut
 gruut-lang-pt
 inflect
-librosa
-matplotlib
 num2words
-numpy
-paramiko
+matplotlib
 scikit_learn
-scipy
 tensorboard
-torch
-torchaudio
-torchcodec
 tqdm
+faster-whisper        # conferência dos áudios por reconhecimento de fala (scripts/eval)
+
+# Só para os scripts antigos (pré-processamento legado, WaveGlow, acesso remoto)
+# torchaudio
+# apex
+# paramiko
