@@ -15,6 +15,7 @@ cd repo
 git fetch origin "$BRANCH" && git reset --hard "origin/$BRANCH"
 pip install -q gruut gruut-lang-pt num2words inflect librosa soundfile tensorboard matplotlib scikit-learn tqdm
 
+command -v bzip2 >/dev/null || (apt-get update -qq && apt-get install -y -qq bzip2)
 mkdir -p data/raw data/processed ckpt
 if [ ! -d data/raw/LJSpeech-1.1 ]; then
   curl -sL https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2 | tar xj -C data/raw
