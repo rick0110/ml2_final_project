@@ -83,7 +83,7 @@ class Tacotron2VAEHparams:
     keep_last_checkpoints: int = 0  # Delete all but the newest N checkpoints (0 = keep all)
     seed: int = 42
     cudnn_enabled: bool = True
-    cudnn_benchmark: bool = True
+    cudnn_benchmark: bool = False  # benchmark re-tunes every conv for each new batch shape; with variable-length audio that costs seconds per step
 
     # Data Parameters
     load_mel_from_disk: bool = True
