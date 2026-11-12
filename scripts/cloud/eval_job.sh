@@ -7,18 +7,11 @@ BUCKET="$(curl -s -H 'Metadata-Flavor: Google' \
   http://metadata.google.internal/computeMetadata/v1/instance/attributes/bucket)"
 STAGE=${STAGE:?set STAGE to en, pt or verbo}
 cd /work/repo
-export PATH="/work/bin:$PATH"
+source scripts/cloud/stage_setup.sh
 python -m pip install -q faster-whisper
-mkdir -p ckpt
 [ -f ckpt/hifigan_universal_v1.pt ] || curl -sL -o ckpt/hifigan_universal_v1.pt \
   https://huggingface.co/csdc-atl/hifigan-universal_v1/resolve/main/g_02500000
 
-case "$STAGE" in
-  en)    EXP=en_vae_v1;    DATA=data/processed/LJSpeech;       CLEANER=english_cleaners;             LANG_CODE=en ;;
-  pt)    EXP=pt_vae_v1;    DATA=data/processed/TTS-Portuguese; CLEANER=portuguese_phonetic_cleaners; LANG_CODE=pt ;;
-  verbo) EXP=verbo_vae_v1; DATA=data/processed/VERBO;          CLEANER=portuguese_phonetic_cleaners; LANG_CODE=pt ;;
-  *) echo "unknown STAGE $STAGE"; exit 1 ;;
-esac
 EXP_DIR=experiments/tacotron2-vae/$EXP
 if ! ls "$EXP_DIR"/checkpoints/epoch_* >/dev/null 2>&1; then  # fresh VM: take the final checkpoint from the bucket
   mkdir -p "$EXP_DIR/checkpoints"
