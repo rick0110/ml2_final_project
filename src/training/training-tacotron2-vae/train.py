@@ -73,6 +73,13 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--iters-per-checkpoint", type=int, default=500)
+    parser.add_argument("--max-steps", type=int, default=0,
+                        help="Stop after this many iterations (0 = run all epochs)")
+    parser.add_argument("--keep-last-checkpoints", type=int, default=0,
+                        help="Delete all but the newest N checkpoints (0 = keep all)")
+    parser.add_argument("--anneal-upper", type=float, default=None, help="Maximum KL weight")
+    parser.add_argument("--anneal-lag", type=int, default=None, help="Steps before the KL weight starts ramping")
+    parser.add_argument("--free-bits", type=float, default=None, help="KL floor per latent dimension (nats)")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-4,
                         help="Default matches hparams.py; 1e-5 was found to cause a training plateau")
@@ -155,6 +162,8 @@ def main() -> None:
     hparams_overrides: Dict[str, Any] = {
         "epochs": args.epochs,
         "iters_per_checkpoint": args.iters_per_checkpoint,
+        "max_steps": args.max_steps,
+        "keep_last_checkpoints": args.keep_last_checkpoints,
         "batch_size": args.batch_size,
         "learning_rate": args.learning_rate,
         "weight_decay": args.weight_decay,
@@ -168,6 +177,9 @@ def main() -> None:
         "n_symbols": text_processor.n_symbols,
         "training_data": str(train_file),
     }
+    for name in ("anneal_upper", "anneal_lag", "free_bits"):
+        if getattr(args, name) is not None:
+            hparams_overrides[name] = getattr(args, name)
     if args.symbols_embedding_dim is not None:
         hparams_overrides["symbols_embedding_dim"] = args.symbols_embedding_dim
     if args.encoder_embedding_dim is not None:
@@ -300,6 +312,11 @@ def main() -> None:
         if epoch_val_loss is not None:
             scheduler.step(epoch_val_loss)
             learning_rate = optimizer.param_groups[0]['lr']
+
+        if hparams.max_steps > 0 and iteration >= hparams.max_steps:
+            save_checkpoint(model, optimizer, learning_rate, iteration,
+                            Path(hparams.checkpoint_dir) / f"epoch_{iteration}", hparams)
+            break
         
 
 

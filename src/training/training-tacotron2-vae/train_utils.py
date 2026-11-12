@@ -404,6 +404,12 @@ def train_epoch(
             save_checkpoint(
                 model, optimizer, learning_rate, iteration, checkpoint_path, hparams
             )
+            # Keep only the most recent checkpoints (each one is several hundred MB)
+            keep_last: int = getattr(hparams, "keep_last_checkpoints", 0)
+            if keep_last > 0:
+                saved = sorted(Path(hparams.checkpoint_dir).glob("epoch_*"), key=lambda f: int(f.name.split("_")[1]))
+                for stale in saved[:-keep_last]:
+                    stale.unlink()
 
         # Diagnostic analysis and plotting
         if training_metadata is not None:
@@ -446,8 +452,6 @@ def train_epoch(
 
                 mel_target: np.ndarray = yt[0][0].cpu().numpy()   # (n_mels, T)
 
-                training_metadata.setdefault("singular_values_of_latent_covariance", []).append(singular_values_info)
-                training_metadata.setdefault("target_predict_example", []).append((mel_pred, mel_target))
 
                 if tensorboard_logger:
                     writer = tensorboard_logger.writer
@@ -509,6 +513,9 @@ def train_epoch(
                 model.train()
 
         iteration += 1
+        max_steps: int = getattr(hparams, "max_steps", 0)
+        if max_steps > 0 and iteration >= max_steps:
+            break
 
     return training_metadata, epoch_val_loss, iteration
 

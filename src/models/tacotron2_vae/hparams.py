@@ -79,6 +79,8 @@ class Tacotron2VAEHparams:
     # Experiment Parameters
     epochs: int = 300
     iters_per_checkpoint: int = 500
+    max_steps: int = 0  # Stop after this many iterations (0 = run all epochs)
+    keep_last_checkpoints: int = 0  # Delete all but the newest N checkpoints (0 = keep all)
     seed: int = 42
     cudnn_enabled: bool = True
     cudnn_benchmark: bool = True
