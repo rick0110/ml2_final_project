@@ -26,7 +26,7 @@ import pickle
 import re
 import sys
 import torch
-import torchaudio
+import librosa
 from torch import Tensor
 from pathlib import Path
 from torch.utils.data import Dataset, random_split, Subset
@@ -145,7 +145,7 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
             Tensor: Mel-spectrogram (n_mels, T).
         """
         if orig_freq is not None and orig_freq != self.stft.sampling_rate:
-            audio = torchaudio.functional.resample(audio, orig_freq=orig_freq, new_freq=self.stft.sampling_rate)
+            audio = torch.from_numpy(librosa.resample(audio.numpy(), orig_sr=orig_freq, target_sr=self.stft.sampling_rate))
         
         # Clamp audio to [-1.0, 1.0] to prevent STFT AssertionErrors due to resampling overshoots
         audio = torch.clamp(audio, -1.0, 1.0)
@@ -194,7 +194,7 @@ class DatasetLibriSpeechTacotronVAE(Dataset):
         audio: Tensor = sample["waveform"].squeeze(0)
         sr: int = sample.get("sr", 16000)
         if sr != self.stft.sampling_rate:
-            audio = torchaudio.functional.resample(audio, orig_freq=sr, new_freq=self.stft.sampling_rate)
+            audio = torch.from_numpy(librosa.resample(audio.numpy(), orig_sr=sr, target_sr=self.stft.sampling_rate))
 
         if cache_file.exists():
             mel_tensor: Tensor = torch.load(cache_file, map_location="cpu", weights_only=False)

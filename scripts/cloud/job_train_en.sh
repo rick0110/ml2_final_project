@@ -34,8 +34,8 @@ fi
 [ -f ckpt/tacotron2_nvidia.pt ] || curl -sL -o ckpt/tacotron2_nvidia.pt \
   "https://api.ngc.nvidia.com/v2/models/nvidia/tacotron2_pyt_ckpt_amp/versions/19.09.0/files/nvidia_tacotron2pyt_fp16_20190427"
 if [ ! -f data/processed/LJSpeech/mels_metadata.csv ]; then
-  python scripts/preprocess/preprocess_ljSpeech.py --input-dir data/raw/LJSpeech-1.1 \
-    --out-dir data/processed/LJSpeech/mels --plot-samples 0
+  python scripts/preprocess/make_manifest.py --corpus ljspeech --input-dir data/raw/LJSpeech-1.1 \
+    --out-dir data/processed/LJSpeech --num-workers 8
 fi
 
 EXP_DIR=experiments/tacotron2-vae/$EXP
