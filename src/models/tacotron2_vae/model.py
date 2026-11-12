@@ -147,7 +147,6 @@ class Attention(nn.Module):
             attention_location_kernel_size,
             attention_dim,
         )
-        self.ln: nn.LayerNorm = nn.LayerNorm(attention_dim)
         self.score_mask_value: float = -1e4
 
     def get_alignment_energies(self, query: Tensor, processed_memory: Tensor, attention_weights_cat: Tensor) -> Tensor:
@@ -162,7 +161,6 @@ class Attention(nn.Module):
         """
         processed_query: Tensor = self.query_layer(query.unsqueeze(1)) # (B, 1, attention_dim)
         processed_attention_weights: Tensor = self.location_layer(attention_weights_cat) # (B, T_text, attention_dim)
-        processed_attention_weights = self.ln(processed_attention_weights)
         energies: Tensor = self.v(
             torch.tanh(processed_query + processed_attention_weights + processed_memory)
         ) # (B, T_text, 1)
@@ -956,7 +954,7 @@ def load_pretrained_tacotron2_backbone(
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    checkpoint: Dict = torch.load(pretrained_path, map_location="cpu", weights_only=False)
+    checkpoint: Dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
     pretrained_sd: Dict[str, Tensor] = checkpoint.get("state_dict", checkpoint)
 
     # Build mapping from NVIDIA keys to VAE model keys
