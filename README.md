@@ -6,6 +6,12 @@ Sistema de síntese de fala (*Text-to-Speech*) baseado no **Tacotron 2** com um 
 
 ---
 
+> **Aviso (revisão em andamento).** Os resultados de "atenção espectral" descritos abaixo, no relatório e na página do projeto **não são válidos**. O *reference encoder* reorganizava o mel `(B, n_mels, T)` com `.view(B, 1, -1, n_mels)` sem transpor os eixos, o que mistura tempo e frequência: cada "bloco" da varredura era um trecho de 80 quadros de um único canal mel, e a posição desses trechos mudava com o *padding* do batch. As "bandas do espectro" eram consequência desse bug, não uma propriedade aprendida. A comparação com o *baseline* também estava confundida (11,2 mil vs. 35,5 mil iterações).
+>
+> O código já foi corrigido (`src/models/tacotron2_vae/modules.py`): o mel é transposto, a GRU percorre blocos de **tempo** (~0,74 s cada) e o *pooling* por atenção ignora os blocos de *padding*. Os modelos precisam ser retreinados; as seções de resultados serão reescritas com os novos números.
+
+---
+
 ## 1. O problema e a contribuição
 
 No Tacotron2-VAE, um *reference encoder* comprime um áudio de referência em um vetor latente `z` que captura características globais de estilo (ritmo, tom, velocidade) e condiciona a síntese. Na prática esse latente frequentemente "morre": o modelo aprende a reconstruir o espectrograma ignorando `z` (*posterior collapse*).

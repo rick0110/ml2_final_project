@@ -802,7 +802,7 @@ class Tacotron2(nn.Module):
         mu: Tensor
         logvar: Tensor
         z: Tensor
-        prosody_outputs, mu, logvar, z = self.vae_gst(targets) # (B, E), (B, L), (B, L), (B, L)
+        prosody_outputs, mu, logvar, z = self.vae_gst(targets, output_lengths) # (B, E), (B, L), (B, L), (B, L)
         
         # Inject prosody into encoder outputs
         prosody_outputs = prosody_outputs.unsqueeze(1).expand_as(transcript_outputs) # (B, T_text, encoder_dim)

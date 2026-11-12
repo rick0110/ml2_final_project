@@ -22,7 +22,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple, List
+from typing import Optional, Tuple, List
 
 from models.tacotron2_vae.coord_conv import CoordConv2d
 from models.tacotron2_vae.hparams import Tacotron2VAEHparams
@@ -33,7 +33,12 @@ class ReferenceEncoder(nn.Module):
     Reference Encoder for VAE-GST.
 
     Architecture:
-        CoordConv2d -> [Conv2d -> BN -> ReLU] * (k-1) -> GRU (Last Hidden State)
+        CoordConv2d -> [Conv2d -> BN -> ReLU] * (k-1) -> GRU -> attention pooling over time
+
+    The mel (B, n_mels, T) is transposed to an image (B, 1, T, n_mels) so the six
+    stride-2 convolutions downsample time and frequency together. The GRU then runs
+    over T' = ceil(T / 64) time blocks (~0.74 s each at hop 256 / 22.05 kHz) and the
+    attention pooling averages its states with learned weights, ignoring padded blocks.
 
     Inputs:
         inputs:
@@ -105,24 +110,28 @@ class ReferenceEncoder(nn.Module):
         self.attn: nn.Linear = nn.Linear(hparams.E // 2, 1)
         self.n_mels: int = hparams.n_mel_channels
 
-    def forward(self, inputs: Tensor) -> Tensor:
+    def forward(self, inputs: Tensor, lengths: Optional[Tensor] = None) -> Tensor:
         """
         Forward pass of the Reference Encoder.
 
         Args:
             inputs (Tensor): Mel-spectrogram input.
                 Shape: (B, n_mels, T)
+            lengths (Optional[Tensor]): Valid mel frames per item, shape (B,).
+                When given, padded time blocks get zero attention weight.
 
         Returns:
             Tensor: Attention-pooled GRU encoding.
                 Shape: (B, E // 2)
         """
-        encoded, _ = self._encode(self._cnn_forward(inputs))
+        encoded, _ = self.encode_with_attention(inputs, lengths)
         return encoded
 
     def _cnn_forward(self, inputs: Tensor) -> Tensor:
+        # (B, n_mels, T) -> (B, 1, T, n_mels). The transpose is required: a bare
+        # .view() would reinterpret memory and mix time with frequency.
+        out: Tensor = inputs.transpose(1, 2).unsqueeze(1)
         batch_size: int = inputs.size(0)
-        out: Tensor = inputs.contiguous().view(batch_size, 1, -1, self.n_mels)
         for conv, bn in zip(self.convs, self.bns):
             out = conv(out)
             out = bn(out)
@@ -131,41 +140,47 @@ class ReferenceEncoder(nn.Module):
         T_prime: int = out.size(1)
         return out.contiguous().view(batch_size, T_prime, -1)
 
-    def _encode(self, gru_input: Tensor) -> Tuple[Tensor, Tensor]:
+    def _encode(self, gru_input: Tensor, lengths: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
         out, _ = self.gru(gru_input)           # (B, T', E // 2)
         scores = self.attn(out)                # (B, T', 1)
+        if lengths is not None:
+            # Number of time blocks that contain at least one real frame
+            blocks = self.calculate_channels(lengths, 3, 2, 1, len(self.convs)).clamp(min=1)
+            pad = torch.arange(out.size(1), device=out.device).unsqueeze(0) >= blocks.unsqueeze(1)
+            scores = scores.masked_fill(pad.unsqueeze(-1), float("-inf"))
         weights = torch.softmax(scores, dim=1) # (B, T', 1)
         encoded = (out * weights).sum(dim=1)   # (B, E // 2)
         return encoded, weights.squeeze(-1)    # (B, T')
 
-    def encode_with_attention(self, inputs: Tensor) -> Tuple[Tensor, Tensor]:
+    def encode_with_attention(self, inputs: Tensor, lengths: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
         """
         Forward pass retornando o encoding e os pesos de atenção temporal.
 
         Args:
             inputs (Tensor): Mel-spectrogram. Shape: (B, n_mels, T)
+            lengths (Optional[Tensor]): Frames válidos por item. Shape: (B,)
 
         Returns:
             Tuple[Tensor, Tensor]:
                 encoded: Shape (B, E // 2)
-                weights: Pesos de atenção por frame da GRU. Shape (B, T')
+                weights: Pesos de atenção por bloco de tempo da GRU. Shape (B, T')
         """
-        return self._encode(self._cnn_forward(inputs))
+        return self._encode(self._cnn_forward(inputs), lengths)
 
     @staticmethod
-    def calculate_channels(length: int, kernel_size: int, stride: int, pad: int, n_convs: int) -> int:
+    def calculate_channels(length, kernel_size: int, stride: int, pad: int, n_convs: int):
         """
         Calculates the output dimension after multiple convolutions.
 
         Args:
-            length (int): Input length.
+            length (int | Tensor): Input length (an int, or a LongTensor of lengths).
             kernel_size (int): Kernel size.
             stride (int): Stride.
             pad (int): Padding.
             n_convs (int): Number of layers.
 
         Returns:
-            int: Final output dimension.
+            int | Tensor: Final output dimension.
         """
         for _ in range(n_convs):
             length = (length - kernel_size + 2 * pad) // stride + 1
@@ -238,7 +253,7 @@ class VAE_GST(nn.Module):
         return style_embed, mu, logvar, z
 
     def forward(
-        self, inputs: Tensor
+        self, inputs: Tensor, lengths: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Forward pass of the VAE_GST module.
@@ -250,11 +265,11 @@ class VAE_GST(nn.Module):
         Returns:
             Tuple[Tensor, Tensor, Tensor, Tensor]: style_embed, mu, logvar, z.
         """
-        enc_out: Tensor = self.ref_encoder(inputs)
+        enc_out: Tensor = self.ref_encoder(inputs, lengths)
         return self._vae_from_enc(enc_out)
 
     def forward_with_attention(
-        self, inputs: Tensor
+        self, inputs: Tensor, lengths: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         """
         Forward pass retornando as saídas do VAE e os pesos de atenção temporal.
@@ -271,6 +286,6 @@ class VAE_GST(nn.Module):
                 z: Shape (B, L)
                 temporal_weights: Pesos de atenção por frame da GRU. Shape (B, T')
         """
-        enc_out, temporal_weights = self.ref_encoder.encode_with_attention(inputs)
+        enc_out, temporal_weights = self.ref_encoder.encode_with_attention(inputs, lengths)
         style_embed, mu, logvar, z = self._vae_from_enc(enc_out)
         return style_embed, mu, logvar, z, temporal_weights
