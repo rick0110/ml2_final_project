@@ -9,7 +9,13 @@ This document records the changes made to resolve the attention collapse (alignm
 **Issue:** Padding masks used `-float("inf")`, which evaluated to `0.0 / 0.0 = NaN` during softmax for fully masked sequences (e.g., edge cases).
 **Fix:** Changed `self.score_mask_value` to a large finite negative scalar (`-1e4`), which resolves cleanly to uniform weights without generating NaNs.
 
-### 2. Location-Sensitive Tanh Saturation (Vanishing Gradients)
+### 2. Location-Sensitive Tanh Saturation (Vanishing Gradients) — REVERTED
+
+> **Reverted.** This `LayerNorm` is not part of Tacotron 2. With it, NVIDIA's pretrained
+> weights could not be used: inference never reached the stop token (4 test sentences,
+> 3 hit the 1000-frame limit). Without it, the same weights synthesize intelligible
+> English inside this model. The saturation described below was never measured; the
+> standard attention handles LJSpeech utterances of 800+ frames. The layer was removed.
 **File:** `src/models/tacotron2_vae/model.py`
 **Issue:** Over long sequences (e.g., >500 frames), cumulative attention weights grew extremely large, causing the linear output of `LocationLayer` to saturate the `tanh` activation. This forced the activation derivative to 0, completely vanishing gradients ($< 10^{-10}$) and "freezing" the attention.
 **Fix:** Added a `nn.LayerNorm(attention_dim)` and applied it to `processed_attention_weights` to scale the location features dynamically back to $O(1)$ and preserve healthy active gradients.
