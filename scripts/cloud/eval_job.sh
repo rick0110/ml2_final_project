@@ -20,6 +20,10 @@ case "$STAGE" in
   *) echo "unknown STAGE $STAGE"; exit 1 ;;
 esac
 EXP_DIR=experiments/tacotron2-vae/$EXP
+if ! ls "$EXP_DIR"/checkpoints/epoch_* >/dev/null 2>&1; then  # fresh VM: take the final checkpoint from the bucket
+  mkdir -p "$EXP_DIR/checkpoints"
+  gsutil -q cp "gs://$BUCKET/experiments/$EXP/checkpoints/final" "$EXP_DIR/checkpoints/epoch_999999"
+fi
 CKPT="$EXP_DIR/checkpoints/$(ls "$EXP_DIR/checkpoints" | sort -t_ -k2 -n | tail -1)"
 OUT=exports/eval/$EXP
 rm -rf "$OUT"
