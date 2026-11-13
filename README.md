@@ -12,7 +12,7 @@ Cada áudio gerado é transcrito pelo Whisper e comparado com o texto pedido. A 
 
 | Modelo | Dados de treino | Palavras erradas | Termina a frase sozinho |
 |---|---|---|---|
-| Inglês, versão antiga | LJSpeech | 75% (28 áudios) | nem sempre |
+| Inglês, versão antiga | LJSpeech | 68% (26 áudios) | nem sempre |
 | Português, versão antiga | VERBO (98 falas) | 100% (ininteligível) | — |
 | **Inglês, retreinado** | LJSpeech, 2.500 passos | **2,2%** (18 áudios) | 100% |
 | **Português, retreinado** | TTS-Portuguese Corpus, 4.000 passos | **10,5%** (18 áudios) | 100% |

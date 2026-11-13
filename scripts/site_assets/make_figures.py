@@ -136,7 +136,7 @@ def main() -> None:
     ap.add_argument("--runs", type=Path, required=True)
     ap.add_argument("--evals", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--old-wer-en", type=float, default=0.75, help="WER of the audio shipped before the retraining")
+    ap.add_argument("--old-wer-en", type=float, default=0.68, help="WER of the audio shipped before the retraining")
     ap.add_argument("--old-wer-pt", type=float, default=1.0)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
