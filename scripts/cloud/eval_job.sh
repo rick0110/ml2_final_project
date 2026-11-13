@@ -1,11 +1,11 @@
 #!/bin/bash
 # Cloud job: synthesize test sentences with the newest checkpoint of a stage,
 # check them with speech recognition and upload audio + results to the bucket.
-#   STAGE=en|pt|verbo   (same meaning as in train_job.sh)
+#   STAGE=en|pt|verbo|mix   (same meaning as in train_job.sh)
 set -ex
 BUCKET="$(curl -s -H 'Metadata-Flavor: Google' \
   http://metadata.google.internal/computeMetadata/v1/instance/attributes/bucket)"
-STAGE=${STAGE:?set STAGE to en, pt or verbo}
+STAGE=${STAGE:?set STAGE to en, pt, verbo or mix}
 cd /work/repo
 source scripts/cloud/stage_setup.sh
 python -m pip install -q faster-whisper

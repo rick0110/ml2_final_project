@@ -5,13 +5,14 @@
 #   STAGE=en     English: LJSpeech, warm-started from NVIDIA's pretrained Tacotron 2
 #   STAGE=pt     Portuguese: TTS-Portuguese Corpus, warm-started from the English model
 #   STAGE=verbo  Emotional Portuguese: VERBO, warm-started from the Portuguese model
+#   STAGE=mix    Emotional Portuguese, the recipe that works: TTS-Portuguese + VERBO together
 #
 # Everything needed to resume lives in the bucket, so a preempted spot VM (or a
 # brand-new VM in another zone) picks up from the last uploaded checkpoint.
 set -ex
 BUCKET="$(curl -s -H 'Metadata-Flavor: Google' \
   http://metadata.google.internal/computeMetadata/v1/instance/attributes/bucket)"
-STAGE=${STAGE:?set STAGE to en, pt or verbo}
+STAGE=${STAGE:?set STAGE to en, pt, verbo or mix}
 MAX_STEPS=${MAX_STEPS:-6000}
 # A value in gs://$BUCKET/control/max_steps_$STAGE overrides MAX_STEPS, so a run can be
 # shortened or extended without editing the queued job (takes effect on the next start).

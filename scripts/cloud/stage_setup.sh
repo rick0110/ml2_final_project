@@ -54,5 +54,20 @@ case "$STAGE" in
     INIT="--checkpoint-path ckpt/pt_final"
     EXTRA="--batch-size 16 --val-split 0.1 --guided-attention-weight 5.0 --guided-attention-sigma 0.3"
     ;;
+  mix)
+    # Portuguese corpus + VERBO in one manifest: VERBO alone has only 14 sentences, so
+    # fine-tuning on it alone teaches emotion but forgets how to read new text.
+    EXP=ptverbo_vae_v1; DATA=data/processed/PT-VERBO; CLEANER=portuguese_phonetic_cleaners; LANG_CODE=pt
+    if [ ! -f "$DATA/mels_metadata.csv" ]; then
+      (STAGE=pt; source scripts/cloud/stage_setup.sh)
+      (STAGE=verbo; source scripts/cloud/stage_setup.sh)
+      mkdir -p "$DATA"
+      cat data/processed/TTS-Portuguese/mels_metadata.csv > "$DATA/mels_metadata.csv"
+      tail -n +2 data/processed/VERBO/mels_metadata.csv >> "$DATA/mels_metadata.csv"
+    fi
+    gsutil -q cp "gs://$BUCKET/experiments/pt_vae_v1/checkpoints/final" ckpt/pt_final
+    INIT="--checkpoint-path ckpt/pt_final"
+    EXTRA="--batch-size 48 --val-split 0.04 --guided-attention-weight 5.0 --guided-attention-sigma 0.3"
+    ;;
   *) echo "unknown STAGE $STAGE"; exit 1 ;;
 esac
