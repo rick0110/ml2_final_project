@@ -24,11 +24,11 @@
 \titlespacing*{\section}{0pt}{6pt}{3pt}
 \titleformat{\section}{\normalfont\large\bfseries}{\thesection}{0.6em}{}
 
-\title{\vspace{-1.2cm}\Large\textbf{Síntese de Fala com Tacotron2-VAE:\\ Atenção Espectral Interpretável no \textit{Reference Encoder}}}
+\title{\vspace{-1.2cm}\Large\textbf{Síntese de Fala em Português com Tacotron2-VAE:\\ Estilo Copiado de um Áudio de Referência}}
 \author{\normalsize Beatriz Nunes \quad Herivelton Siqueira \quad Richard Viana\\[2pt]
 \small Machine Learning II --- IMPA Tech\\
 \small Professores: Francisco Ganacim e Daniel Silveira Yukimura Lopez}
-\date{\small Julho de 2026}
+\date{\small Versão revisada --- novembro de 2026}
 
 \begin{document}
 
@@ -37,19 +37,22 @@
 \vspace{-0.9cm}
 \begin{center}
 \begin{minipage}{0.92\textwidth}
-\small\textbf{Resumo ---} Implementamos um sistema de síntese de fala (\textit{Text-to-Speech}) baseado no Tacotron2 com um \textit{Variational Autoencoder} (VAE) para modelagem de prosódia. A contribuição central do trabalho é substituir o \textit{pooling} usual do \textit{reference encoder} (último estado da GRU) por um \textit{pooling} por \textbf{atenção espectral}, tornando o condicionamento de estilo interpretável, além de produzir um modelo especificamente para o português a partir do corpus emocional VERBO. Treinamos três modelos --- \textit{baseline} e variante com atenção no LJSpeech (inglês), e a variante em português no VERBO --- e avaliamos transferência de estilo e de emoção, interpretabilidade dos pesos de atenção, manipulação direta do espaço latente e interpolação esférica (\textit{slerp}) versus linear (\textit{lerp}). Página do projeto: \url{https://rick0110.github.io/ml2_final_project}.
+\small\textbf{Resumo ---} Implementamos um sistema de síntese de fala baseado no Tacotron~2 com um \textit{Variational Autoencoder} (VAE) que resume um áudio de referência em um vetor de estilo. Esta versão substitui a anterior, cujo resultado central (``atenção espectral interpretável'') vinha de um erro de código e não era válido. Corrigimos o erro, passamos a treinar a partir de um Tacotron~2 pré-treinado e conferimos todo áudio gerado por reconhecimento de fala. A taxa de palavras erradas caiu de 68\% para 2,2\% em inglês e de ininteligível para 10,5\% em português. Com o corpus emocional VERBO, a fala gerada copia a voz e o tom da referência, ao custo de inteligibilidade; um controle de intensidade do estilo recupera a inteligibilidade (9\% de erro) mantendo parte da emoção. Página do projeto: \url{https://rick0110.github.io/ml2_final_project}.
 \end{minipage}
 \end{center}
 \vspace{0.3cm}
 ]
 
 \section{Introdução}
-Sistemas de TTS tradicionais produzem fala inteligível, porém com entonação pouco natural. O Tacotron2-VAE \cite{hsu,zhang} ataca esse problema comprimindo um \textbf{áudio de referência} em um vetor latente $z$ que captura características globais de estilo (ritmo, tom, velocidade) e condiciona a síntese. Na prática, contudo, esse latente frequentemente ``morre'': o modelo aprende a reconstruir o espectrograma ignorando $z$ (\textit{posterior collapse}). Este trabalho, então, implementa métodos para evitar o colapso e investiga uma mudança estrutural simples no \textit{reference encoder} --- atenção em vez do último estado da GRU --- para tornar o latente informativo e interpretável, respectivamente. Em paralelo, tivemos problemas de alinhamento na atenção do decoder e por isso introduzimos a perda de atenção guiada, ausente no artigo de referência \cite{zhang}.
+Sistemas de síntese de fala produzem fala inteligível, mas com entonação fixa. O Tacotron2-VAE \cite{hsu,zhang} comprime um \textbf{áudio de referência} em um vetor latente $z$ que guarda o que o texto não determina (tom, velocidade, voz) e condiciona a síntese: o texto diz o que falar, a referência diz como. Nosso objetivo é ter esse sistema funcionando em português, como primeira peça de um sistema de dublagem.
+
+\section{Revisão da versão anterior}
+A versão anterior deste relatório propunha um \textit{pooling} por atenção no \textit{reference encoder} e interpretava seus pesos como bandas do espectro. A revisão do código mostrou três problemas. (i)~O mel de formato $(B, 80, T)$ era reorganizado com \texttt{view} sem transpor os eixos: tempo e frequência ficavam misturados e a posição dos blocos mudava com o \textit{padding} do lote. As ``bandas'' eram efeito desse erro. (ii)~A comparação com o \textit{baseline} usava treinos de 11,2 mil e 35,5 mil iterações, e não sustentava a conclusão sobre o colapso do latente. (iii)~Os áudios eram pouco inteligíveis: transcritos pelo Whisper \cite{whisper}, os 26 áudios em inglês tinham em média 68\% das palavras erradas e os dois em português não eram reconhecidos. Uma \texttt{LayerNorm} extra na atenção do decoder ainda impedia o uso de pesos pré-treinados. Todos os resultados abaixo são da versão corrigida.
 
 \section{Arquitetura}
-O sistema (Fig.~\ref{fig:pipeline}) segue o Tacotron2 \cite{shen,nvidiataco} em quatro passos: (i) um \textit{text encoder} (embedding de símbolos + 3 camadas Conv1d + BiLSTM) extrai representações linguísticas; (ii) uma atenção sensível à localização alinha texto e áudio no decoder; (iii) um decoder autoregressivo prevê o Mel-espectrograma quadro a quadro; (iv) o vocoder \textbf{WaveGlow} \cite{waveglow} (pré-treinado e congelado) converte o espectrograma em forma de onda.
+O sistema (Fig.~\ref{fig:pipeline}) segue o Tacotron~2 \cite{shen,nvidiataco}: um \textit{encoder} de texto (embedding + 3 Conv1d + BiLSTM), uma atenção sensível à localização, um decoder autoregressivo que prevê o mel quadro a quadro e o sinal de parada, e o vocoder \textbf{HiFi-GAN} universal \cite{hifigan}, pré-treinado e congelado. O inglês entra como caracteres e o português como fonemas IPA; os dois conjuntos ficam na mesma tabela de 199 símbolos, o que permite ajustar para o português um modelo treinado em inglês.
 
-Em paralelo, o \textit{reference encoder} processa o Mel-espectrograma de referência com 6 convoluções 2D de \textit{stride} 2 (a primeira é uma CoordConv), reduzindo $80\times T$ para $\sim 128\times(T/64)$, seguidas de uma GRU. O resultado é projetado nos parâmetros $(\mu,\sigma)$ do posterior; amostra-se $z$ (32 dims no LJ, 16 no VERBO), que é convertido em um vetor de estilo somado a todas as posições da memória do \textit{text encoder}.
+O \textit{reference encoder} \cite{skerry} aplica 6 convoluções 2D de \textit{stride}~2 ao mel de referência e uma GRU sobre os $T/64$ blocos de tempo resultantes ($\sim$0,74\,s cada). Os estados $h_t$ são resumidos por atenção, $e=\sum_t \alpha_t h_t$ com $\alpha=\mathrm{softmax}(w^\top h_t+b)$, com peso zero nos blocos de \textit{padding}. O resumo é projetado em $(\mu,\sigma)$; amostra-se $z$ de 32 dimensões, convertido em um vetor de estilo somado a todas as posições da saída do \textit{encoder}. Não comparamos esse resumo com o último estado da GRU, e por isso não afirmamos que seja melhor.
 
 \begin{figure*}[t]
     \centering
@@ -69,7 +72,7 @@ Em paralelo, o \textit{reference encoder} processa o Mel-espectrograma de refer�
     \node[circle, draw=refblue, thick, fill=white, inner sep=1.5pt, font=\normalsize] (soma) at (10.2,-2.7) {$+$};
     \node[box, minimum width=3cm] (atencao) at (13.1,-2.7) {Atenção};
     \node[box, minimum width=3cm] (decoder) at (17.1,-2.7) {Decoder};
-    \node[box, minimum width=3.2cm] (waveglow) at (21.2,-2.7) {WaveGlow};
+    \node[box, minimum width=3.2cm] (waveglow) at (21.2,-2.7) {HiFi-GAN};
     % setas
     \draw[arrow] (mel) -- (vae);
     \draw[arrow] ([xshift=-0.7cm]vae.south) -- ($(soma.north)+(0.18,0.06)$);
@@ -80,72 +83,85 @@ Em paralelo, o \textit{reference encoder} processa o Mel-espectrograma de refer�
     \draw[arrow] (decoder) -- (waveglow);
     \end{tikzpicture}%
     }
-    \caption{\small Arquitetura do sistema: o VAE comprime o Mel de referência no vetor de estilo $e$, somado ($+$) a cada posição da memória do \textit{encoder}; atenção e decoder geram o Mel-espectrograma, convertido em áudio pelo WaveGlow.}
+    \caption{\small Arquitetura do sistema: o VAE comprime o Mel de referência no vetor de estilo $e$, somado ($+$) a cada posição da memória do \textit{encoder}; atenção e decoder geram o Mel-espectrograma, convertido em áudio pelo HiFi-GAN.}
     \label{fig:pipeline}
 \end{figure*}
 
-\section{A mudança: atenção espectral}
-No \textit{baseline} \cite{skerry}, o resumo do áudio de referência é apenas o \textbf{último estado da GRU} --- um vetor opaco, no qual o gradiente favorece os últimos estados da varredura. Propomos um \textit{pooling} por atenção sobre todos os estados $h_t$:
-\begin{equation*}
-s_t = w^{\top} h_t + b, \qquad \alpha = \mathrm{softmax}(s), \qquad e = \textstyle\sum_t \alpha_t h_t,
-\end{equation*}
-implementado com uma camada linear de \textit{score} e um softmax sobre os $T'$ estados ($E/2+1$ parâmetros). Os ganhos são dois: o gradiente flui para \textbf{todos} os blocos da varredura do espectrograma (bandas de canais mel, dos graves aos agudos), e os pesos $\alpha_t$ formam um mapa legível --- sabemos \emph{quais faixas do espectro} da referência definem o estilo.
-
-\section{Dados e pré-processamento}
-Foram usados dois corpora: \textbf{LJSpeech~1.1} (13.100 falas, $\sim$23,9\,h, locutora única, inglês) e \textbf{VERBO} (locutora f1: 98 falas, $\sim$4,7\,min, português, 7 emoções). Todo áudio é reamostrado para 22.050\,Hz e convertido em Mel-espectrogramas de 80 canais (FFT 1024, \textit{hop} 256, $f_{\max}=8$\,kHz). O texto usa \textit{english\_cleaners} (caracteres) no LJ e fonemas IPA via \textit{gruut} no VERBO.
-
 \section{Treinamento}
-A perda total combina quatro termos:
+A perda combina quatro termos:
 \begin{equation*}
 \mathcal{L} = \mathcal{L}_{\text{mel}} + \mathcal{L}_{\text{gate}} + \beta(\text{passo})\,\mathcal{L}_{\text{KL}} + \lambda\,\mathcal{L}_{\text{GA}},
 \end{equation*}
-onde $\mathcal{L}_{\text{mel}}$ é o MSE de reconstrução (decoder + postnet, mascarado no \textit{padding}), $\mathcal{L}_{\text{gate}}$ é a entropia cruzada do sinal de parada, $\mathcal{L}_{\text{KL}}$ é a divergência KL com \textit{free bits} de 0,5 e $\mathcal{L}_{\text{GA}}$ é a perda de \textbf{atenção guiada} \cite{tachibana}, que penaliza massa de atenção longe da diagonal e resolve o desalinhamento severo do início do treino (LJ: $\lambda=2{,}0$, $\sigma=0{,}4$; VERBO: $\lambda=50$, $\sigma=0{,}2$, um prior forte para o corpus minúsculo). O \textit{KL annealing} é cíclico ($\beta$ em rampa de 0 a 0,2 a cada 4.000 passos), mitigando o \textit{KL vanishing}. Otimização com Adam ($lr=10^{-4}$); três modelos (Fig.~\ref{fig:curvas}): LJ \textit{baseline} (11,2 mil iterações), LJ atenção (35,5 mil) e VERBO (9,5 mil), com 28,9M e 7,7M parâmetros.
+com MSE do mel, entropia cruzada do sinal de parada, KL com \textit{free bits} de 0,5 e $\beta$ cíclico (0 a 0,2), e atenção guiada \cite{tachibana}. Treinar do zero não cabia no orçamento e era a causa provável dos alinhamentos ruins; por isso o treino é feito em etapas, cada uma partindo da anterior (Tab.~\ref{tab:etapas}), em uma GPU L4, com Adam ($lr=10^{-4}$) e 28,9\,M de parâmetros.
 
-\section{Resultados e experimentos}
+\begin{table}[h]
+\centering\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+Etapa & Dados & Passos\\
+\midrule
+Inglês & LJSpeech, 23,7\,h & 2.500\\
+Português & TTS-Portuguese \cite{ttspt}, 3,8\,h & 4.000\\
+Emoção & TTS-Port. + VERBO \cite{verbo} & 1.500\\
+\bottomrule
+\end{tabular}
+\caption{Etapas de treino. A primeira parte do Tacotron~2 pré-treinado da NVIDIA; cada uma das seguintes parte da anterior. O VERBO tem 1.167 falas de 12 locutores em 7 emoções, com apenas 14 frases distintas.}
+\label{tab:etapas}
+\end{table}
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\columnwidth]{fig_tb_curves}
-    \caption{Perda total (treino vs. validação): \textit{overfitting} esperado no VERBO, com só 98 falas.}
+    \includegraphics[width=\columnwidth]{fig_retreino_curvas}
+    \caption{Em cima: erro de reconstrução do mel (treino em cinza, validação em azul; o treino é maior porque metade dos quadros de entrada do decoder é descartada). Embaixo: nitidez do alinhamento na síntese livre (laranja) e dimensões ativas do latente (tracejado).}
     \label{fig:curvas}
 \end{figure}
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=\columnwidth]{fig_latent_var}
-    \caption{Variância de $\mu$ por dimensão do latente: posterior colapsado no \textit{baseline} (escala $\sim$100$\times$ menor); com atenção, 32/32 (LJ) e 15/16 (VERBO) dimensões ativas.}
-    \label{fig:latvar}
-\end{figure}
-
-\textbf{Transferência de estilo (LJSpeech).} Sintetizamos duas frases condicionadas a três referências de prosódia contrastante: grave/lenta (F0 $173\pm57$\,Hz; 10,1 caract./s), expressiva e rápida (19,2 caract./s). O \textit{baseline} produz áudios praticamente idênticos entre referências; o modelo com atenção muda ritmo e F0 de forma audível e consistente com a referência.
+\section{Avaliação}
+Para cada modelo sintetizamos 6 frases fora do treino com várias referências. Cada áudio é transcrito pelo Whisper \textit{small} e comparado com o texto pedido (taxa de palavras erradas, WER). Medimos também se o decoder para sozinho, o tom médio (F0) e a velocidade (caracteres por segundo) do áudio gerado e da referência.
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\columnwidth]{fig_verbo_attn_stats}
-    \caption{VERBO: entropia normalizada da atenção por emoção (esquerda) e correlação de Pearson entre $\alpha_t$ e a energia do mel no bloco correspondente (direita).}
-    \label{fig:attn}
+    \includegraphics[width=\columnwidth]{fig_retreino_wer}
+    \caption{Palavras erradas na transcrição automática dos áudios gerados. Cinza: modelos anteriores. Azul: retreinados.}
+    \label{fig:wer}
 \end{figure}
 
-\textbf{Interpretabilidade da atenção.} No LJ, os pesos $\alpha_t$ são não-uniformes e concentram-se em bandas específicas do espectro. No VERBO, a \textbf{entropia normalizada} da atenção correlaciona-se com a emoção da referência (Fig.~\ref{fig:attn}): alegria 0,99, raiva 0,99 e surpresa 0,98 (atenção quase uniforme --- energia em banda larga) contra tristeza 0,67, neutro 0,70 e desgosto 0,76 (atenção concentrada em poucas bandas, tipicamente as agudas). A correlação com a energia do bloco é fraca ($|r|\le 0{,}38$): a atenção não é um mero detector de volume.
+\textbf{Inglês.} WER de 2,2\% em 18 áudios, todos terminando sozinhos; os três erros são a mesma palavra (``stone''). Tom e velocidade não acompanharam as referências: o LJSpeech é uma locutora com leitura uniforme, e há pouca variação de estilo a aprender.
 
-\textbf{Transferência de emoção em português.} Condicionando a síntese às 7 referências emocionais do VERBO, ritmo e registro mudam consistentemente com a emoção. Limitações: $\sim$4,7\,min de dados e vocoder treinado em inglês geram artefatos --- o objetivo é estudar o espaço de estilo, não produção.
+\textbf{Português.} WER de 10,5\% em 18 áudios, todos terminando sozinhos (Fig.~\ref{fig:wer}). Os erros são trocas pontuais (``carrega''$\to$``cariga''). A velocidade da fala acompanha a referência: com referências de 9,1, 12,6 e 16,3 caracteres/s, a mesma frase saiu com 8,8, 11,9 e 12,7. As 32 dimensões do latente ficam ativas (Fig.~\ref{fig:curvas}).
 
-\textbf{Manipulação direta do latente.} Movendo uma única dimensão influente a $\pm 3\sigma$ (referência fixa), os modelos com atenção produzem mudanças \emph{graduais e audíveis} de ritmo/registro; no \textit{baseline}, $\pm 3\sigma$ de uma dimensão morta ($\sigma\approx0{,}06$) não muda nada.
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_retreino_estilo_ptverbo_vae_v1}
+    \caption{Modelo português + VERBO, estilo inteiro: tom e velocidade da fala gerada contra os da referência (círculos: locutora f1; quadrados: locutor m1).}
+    \label{fig:estilo}
+\end{figure}
 
-\textbf{Interpolação: esfera, não reta.} Em alta dimensão, a massa do prior gaussiano concentra-se numa casca de raio $\sqrt{L}$. A \textit{lerp} entre dois códigos ($\theta=80^{\circ}$ no LJ atenção) atravessa o interior da casca e em $t=0{,}25$--$0{,}50$ o áudio perde definição harmônica (espectros ``lavados''); a \textit{slerp} \cite{white} caminha pelo arco e preserva a qualidade em todo o caminho. No \textit{baseline} ($\theta=14^{\circ}$), \textit{lerp} e \textit{slerp} coincidem --- o caso degenerado.
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{fig_retreino_intensidade}
+    \caption{Efeito da intensidade do estilo (7 emoções da locutora f1): palavras erradas e faixa do tom médio entre as emoções.}
+    \label{fig:intensidade}
+\end{figure}
+
+\textbf{Emoção.} Usamos 10 referências do VERBO (7 emoções da locutora f1 e 3 do locutor m1). O modelo de português, sem ver o VERBO, mantém a própria voz (WER 19\%, sem relação entre o tom gerado e o da referência). Ajustado só no VERBO, o modelo copia voz e tom (correlação 0,96 entre o F0 gerado e o da referência), mas o WER sobe para 52\%: com 14 frases, ele desaprende a ler texto novo. Treinando com os dois corpora juntos, o tom continua seguindo a referência (correlação 0,97, Fig.~\ref{fig:estilo}) e o WER cai para 41\%, ainda alto.
+
+\textbf{Intensidade do estilo.} O erro vem de sintetizar com vozes que o modelo só ouviu em 14 frases. Multiplicando o código latente da referência por um fator $a\in[0,1]$ antes da síntese, $z = a\,\mu_{\text{ref}}$, obtemos um controle contínuo (Fig.~\ref{fig:intensidade}): com $a=0{,}6$ o WER cai para 9\% e a velocidade ainda varia com a emoção (de 9,3 a 14,1 caracteres/s), mas o tom fica próximo do neutro. Emoção forte e fala clara não foram obtidas ao mesmo tempo; o limite está no corpus, não no modelo.
 
 \section{Conclusão}
-A troca do \textit{pooling} do \textit{reference encoder} por atenção espectral foi suficiente para tornar o modelo interpretável, e a introdução da perda de alinhamento sobre a atenção sensível à localização tornou o treinamento mais estável e robusto contra o desalinhamento temporal da fala. Os pesos de atenção são interpretáveis e seguem padrões previsíveis por emoção; a geometria esférica do prior deve ser respeitada (\textit{slerp} $>$ \textit{lerp}). Continuação natural: corpora maiores de português e um modelo não autoregressivo capaz de operar em tempo real.
+O resultado central da versão anterior era um erro e foi retirado. Com o código corrigido e o treino a partir de um modelo pré-treinado, o sistema fala inglês e português de forma inteligível e copia da referência a velocidade e, com dados de vários locutores e emoções, a voz e o tom. Com o VERBO, copiar a emoção por inteiro custa inteligibilidade, e o controle de intensidade do estilo permite escolher o ponto desse compromisso. Limitações: a avaliação usa poucas frases e mede só inteligibilidade, não naturalidade; o vetor de estilo é global e não varia ao longo da frase; o \textit{pooling} por atenção não foi comparado com a alternativa mais simples. Para a dublagem faltam o controle de duração das falas, o vídeo como entrada e a sincronia labial.
 
-\begin{thebibliography}{9}\footnotesize\setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}
+\begin{thebibliography}{99}\footnotesize\setlength{\itemsep}{1pt}\setlength{\parskip}{0pt}
 \bibitem{hsu} Hsu, W.-N. et al. \textit{Hierarchical Generative Modeling for Controllable Speech Synthesis}. ICLR, 2019.
 \bibitem{zhang} Zhang, Y.-J., Pan, S., He, L., Ling, Z.-H. \textit{Learning Latent Representations for Style Control and Transfer in End-to-End Speech Synthesis}. ICASSP, 2019. arXiv:1812.04342.
 \bibitem{shen} Shen, J. et al. \textit{Natural TTS Synthesis by Conditioning WaveNet on Mel Spectrogram Predictions}. ICASSP, 2018. arXiv:1712.05884.
 \bibitem{nvidiataco} NVIDIA. \textit{Tacotron 2} (implementação de referência). \url{https://github.com/NVIDIA/tacotron2}.
-\bibitem{waveglow} NVIDIA. \textit{WaveGlow} (código e \textit{checkpoint} LJS 256 canais). \url{https://github.com/NVIDIA/waveglow}; \url{https://catalog.ngc.nvidia.com/orgs/nvidia/models/waveglow_ljs_256channels}.
+\bibitem{hifigan} Kong, J., Kim, J., Bae, J. \textit{HiFi-GAN: Generative Adversarial Networks for Efficient and High Fidelity Speech Synthesis}. NeurIPS, 2020.
 \bibitem{skerry} Skerry-Ryan, R.J. et al. \textit{Towards End-to-End Prosody Transfer for Expressive Speech Synthesis with Tacotron}. ICML, 2018.
 \bibitem{tachibana} Tachibana, H. et al. \textit{Efficiently Trainable Text-to-Speech System Based on Deep Convolutional Networks with Guided Attention}. 2017.
-\bibitem{white} White, T. \textit{Sampling Generative Networks}. 2016.
+\bibitem{ttspt} Casanova, E. et al. \textit{TTS-Portuguese Corpus: a corpus for speech synthesis in Brazilian Portuguese}. Language Resources and Evaluation, 2022.
+\bibitem{verbo} Torres Neto, J. R. et al. \textit{VERBO: Voice Emotion Recognition dataBase in Portuguese Language}. Journal of Computer Science, 2018.
+\bibitem{whisper} Radford, A. et al. \textit{Robust Speech Recognition via Large-Scale Weak Supervision}. ICML, 2023.
 \end{thebibliography}
 
 \end{document}

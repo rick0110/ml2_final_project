@@ -860,35 +860,41 @@ class Tacotron2(nn.Module):
         return audio_output
 
     @torch.inference_mode()
-    def inference_mel(self, text: Tensor, audio: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def inference_mel(self, text: Tensor, audio: Tensor, style_strength: float = 1.0) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Generate mel-spectrogram from text conditioned on reference audio.
 
         Args:
             text (Tensor): Text sequence tensor (1, T_text).
             audio (Tensor): Reference mel-spectrogram tensor (1, n_mels, T_mel).
+            style_strength (float): Scales the latent code of the reference before decoding.
+                1.0 uses the reference style as is; 0.0 uses the prior mean (z = 0).
 
         Returns:
             Tuple[Tensor, Tensor, Tensor]: mel_outputs, mel_outputs_postnet, alignments
         """
-        # Encode text
-        embedded_inputs = self.transcript_embedding(text).transpose(1, 2)
-        transcript_outputs = self.encoder.inference(embedded_inputs)
+        _, mu, _, _ = self.vae_gst(audio)  # (1, L)
+        return self.inference_from_latent(text, mu * style_strength)
 
-        # Extract prosody from reference audio
-        latent_vector, _, _, _ = self.vae_gst(audio)
-        
-        # Inject prosody
-        latent_vector = latent_vector.unsqueeze(1).expand_as(transcript_outputs)
-        encoder_outputs = transcript_outputs + latent_vector
-        
-        # Decode to mel-spectrogram
+    def inference_from_latent(self, text: Tensor, z: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        """
+        Generate mel-spectrogram from text and a latent style code.
+
+        Args:
+            text (Tensor): Text sequence tensor (1, T_text).
+            z (Tensor): Latent style code (1, L).
+
+        Returns:
+            Tuple[Tensor, Tensor, Tensor]: mel_outputs, mel_outputs_postnet, alignments
+        """
+        embedded_inputs = self.transcript_embedding(text).transpose(1, 2)
+        transcript_outputs = self.encoder.inference(embedded_inputs)  # (1, T_text, E)
+
+        style = self.vae_gst.fc3(z)  # (1, E)
+        encoder_outputs = transcript_outputs + style.unsqueeze(1).expand_as(transcript_outputs)
+
         mel_outputs, _, alignments = self.decoder.inference(encoder_outputs)
-        
-        # Refine mel-spectrogram via postnet
-        mel_outputs_postnet = self.postnet(mel_outputs)
-        mel_outputs_postnet = mel_outputs + mel_outputs_postnet
-        
+        mel_outputs_postnet = mel_outputs + self.postnet(mel_outputs)
         return mel_outputs, mel_outputs_postnet, alignments
 
 

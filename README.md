@@ -16,13 +16,16 @@ Cada áudio gerado é transcrito pelo Whisper e comparado com o texto pedido. A 
 | Português, versão antiga | VERBO (98 falas) | 100% (ininteligível) | — |
 | **Inglês, retreinado** | LJSpeech, 2.500 passos | **2,2%** (18 áudios) | 100% |
 | **Português, retreinado** | TTS-Portuguese Corpus, 4.000 passos | **10,5%** (18 áudios) | 100% |
-<!--EMO_ROWS-->
+| Emoção: português → só VERBO | VERBO, 1.500 passos | 52% (60 áudios) | 100% |
+| Emoção: português + VERBO | os dois juntos, 1.500 passos | 41% (60 áudios) | 100% |
+| **Emoção: português + VERBO, estilo a 60%** | idem | **9%** (42 áudios) | 100% |
 
 O que os números mostram:
 
 - **Inteligibilidade.** Partir do Tacotron 2 pré-treinado da NVIDIA, em vez de treinar do zero, resolveu o problema principal. O português foi obtido ajustando o modelo em inglês em 3,8 h de fala.
 - **Velocidade copiada da referência (português).** Com referências lenta, média e rápida (9, 13 e 16 caracteres por segundo), a fala gerada saiu com cerca de 9, 12 e 13.
-<!--EMO_BULLETS-->
+- **Voz e tom copiados (VERBO).** Com referências de emoção, o tom médio da fala gerada acompanha o da referência (correlação 0,97 em 10 referências), inclusive trocando voz feminina por masculina.
+- **Emoção forte custa inteligibilidade.** O VERBO tem só 14 frases: com o estilo inteiro da referência o modelo fala com uma voz que quase não conhece, e erra 41% das palavras. Multiplicando o código de estilo por 0,6 (`--style-strength` no `synth_check.py`), o erro cai para 9%; sobra da emoção principalmente o ritmo.
 - **No inglês o estilo quase não muda.** O LJSpeech é uma locutora lendo sempre do mesmo jeito; há pouca variação para o VAE aprender.
 
 Limitações conhecidas: sobram trocas de palavras no português ("carrega" → "cariga"); a avaliação usa 6 frases por referência, uma amostra pequena; a naturalidade não foi medida por ouvintes, só a inteligibilidade por reconhecimento automático.
@@ -37,6 +40,7 @@ Limitações conhecidas: sobram trocas de palavras no português ("carrega" → 
 | O resumo da referência incluía os blocos de *padding* | O vetor de estilo de uma mesma fala mudava com o tamanho do lote | A atenção dá peso zero ao *padding* |
 | Uma `LayerNorm` extra na atenção do decoder, que não existe no Tacotron 2 | Os pesos pré-treinados não funcionavam: a síntese nunca chegava ao fim da frase | Removida |
 | Treino do zero, com poucos dados | Alinhamento texto–áudio ruim; no VERBO (5 min), fala ininteligível | Treino a partir do Tacotron 2 pré-treinado, em etapas: inglês → português → emoção |
+| Ajuste só no VERBO (14 frases) | O modelo aprende as emoções mas desaprende a ler texto novo (52% de erro) | Treino com o corpus de português e o VERBO juntos, e controle de intensidade do estilo |
 | Vocoder WaveGlow treinado só em voz inglesa | Artefatos em outras vozes | HiFi-GAN universal pré-treinado (`src/models/hifigan.py`) |
 | Comparação com o *baseline* com treinos de tamanhos diferentes (11,2 mil vs. 35,5 mil iterações) | A conclusão "a atenção evita o colapso do latente" não se sustentava | Comparação retirada |
 

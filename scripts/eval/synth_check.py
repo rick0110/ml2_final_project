@@ -95,6 +95,7 @@ def main() -> None:
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--references", nargs="*", default=None, help="utt_ids to use as style references")
     ap.add_argument("--n-references", type=int, default=3, help="If --references is not given: shortest, median, longest-rate picks")
+    ap.add_argument("--style-strength", type=float, default=1.0, help="Scale of the reference latent code (1 = as is, 0 = prior mean)")
     ap.add_argument("--whisper", default="small")
     ap.add_argument("--max-decoder-steps", type=int, default=1200)
     a = ap.parse_args()
@@ -133,7 +134,7 @@ def main() -> None:
         for si, sentence in enumerate(SENTENCES[a.language]):
             seq = torch.LongTensor(tp.text_to_sequence(sentence)).unsqueeze(0).to(device)
             with torch.inference_mode():
-                _, mel, align = model.inference_mel(seq, ref_mel)
+                _, mel, align = model.inference_mel(seq, ref_mel, a.style_strength)
             stopped = mel.size(2) < a.max_decoder_steps
             audio = vocode(voc, mel[0].float()).cpu().numpy()
             name = f"{ref['utt_id']}__s{si}"

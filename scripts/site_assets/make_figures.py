@@ -78,11 +78,12 @@ def fig_curves(runs: Path, out: Path) -> None:
 def fig_wer(evals: Path, out: Path, old_en: float, old_pt: float) -> None:
     bars = [("Inglês\nmodelo antigo", old_en, GRAY), ("Português\nmodelo antigo", old_pt, GRAY)]
     for exp, label in [("en_vae_v1", "Inglês\nretreinado"), ("pt_vae_v1", "Português\nretreinado"),
-                       ("verbo_vae_v1", "Emoção\nsó VERBO"), ("ptverbo_vae_v1", "Emoção\nPT + VERBO")]:
+                       ("verbo_vae_v1", "Emoção\nsó VERBO"), ("ptverbo_vae_v1", "Emoção\nPT + VERBO"),
+                       ("mix_strength_0.6", "Emoção, PT + VERBO\nestilo a 60%")]:
         p = evals / exp / "results.csv"
         if p.exists():
             bars.append((label, float(np.mean([float(r["wer"]) for r in read_eval(p)])), BLUE))
-    fig, ax = plt.subplots(figsize=(7.2, 3.2))
+    fig, ax = plt.subplots(figsize=(8.2, 3.2))
     ax.bar(range(len(bars)), [100 * b[1] for b in bars], color=[b[2] for b in bars], width=0.62)
     for i, b in enumerate(bars):
         ax.text(i, 100 * b[1] + 2, f"{100 * b[1]:.0f}%".replace(".", ","), ha="center", fontsize=9)
@@ -131,6 +132,46 @@ def fig_style(evals: Path, out: Path, exp: str) -> None:
     plt.close(fig)
 
 
+def fig_strength(evals: Path, out: Path, full: str, pattern: str = "mix_strength_*") -> None:
+    """Trade-off of the style-strength control: word error rate and F0 spread across emotion references."""
+    runs = {1.0: evals / full / "results.csv"}
+    for d in sorted(evals.glob(pattern)):
+        runs[float(d.name.rsplit("_", 1)[1])] = d / "results.csv"
+    if len(runs) < 2 or not runs[1.0].exists():
+        return
+    refs = {r["reference"] for r in read_eval(runs[min(runs)])}
+    xs, wers, lo, hi = [], [], [], []
+    for a in sorted(runs):
+        groups: Dict[str, List[dict]] = defaultdict(list)
+        for r in read_eval(runs[a]):
+            if r["reference"] in refs:
+                groups[r["reference"]].append(r)
+        f0 = [float(np.nanmean([float(r["f0_hz"]) for r in rows])) for rows in groups.values()]
+        xs.append(a)
+        wers.append(100 * float(np.mean([np.mean([float(r["wer"]) for r in rows]) for rows in groups.values()])))
+        lo.append(min(f0))
+        hi.append(max(f0))
+    fig, axes = plt.subplots(1, 2, figsize=(8.4, 3.2))
+    axes[0].plot(xs, wers, color=BLUE, marker="o")
+    for x, w in zip(xs, wers):
+        axes[0].annotate(f"{w:.0f}%", (x, w), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8)
+    axes[0].set_ylabel("palavras erradas (%)")
+    axes[0].set_ylim(0, max(wers) * 1.25)
+    axes[1].fill_between(xs, lo, hi, color=ORANGE, alpha=0.25)
+    axes[1].plot(xs, lo, color=ORANGE, marker="o")
+    axes[1].plot(xs, hi, color=ORANGE, marker="o")
+    axes[1].set_ylabel("tom médio gerado: menor e maior\nentre as 7 emoções (Hz)")
+    for ax in axes:
+        ax.set_xlabel("intensidade do estilo (1 = referência inteira)")
+        ax.set_xticks(xs)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out / "fig_retreino_intensidade.png", dpi=130)
+    plt.close(fig)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--runs", type=Path, required=True)
@@ -144,6 +185,7 @@ def main() -> None:
     fig_wer(a.evals, a.out, a.old_wer_en, a.old_wer_pt)
     for exp in ["pt_vae_v1", "verbo_vae_v1", "ptverbo_vae_v1"]:
         fig_style(a.evals, a.out, exp)
+    fig_strength(a.evals, a.out, "ptverbo_vae_v1")
     print("figures written to", a.out)
 
 
