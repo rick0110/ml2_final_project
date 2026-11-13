@@ -24,18 +24,13 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import random
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
 
-import librosa
-import numpy as np
-import torch
 
 MAX_N = 32          # largest number of training speakers in any run
-N_UNSEEN = 4        # speakers kept out of every run
 HELDOUT = 4         # sentences per speaker kept as references
 FIELDS = ["utt_id", "mel_path", "text", "speaker", "emotion", "duration"]
 
@@ -53,30 +48,17 @@ def write(path: Path, rows: List[dict]) -> None:
         w.writerows(rows)
 
 
-def median_f0(rows: List[dict]) -> float:
-    vals = []
-    for r in rows[:2]:
-        wav = torch.load(r["mel_path"], map_location="cpu", weights_only=True)["waveform"][0].numpy()
-        f0, voiced, _ = librosa.pyin(wav, fmin=60, fmax=450, sr=22050, frame_length=1024, hop_length=256)
-        if voiced.any():
-            vals.append(float(np.nanmedian(f0[voiced])))
-    return float(np.mean(vals)) if vals else 0.0
+# Fixed so that every run, on any machine, uses the same voices. The first eight were picked
+# to alternate low and high voices (2 speakers = one of each); the last four are never trained on.
+FIRST_SEEN = ["3486", "4137", "8088", "7178", "2952", "5163", "6209", "6147"]
+UNSEEN = ["4297", "696", "6415", "7800"]
 
 
-def speaker_order(libritts: Path, by_speaker: Dict[str, List[dict]]) -> List[str]:
-    """The MAX_N + N_UNSEEN speakers with most sentences, ordered so that every prefix mixes low and high voices."""
-    cache = libritts / "coverage_speakers.json"
-    if cache.exists():
-        return json.loads(cache.read_text())
-    top = sorted(by_speaker, key=lambda s: (-len(by_speaker[s]), s))[: MAX_N + N_UNSEEN]
-    by_pitch = sorted(top, key=lambda s: median_f0(by_speaker[s]))
-    order: List[str] = []
-    while by_pitch:  # lowest, highest, 2nd lowest, 2nd highest, ...
-        order.append(by_pitch.pop(0))
-        if by_pitch:
-            order.append(by_pitch.pop(-1))
-    cache.write_text(json.dumps(order))
-    return order
+def speaker_order(by_speaker: Dict[str, List[dict]]) -> List[str]:
+    """FIRST_SEEN, then the speakers with most sentences (up to MAX_N in total), then UNSEEN."""
+    pinned = set(FIRST_SEEN + UNSEEN)
+    rest = sorted((s for s in by_speaker if s not in pinned), key=lambda s: (-len(by_speaker[s]), s))
+    return FIRST_SEEN + sorted(rest[: MAX_N - len(FIRST_SEEN)]) + UNSEEN
 
 
 def main() -> None:
@@ -100,7 +82,7 @@ def main() -> None:
         by_speaker[r["speaker"]].append(r)
     for rows in by_speaker.values():
         random.Random(1).shuffle(rows)
-    order = speaker_order(a.libritts, by_speaker)
+    order = speaker_order(by_speaker)
     seen, unseen = order[: a.n], order[MAX_N:]
 
     train = list(lj)
