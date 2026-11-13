@@ -97,6 +97,8 @@ def main() -> None:
     ap.add_argument("--all-references", action="store_true", help="Use every utterance of --data-dir as a reference")
     ap.add_argument("--n-references", type=int, default=3, help="If --references is not given: shortest, median, longest-rate picks")
     ap.add_argument("--style-strength", type=float, default=1.0, help="Scale of the reference latent code (1 = as is, 0 = prior mean)")
+    ap.add_argument("--style-origin", type=Path, default=None,
+                    help=".npy latent vector that --style-strength contracts towards (default: the prior mean, 0)")
     ap.add_argument("--whisper", default="small")
     ap.add_argument("--max-decoder-steps", type=int, default=1200)
     a = ap.parse_args()
@@ -129,6 +131,10 @@ def main() -> None:
     from faster_whisper import WhisperModel
     asr = WhisperModel(a.whisper, device="cpu", compute_type="int8")
 
+    origin = torch.zeros(1, hp.z_latent_dim, device=device)
+    if a.style_origin:
+        origin = torch.from_numpy(np.load(a.style_origin)).float().view(1, -1).to(device)
+
     out_rows = []
     for ref in refs:
         wav = torch.load(ref["mel_path"], map_location="cpu", weights_only=True)["waveform"]
@@ -137,7 +143,9 @@ def main() -> None:
         for si, sentence in enumerate(SENTENCES[a.language]):
             seq = torch.LongTensor(tp.text_to_sequence(sentence)).unsqueeze(0).to(device)
             with torch.inference_mode():
-                _, mel, align = model.inference_mel(seq, ref_mel, a.style_strength)
+                _, mu, _, _ = model.vae_gst(ref_mel)  # (1, L)
+                z = origin + a.style_strength * (mu - origin)
+                _, mel, align = model.inference_from_latent(seq, z)
             stopped = mel.size(2) < a.max_decoder_steps
             audio = vocode(voc, mel[0].float()).cpu().numpy()
             name = f"{ref['utt_id']}__s{si}"
@@ -151,6 +159,7 @@ def main() -> None:
                 "reference_speaker": ref.get("speaker", ""), "text": sentence, "heard": heard,
                 "wer": round(wer(sentence, heard), 3), "stopped_by_itself": int(stopped),
                 "duration_s": round(len(audio) / 22050, 2), "align_peak": round(float(ali.max(axis=1).mean()), 3),
+                "latent_norm": round(float(z.norm()), 3), "latent_shift": round(float((z - origin).norm()), 3),
                 "f0_hz": round(pros["f0_hz"], 1), "f0_std_hz": round(pros["f0_std_hz"], 1), "chars_per_s": round(pros["chars_per_s"], 2),
                 "ref_f0_hz": round(ref_pros["f0_hz"], 1), "ref_chars_per_s": round(ref_pros["chars_per_s"], 2),
             })
