@@ -70,7 +70,7 @@ case "$STAGE" in
     EXTRA="--batch-size 48 --val-split 0.04 --guided-attention-weight 5.0 --guided-attention-sigma 0.3"
     ;;
   cov_n*_k*)
-    # Coverage experiment (scripts/experiments/coverage_manifest.py): LJSpeech subset +
+    # Coverage experiment (scripts/coverage/coverage_manifest.py): LJSpeech subset +
     # N LibriTTS speakers with K sentences each, warm-started from the English model.
     N=${STAGE#cov_n}; N=${N%%_k*}; K=${STAGE##*_k}
     EXP=$STAGE; DATA=data/processed/$STAGE; CLEANER=english_cleaners; LANG_CODE=en
@@ -81,7 +81,7 @@ case "$STAGE" in
         python scripts/preprocess/make_manifest.py --corpus libritts --input-dir data/raw/LibriTTS/train-clean-100 \
           --out-dir data/processed/LibriTTS --min-duration 1.5 --max-duration 10 --num-workers 8
       fi
-      python scripts/experiments/coverage_manifest.py --lj data/processed/LJSpeech --libritts data/processed/LibriTTS \
+      python scripts/coverage/coverage_manifest.py --lj data/processed/LJSpeech --libritts data/processed/LibriTTS \
         --n "$N" --k "$K" --out "$DATA"
     fi
     gsutil -q cp "gs://$BUCKET/experiments/en_vae_v1/checkpoints/final" ckpt/en_final
