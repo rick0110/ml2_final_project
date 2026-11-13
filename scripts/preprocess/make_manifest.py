@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build the training manifest for one corpus (LJSpeech, TTS-Portuguese Corpus or VERBO).
+Build the training manifest for one corpus (LJSpeech, TTS-Portuguese Corpus, VERBO or LibriTTS).
 
 For every utterance it writes a .pt file with the mono waveform resampled to
 22.05 kHz, and one row in <out-dir>/mels_metadata.csv. The mel-spectrogram is
@@ -81,7 +81,15 @@ def verbo_items(root: Path) -> Iterator[Item]:
             yield wav.stem, wav, VERBO_PHRASES[m.group(3)], m.group(2), VERBO_EMOTIONS[m.group(1)]
 
 
-CORPORA = {"ljspeech": ljspeech_items, "tts_portuguese": tts_portuguese_items, "verbo": verbo_items}
+def libritts_items(root: Path) -> Iterator[Item]:
+    """LibriTTS layout: <root>/<speaker>/<chapter>/<utt>.wav with <utt>.normalized.txt beside it."""
+    for wav in sorted(root.rglob("*.wav")):
+        txt = wav.with_suffix(".normalized.txt")
+        if txt.exists():
+            yield wav.stem, wav, txt.read_text(encoding="utf-8").strip(), wav.parts[-3], ""
+
+
+CORPORA = {"ljspeech": ljspeech_items, "tts_portuguese": tts_portuguese_items, "verbo": verbo_items, "libritts": libritts_items}
 
 
 def process(args: Tuple[Item, Path, float, float, bool]) -> Optional[Dict[str, str]]:

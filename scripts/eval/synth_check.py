@@ -94,6 +94,7 @@ def main() -> None:
     ap.add_argument("--language", choices=["en", "pt"], required=True)
     ap.add_argument("--out-dir", type=Path, required=True)
     ap.add_argument("--references", nargs="*", default=None, help="utt_ids to use as style references")
+    ap.add_argument("--all-references", action="store_true", help="Use every utterance of --data-dir as a reference")
     ap.add_argument("--n-references", type=int, default=3, help="If --references is not given: shortest, median, longest-rate picks")
     ap.add_argument("--style-strength", type=float, default=1.0, help="Scale of the reference latent code (1 = as is, 0 = prior mean)")
     ap.add_argument("--whisper", default="small")
@@ -116,7 +117,9 @@ def main() -> None:
     with open(a.data_dir / "mels_metadata.csv", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     by_id = {r["utt_id"]: r for r in rows}
-    if a.references:
+    if a.all_references:
+        refs = rows
+    elif a.references:
         refs = [by_id[u] for u in a.references]
     else:  # spread over speaking rate: slow, typical, fast
         rated = sorted(rows, key=lambda r: len(r["text"]) / float(r["duration"]))
