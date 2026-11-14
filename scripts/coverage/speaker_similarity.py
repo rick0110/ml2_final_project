@@ -5,7 +5,7 @@ Was the reference voice copied? Speaker-embedding similarity of each generated a
 Reads the results.csv written by scripts/eval/synth_check.py and adds two columns:
     sim_ref      cosine similarity between the generated audio and its reference audio
     sim_default  cosine similarity between the generated audio and the default voice
-                 (mean embedding of utterances of --default-speaker in the training set)
+                 (mean embedding of utterances of the main speaker of the training set)
 The voice was copied when sim_ref is high and above sim_default. Embeddings come from
 Resemblyzer (a speaker-verification encoder trained on other data).
 
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from collections import Counter
 from pathlib import Path
 
 import librosa
@@ -38,7 +39,7 @@ def main() -> None:
     ap.add_argument("--eval-dir", type=Path, required=True, help="Folder with results.csv and the generated .wav")
     ap.add_argument("--refs", type=Path, required=True, help="Processed folder of the references")
     ap.add_argument("--train", type=Path, required=True, help="Processed folder of the training set")
-    ap.add_argument("--default-speaker", default="ljspeech")
+    ap.add_argument("--default-speaker", default=None, help="Default: the speaker with most training utterances")
     ap.add_argument("--n-default", type=int, default=20)
     a = ap.parse_args()
 
@@ -46,8 +47,10 @@ def main() -> None:
     with open(a.refs / "mels_metadata.csv", encoding="utf-8") as f:
         ref_emb = {r["utt_id"]: embed(enc, stored(r["mel_path"])) for r in csv.DictReader(f)}
     with open(a.train / "mels_metadata.csv", encoding="utf-8") as f:
-        default = [r for r in csv.DictReader(f) if r["speaker"] == a.default_speaker][: a.n_default]
-    assert default, f"no utterance of speaker {a.default_speaker} in {a.train}"
+        train = list(csv.DictReader(f))
+    name = a.default_speaker or Counter(r["speaker"] for r in train).most_common(1)[0][0]
+    default = [r for r in train if r["speaker"] == name][: a.n_default]
+    assert default, f"no utterance of speaker {name} in {a.train}"
     default_emb = np.mean([embed(enc, stored(r["mel_path"])) for r in default], axis=0)
     default_emb /= np.linalg.norm(default_emb)
 

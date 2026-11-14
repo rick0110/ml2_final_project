@@ -65,9 +65,10 @@ for RUN in $RUNS; do
     fi
     CKPT=$EXP_DIR/checkpoints/epoch_$STEP
     echo "$(date -u +%H:%M:%S) evaluating $RUN at step $STEP" >> /content/out/progress.txt
-    rm -rf "$OUT"
     for S in $STRENGTHS; do
-      python scripts/eval/synth_check.py --checkpoint "$CKPT" --hifigan ckpt/hifigan_universal_v1.pt \
+      # An evaluation interrupted after the synthesis continues from the similarity
+      head -n 1 "$OUT/strength_$S/results.csv" 2>/dev/null | grep -q sim_ref && continue
+      [ -f "$OUT/strength_$S/results.csv" ] || python scripts/eval/synth_check.py --checkpoint "$CKPT" --hifigan ckpt/hifigan_universal_v1.pt \
         --data-dir "$DATA/refs" --all-references --sentences-file "$DATA/test_sentences.txt" \
         --text-cleaner english_cleaners --language en --style-strength "$S" --out-dir "$OUT/strength_$S"
       python scripts/coverage/speaker_similarity.py --eval-dir "$OUT/strength_$S" --refs "$DATA/refs" --train "$DATA"
