@@ -131,6 +131,9 @@ class Tacotron2VAEHparams:
     guided_attention_sigma: float = 0.4   # Gaussian width; larger = more permissive diagonal
 
     # Gate (stop token) loss
+    contrastive_weight: float = 0.0  # Weight of the speaker-contrastive loss on the style latent (needs --swap-reference)
+    contrastive_temperature: float = 0.1
+    contrastive_memory: int = 512  # Latents of recent batches kept as extra negatives
     gate_positive_weight: float = 1.0  # BCE pos_weight for the stop frame; >1 counters the ~1:250 stop/continue imbalance when the gate never fires
 
     # Decoder parameters

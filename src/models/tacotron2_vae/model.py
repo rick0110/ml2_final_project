@@ -734,6 +734,7 @@ class Tacotron2(nn.Module):
         self.decoder: Decoder = Decoder(hparams)
         self.postnet: Postnet = Postnet(hparams)
         self.vae_gst: VAE_GST = VAE_GST(hparams)
+        self.contrastive: bool = getattr(hparams, 'contrastive_weight', 0.0) > 0.0
 
     def parse_batch(self, batch: Any, device: torch.device) -> Tuple[Tuple[Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Tensor]]:
         """
@@ -755,6 +756,8 @@ class Tacotron2(nn.Module):
         inputs: Tuple[Tensor, ...] = (text_padded, input_lengths, mel_padded, output_lengths)
         if len(batch) > 6:  # style reference from another utterance: (ref_mel, ref_lengths)
             inputs += (to_device(batch[6], device).float(), to_device(batch[7], device).long())
+            if len(batch) > 8 and self.contrastive:  # speaker of each item, for the contrastive loss
+                inputs += (to_device(batch[8], device).long(),)
         return inputs, (mel_padded, gate_padded)
 
     def parse_output(self, outputs: List[Tensor], output_lengths: Optional[Tensor] = None) -> List[Tensor]:
@@ -818,10 +821,12 @@ class Tacotron2(nn.Module):
         mel_outputs_postnet: Tensor = self.postnet(mel_outputs) # (B, n_mels, T_mel)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet # (B, n_mels, T_mel)
 
-        return self.parse_output(
-            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, mu, logvar, z],
-            output_lengths,
-        )
+        outputs: List[Tensor] = [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, mu, logvar, z]
+        if len(inputs) > 6:
+            # Latent of the target itself and the speakers: the contrastive loss asks the
+            # reference and the target (two utterances of one speaker) to share a code
+            outputs += [self.vae_gst(targets, output_lengths)[1], inputs[6]]
+        return self.parse_output(outputs, output_lengths)
 
     @torch.inference_mode()
     def infer(self, text: Tensor, audio: Tensor, waveglow: nn.Module) -> Tensor:

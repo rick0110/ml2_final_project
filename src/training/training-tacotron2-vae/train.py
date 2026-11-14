@@ -91,6 +91,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--swap-reference", action="store_true",
                         help="Take the style of each training utterance from another utterance of the same speaker")
+    parser.add_argument("--contrastive-weight", type=float, default=0.0,
+                        help="Weight of the speaker-contrastive loss on the style latent (implies --swap-reference)")
     parser.add_argument("--val-split", type=float, default=0.1)
     parser.add_argument("--anneal-function", type=str, default="cyclical")
     parser.add_argument("--guided-attention-weight", type=float, default=2.0)
@@ -177,6 +179,7 @@ def main() -> None:
         "guided_attention_weight": args.guided_attention_weight,
         "guided_attention_sigma": args.guided_attention_sigma,
         "gate_positive_weight": args.gate_positive_weight,
+        "contrastive_weight": args.contrastive_weight,
         "warmup_steps": args.warmup_steps,
         "n_symbols": text_processor.n_symbols,
         "training_data": str(train_file),
@@ -245,7 +248,7 @@ def main() -> None:
     collate_fn: TextMelCollate = TextMelCollate(hparams.n_frames_per_step)
     
     # Initialize DataLoaders
-    if args.swap_reference:
+    if args.swap_reference or args.contrastive_weight > 0.0:
         train_dataset = SwapReference(train_dataset)
     train_loader: DataLoader = create_dataloader(train_dataset, args.batch_size, args.num_workers, collate_fn, True)
     test_loader: DataLoader = create_dataloader(test_dataset, args.batch_size, args.num_workers, collate_fn, False)

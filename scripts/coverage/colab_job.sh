@@ -45,8 +45,12 @@ fi
   https://huggingface.co/csdc-atl/hifigan-universal_v1/resolve/main/g_02500000
 
 for RUN in $RUNS; do
-  # A run named n8_k8_s1-swap trains with the style reference taken from another utterance
-  BASE=${RUN%-swap}; SWAP=""; [ "$BASE" != "$RUN" ] && SWAP="--swap-reference"
+  # n8_k8_s1-swap: style reference from another utterance; -contrast: that plus the contrastive loss
+  BASE=${RUN%%-*}; SWAP=""
+  case "$RUN" in
+    *-swap) SWAP="--swap-reference" ;;
+    *-contrast) SWAP="--contrastive-weight 0.5" ;;
+  esac
   N=${BASE#n}; N=${N%%_*}; K=${BASE#*_k}; K=${K%%_*}; SEED=${BASE##*_s}
   DATA=data/processed/cov_n${N}_k${K}
   EXP_DIR=experiments/tacotron2-vae/cov_$RUN

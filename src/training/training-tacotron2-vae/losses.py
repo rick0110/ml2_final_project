@@ -38,6 +38,7 @@ class Tacotron2LossVAE(nn.Module):
         Total Loss = MSE(Mel) + MSE(Post-Mel) + BCE(Gate)
                    + KL_Weight * KL_Divergence
                    + guided_attention_weight * GuidedAttentionLoss
+                   + contrastive_weight * SpeakerContrastiveLoss (optional)
         KL uses free bits to prevent posterior collapse.
         Guided attention penalises non-monotonic attention diagonally.
 
@@ -78,6 +79,13 @@ class Tacotron2LossVAE(nn.Module):
         self.guided_attention_weight: float = getattr(hparams, 'guided_attention_weight', 2.0)
         self.guided_attention_sigma: float = getattr(hparams, 'guided_attention_sigma', 0.4)
         self.gate_positive_weight: float = getattr(hparams, 'gate_positive_weight', 1.0)
+        self.contrastive_weight: float = getattr(hparams, 'contrastive_weight', 0.0)
+        self.contrastive_temperature: float = getattr(hparams, 'contrastive_temperature', 0.1)
+        self.contrastive_memory: int = getattr(hparams, 'contrastive_memory', 512)
+        # Latents of recent batches, used as extra negatives (most of a batch is one speaker)
+        self.memory_latents: Optional[Tensor] = None
+        self.memory_speakers: Optional[Tensor] = None
+        self.last_contrastive: float = 0.0
 
         # Pre-instantiate loss functions to avoid re-creation every forward pass
         self.mse_loss = nn.MSELoss(reduction='none')
@@ -131,6 +139,43 @@ class Tacotron2LossVAE(nn.Module):
 
         denom = valid.sum().clamp(min=1.0)
         return (W * alignment * valid).sum() / denom
+
+    def compute_contrastive_loss(self, mu_reference: Tensor, mu_target: Tensor, speakers: Tensor) -> Tensor:
+        """
+        Speaker-contrastive loss on the style latent (InfoNCE, both directions).
+
+        The reference and the target of an item are two utterances of one speaker, so they
+        are the positive pair. Negatives are latents of other speakers only, from this batch
+        and from a memory of recent batches; same-speaker items are never pushed apart.
+
+        Args:
+            mu_reference (Tensor): Latent mean of the style reference (B, L).
+            mu_target (Tensor): Latent mean of the target utterance (B, L).
+            speakers (Tensor): Speaker index of each item (B,).
+
+        Returns:
+            Tensor: Scalar loss, averaged over the items that have at least one negative.
+        """
+        reference = nn.functional.normalize(mu_reference.float(), dim=1)
+        target = nn.functional.normalize(mu_target.float(), dim=1)
+        bank, bank_speakers = torch.cat([reference, target]).detach(), torch.cat([speakers, speakers])
+        if self.memory_latents is not None:
+            bank = torch.cat([bank, self.memory_latents.to(bank.device)])
+            bank_speakers = torch.cat([bank_speakers, self.memory_speakers.to(bank.device)])
+        negative = bank_speakers.unsqueeze(0) != speakers.unsqueeze(1)  # (B, M)
+        has_negative = negative.any(dim=1)
+
+        loss = mu_reference.new_zeros(())
+        if has_negative.any():
+            positive = (reference * target).sum(dim=1, keepdim=True) / self.contrastive_temperature  # (B, 1)
+            for anchor in (reference, target):
+                logits = (anchor @ bank.t() / self.contrastive_temperature).masked_fill(~negative, float('-inf'))
+                per_item = torch.logsumexp(torch.cat([positive, logits], dim=1), dim=1) - positive.squeeze(1)
+                loss = loss + 0.5 * per_item[has_negative].mean()
+
+        keep = self.contrastive_memory
+        self.memory_latents, self.memory_speakers = bank[:keep], bank_speakers[:keep]
+        return loss
 
     def kl_anneal_function(self, anneal_function: str, lag: int, step: int, k: float, x0: int, upper: float) -> float:
         """
@@ -208,7 +253,7 @@ class Tacotron2LossVAE(nn.Module):
         """
         mel_target, gate_target = targets[0], targets[1]
 
-        mel_out, mel_out_postnet, gate_out, alignment, mu, logvar, _ = model_output
+        mel_out, mel_out_postnet, gate_out, alignment, mu, logvar, _ = model_output[:7]
 
         # --- Reconstruction losses (masked over valid frames only) ---
         mel_loss_raw: Tensor = self.mse_loss(mel_out, mel_target) + self.mse_loss(mel_out_postnet, mel_target)  # (B, n_mels, T)
@@ -252,5 +297,9 @@ class Tacotron2LossVAE(nn.Module):
             + kl_weight * kl_loss
             + self.guided_attention_weight * guided_attn_loss
         )
+        if self.contrastive_weight > 0.0 and len(model_output) > 8:
+            contrastive: Tensor = self.compute_contrastive_loss(mu, model_output[7], model_output[8])
+            self.last_contrastive = float(contrastive.detach())
+            total_loss = total_loss + self.contrastive_weight * contrastive
 
         return total_loss, recon_loss, kl_loss, kl_weight, guided_attn_loss

@@ -430,6 +430,7 @@ def train_epoch(
             append_metrics(hparams, {
                 "it": iteration, "loss": reduced_loss, "recon": recon_loss.item(), "kl": kl_loss.item(),
                 "kl_weight": float(kl_weight), "guided_attn": guided_attn_loss.item(),
+                "contrastive": getattr(criterion, "last_contrastive", 0.0),
                 "grad_norm": float(grad_norm), "lr": optimizer.param_groups[0]["lr"],
             })
 
