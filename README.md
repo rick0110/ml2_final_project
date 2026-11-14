@@ -143,7 +143,37 @@ pip install -r requirements.txt
 
 Requisitos: Python 3.10+, GPU CUDA para treino. Modelos pré-treinados usados: [Tacotron 2 da NVIDIA](https://catalog.ngc.nvidia.com/orgs/nvidia/models/tacotron2_pyt_ckpt_amp) e [HiFi-GAN UNIVERSAL_V1](https://github.com/jik876/hifi-gan).
 
-## 9. Próximo passo: dublagem
+## 9. Experimento: quanta cobertura de dados o estilo precisa
+
+Pergunta: quando um estilo (aqui, uma voz) aparece no treino com poucas frases, o modelo consegue falar um texto novo com ele? E como isso muda com o número de estilos e com o número de frases por estilo?
+
+Montagem: 2.000 frases do LJSpeech (a voz padrão, com muito texto) mais N locutores do LibriTTS com K frases cada, partindo do modelo em inglês, 2.500 passos por treino. Em cada treino sintetizamos 25 frases fora do treino com 8 referências de vozes treinadas e 4 de vozes nunca vistas. "Voz copiada" é a parcela das amostras cujo áudio fica mais parecido com a referência do que com a voz padrão, segundo um codificador de locutor externo (Resemblyzer). Onde há dois números, são duas sementes.
+
+| Locutores (N) | Frases por locutor (K) | Palavras erradas: treinadas | Palavras erradas: novas | Voz copiada: treinadas | Voz copiada: novas |
+|---|---|---|---|---|---|
+| 2 | 128 | 13% / 11% | 8% / 5% | 70% / 74% | 4% / 2% |
+| 8 | 8 | 21% / 26% | 14% / 24% | 45% / 44% | 26% / 39% |
+| 8 | 32 | 17% | 14% | 74% | 47% |
+| 8 | 128 | 11% / 10% | 8% / 9% | 91% / 88% | 51% / 37% |
+| 32 | 8 | 17% / 17% | 13% / 9% | 58% / 51% | 47% / 47% |
+| 32 | 32 | 13% | 8% | 80% | 52% |
+| 32 | 128 | 12% / 10% | 5% / 5% | 86% / 86% | 61% / 57% |
+
+![Voz copiada em função das frases por locutor e do número de locutores](reports/figures/fig_cobertura.png)
+
+O que os números mostram:
+
+- **Frases por locutor decidem as vozes treinadas.** Com 8 locutores, a cópia da voz vai de 45% (8 frases) a 74% (32) e 90% (128).
+- **Número de locutores decide as vozes novas.** Com 128 frases por locutor, a cópia de vozes nunca vistas vai de 3% (2 locutores) a 44% (8) e 59% (32).
+- **Muitos locutores compensam poucas frases.** 32 locutores com 8 frases (256 frases) copiam vozes novas tanto quanto 8 locutores com 128 (1.024 frases).
+- **O latente explica o erro.** Em 144 referências, quanto mais longe da voz padrão está o código de estilo, mais a voz é copiada (correlação de postos 0,83) e mais palavras saem erradas (0,45). Cerca de 80% da variância do latente é diferença entre locutores.
+- **Estilo a 60%** reduz o erro de palavras para 4–9% em todos os treinos, mas a cópia da voz cai junto; só o treino 32 × 128 ainda copia cerca de 45% das vozes novas.
+
+Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 14 pontos; a medida de voz copiada depende de um único codificador de locutor.
+
+Reprodução: `scripts/coverage/colab_job.sh` (treino e avaliação), `scripts/coverage/summarize.py` (tabela e figura). Resultados por amostra em `reports/coverage/results/`.
+
+## 10. Próximo passo: dublagem
 
 O objetivo seguinte é dublar filmes: texto traduzido + áudio do ator original como referência de estilo. O que este projeto já entrega para isso é a síntese em português com tom e velocidade vindos de uma referência. O que falta: controlar a duração de cada fala para caber na cena, usar o vídeo (movimento da boca) como entrada, e sincronia labial.
 

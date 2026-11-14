@@ -194,6 +194,7 @@
   <a href="#ingles">Inglês</a>
   <a href="#portugues">Português</a>
   <a href="#emocao">Emoção</a>
+  <a href="#cobertura">Cobertura</a>
   <a href="#limites">Limites e próximos passos</a>
 </div></nav>
 
@@ -405,8 +406,40 @@
   </div>
 </section>
 
+<section id="cobertura">
+  <h2><span class="kicker">7 · Cobertura</span> Quantos dados cada voz precisa para ser copiada</h2>
+  <p>
+    O erro com emoção forte vem de um estilo visto com poucas frases. Para medir isso de forma controlada, trocamos
+    emoções por vozes: 2.000 frases do LJSpeech (a voz padrão) mais N locutores do LibriTTS com K frases cada,
+    partindo do modelo em inglês, 2.500 passos por treino. Cada treino sintetiza 25 frases fora do treino com
+    8 vozes treinadas e 4 vozes nunca vistas. Uma voz conta como copiada quando o áudio gerado fica mais parecido
+    com a referência do que com a voz padrão, segundo um codificador de locutor externo.
+  </p>
+  <figure class="figure">
+    <img src="assets/img/fig_cobertura.png" alt="Voz copiada em função das frases por locutor, para 2, 8 e 32 locutores, em vozes treinadas e nunca vistas" loading="lazy">
+    <figcaption>Parcela das amostras com a voz copiada. Pontos: sementes; linhas: médias.</figcaption>
+  </figure>
+  <div class="scroll"><table>
+    <tr><th>Locutores</th><th>Frases por locutor</th><th>Palavras erradas: treinadas</th><th>Palavras erradas: novas</th><th>Voz copiada: treinadas</th><th>Voz copiada: novas</th></tr>
+    <tr><td>2</td><td>128</td><td>13% / 11%</td><td>8% / 5%</td><td>70% / 74%</td><td>4% / 2%</td></tr>
+    <tr><td>8</td><td>8</td><td>21% / 26%</td><td>14% / 24%</td><td>45% / 44%</td><td>26% / 39%</td></tr>
+    <tr><td>8</td><td>32</td><td>17%</td><td>14%</td><td>74%</td><td>47%</td></tr>
+    <tr><td>8</td><td>128</td><td>11% / 10%</td><td>8% / 9%</td><td>91% / 88%</td><td>51% / 37%</td></tr>
+    <tr><td>32</td><td>8</td><td>17% / 17%</td><td>13% / 9%</td><td>58% / 51%</td><td>47% / 47%</td></tr>
+    <tr><td>32</td><td>32</td><td>13%</td><td>8%</td><td>80%</td><td>52%</td></tr>
+    <tr><td>32</td><td>128</td><td>12% / 10%</td><td>5% / 5%</td><td>86% / 86%</td><td>61% / 57%</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Frases por locutor decidem as vozes treinadas.</b> Com 8 locutores, a cópia vai de 45% (8 frases) a 90% (128).</li>
+    <li><b>Número de locutores decide as vozes novas.</b> Com 128 frases, a cópia de vozes nunca vistas vai de 3% (2 locutores) a 59% (32).</li>
+    <li><b>Muitos locutores compensam poucas frases.</b> 32 locutores com 8 frases copiam vozes novas tanto quanto 8 locutores com 128.</li>
+    <li><b>O latente explica o erro.</b> Quanto mais longe da voz padrão está o código de estilo, mais a voz é copiada (correlação 0,83) e mais palavras saem erradas (0,45).</li>
+    <li><b>Limites.</b> Duas configurações têm uma semente só, cada treino avalia 4 vozes novas, e entre sementes a cópia de vozes novas varia até 14 pontos.</li>
+  </ul>
+</section>
+
 <section id="limites">
-  <h2><span class="kicker">7 · Limites e próximos passos</span> O que ainda não está resolvido</h2>
+  <h2><span class="kicker">8 · Limites e próximos passos</span> O que ainda não está resolvido</h2>
   <ul>
     <li><b>Amostra pequena de avaliação.</b> São 6 frases por referência. Os números indicam a ordem de grandeza, não uma medida precisa.</li>
     <li><b>Só inteligibilidade foi medida.</b> A naturalidade não foi avaliada por ouvintes.</li>
