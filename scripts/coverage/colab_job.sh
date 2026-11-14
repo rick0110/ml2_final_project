@@ -11,7 +11,7 @@
 # One training step costs the same on any GPU (the decoder runs frame by frame), so the way
 # to go faster is to start several copies of this job on one GPU, each with its own RUNS.
 #
-#   RUNS="n8_k8_s1 n8_k128_s1"   STEPS="2000 4000"   STRENGTHS="1.0 0.6"
+#   RUNS="n8_k8_s1 n8_k128_s1"   STEPS="2000 4000"   STRENGTHS="1.0 0.6"   (n8_k8_s1-swap: see below)
 set -ex
 RUNS=${RUNS:?set RUNS, e.g. "n8_k8_s1 n8_k128_s1"}
 STEPS=${STEPS:-"2000 4000"}
@@ -45,7 +45,9 @@ fi
   https://huggingface.co/csdc-atl/hifigan-universal_v1/resolve/main/g_02500000
 
 for RUN in $RUNS; do
-  N=${RUN#n}; N=${N%%_*}; K=${RUN#*_k}; K=${K%%_*}; SEED=${RUN##*_s}
+  # A run named n8_k8_s1-swap trains with the style reference taken from another utterance
+  BASE=${RUN%-swap}; SWAP=""; [ "$BASE" != "$RUN" ] && SWAP="--swap-reference"
+  N=${BASE#n}; N=${N%%_*}; K=${BASE#*_k}; K=${K%%_*}; SEED=${BASE##*_s}
   DATA=data/processed/cov_n${N}_k${K}
   EXP_DIR=experiments/tacotron2-vae/cov_$RUN
   [ -f "$DATA/test_sentences.txt" ] || python scripts/coverage/coverage_manifest.py --lj data/processed/LJSpeech \
@@ -57,7 +59,7 @@ for RUN in $RUNS; do
     echo "$(date -u +%H:%M:%S) training $RUN to step $STEP" >> /content/out/progress.txt
     COMMON="--artifacts-dir $DATA --text-cleaner english_cleaners --num-workers $WORKERS --learning-rate 1e-4 --warmup-steps 500
       --iters-per-checkpoint 500 --keep-last-checkpoints 1 --max-steps $STEP --lr-scheduler-patience 100000
-      --batch-size $BATCH --val-split 0.03 --guided-attention-weight 2.0 --guided-attention-sigma 0.4 --seed $SEED"
+      --batch-size $BATCH --val-split 0.03 --guided-attention-weight 2.0 --guided-attention-sigma 0.4 --seed $SEED $SWAP"
     if ls "$EXP_DIR"/checkpoints/epoch_* >/dev/null 2>&1; then
       python src/training/training-tacotron2-vae/train.py $COMMON --resume-experiment "$EXP_DIR"
     else

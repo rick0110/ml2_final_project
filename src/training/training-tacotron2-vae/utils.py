@@ -115,6 +115,22 @@ class TextMelCollate:
             gate_padded[i, mel.size(1) - 1 :] = 1
             output_lengths[i] = mel.size(1)
 
+        if len(batch[0]) < 4:
+            return (
+                text_padded,
+                input_lengths,
+                mel_padded,
+                gate_padded,
+                output_lengths,
+                emotions,
+            )
+
+        # Style references taken from other utterances (see SwapReference)
+        refs: List[Tensor] = [batch[i][3] for i in ids_sorted_decreasing]
+        ref_lengths: Tensor = torch.LongTensor([r.size(1) for r in refs])
+        ref_padded: Tensor = torch.full((len(refs), num_mels, int(ref_lengths.max())), -11.5129)
+        for i, r in enumerate(refs):
+            ref_padded[i, :, : r.size(1)] = r
         return (
             text_padded,
             input_lengths,
@@ -122,7 +138,40 @@ class TextMelCollate:
             gate_padded,
             output_lengths,
             emotions,
+            ref_padded,
+            ref_lengths,
         )
+
+
+class SwapReference(Dataset):
+    """
+    Training subset in which the style reference of each utterance is another utterance
+    of the same speaker, so the style latent cannot carry the content being reconstructed.
+
+    Each item is (text, mel, emotion, reference_mel). A speaker with a single utterance
+    keeps its own audio as the reference.
+    """
+    def __init__(self, subset: Any) -> None:
+        self.subset: Any = subset
+        by_speaker: Dict[str, List[int]] = {}
+        for position, idx in enumerate(subset.indices):
+            by_speaker.setdefault(subset.dataset.files[idx].get("speaker", ""), []).append(position)
+        self.others: List[List[int]] = [[] for _ in subset.indices]
+        for positions in by_speaker.values():
+            for position in positions:
+                self.others[position] = positions
+
+    def __len__(self) -> int:
+        return len(self.subset)
+
+    def __getitem__(self, position: int) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        text, mel, emotion = self.subset[position]
+        same: List[int] = self.others[position]
+        other: int = position
+        if len(same) > 1:
+            while other == position:
+                other = same[int(torch.randint(len(same), (1,)))]
+        return text, mel, emotion, self.subset[other][1]
 
 
 def create_dataloader(

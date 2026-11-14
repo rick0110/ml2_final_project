@@ -33,11 +33,11 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 # Import training utilities
 try:
-    from utils import ARTIFACTS_DIR, TextMelCollate, create_dataloader, create_experiment_dir
+    from utils import ARTIFACTS_DIR, SwapReference, TextMelCollate, create_dataloader, create_experiment_dir
 except ImportError:
     # Fallback to absolute paths if running from root
     sys.path.insert(0, str(Path(__file__).resolve().parents[0]))
-    from utils import ARTIFACTS_DIR, TextMelCollate, create_dataloader, create_experiment_dir
+    from utils import ARTIFACTS_DIR, SwapReference, TextMelCollate, create_dataloader, create_experiment_dir
 
 
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
@@ -89,6 +89,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--grad-clip-thresh", type=float, default=1.0)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--swap-reference", action="store_true",
+                        help="Take the style of each training utterance from another utterance of the same speaker")
     parser.add_argument("--val-split", type=float, default=0.1)
     parser.add_argument("--anneal-function", type=str, default="cyclical")
     parser.add_argument("--guided-attention-weight", type=float, default=2.0)
@@ -243,6 +245,8 @@ def main() -> None:
     collate_fn: TextMelCollate = TextMelCollate(hparams.n_frames_per_step)
     
     # Initialize DataLoaders
+    if args.swap_reference:
+        train_dataset = SwapReference(train_dataset)
     train_loader: DataLoader = create_dataloader(train_dataset, args.batch_size, args.num_workers, collate_fn, True)
     test_loader: DataLoader = create_dataloader(test_dataset, args.batch_size, args.num_workers, collate_fn, False)
     val_loader: DataLoader = create_dataloader(val_dataset, args.batch_size, args.num_workers, collate_fn, False)

@@ -745,19 +745,17 @@ class Tacotron2(nn.Module):
             inputs: (text, input_lengths, mel, output_lengths)
             targets: (mel, gate)
         """
-        text_padded, input_lengths, mel_padded, gate_padded, output_lengths, _ = batch
+        text_padded, input_lengths, mel_padded, gate_padded, output_lengths = batch[:5]
         text_padded = to_device(text_padded, device).long()
         input_lengths = to_device(input_lengths, device).long()
         mel_padded = to_device(mel_padded, device).float()
         gate_padded = to_device(gate_padded, device).float()
         output_lengths = to_device(output_lengths, device).long()
 
-        return (
-            text_padded,
-            input_lengths,
-            mel_padded,
-            output_lengths,
-        ), (mel_padded, gate_padded)
+        inputs: Tuple[Tensor, ...] = (text_padded, input_lengths, mel_padded, output_lengths)
+        if len(batch) > 6:  # style reference from another utterance: (ref_mel, ref_lengths)
+            inputs += (to_device(batch[6], device).float(), to_device(batch[7], device).long())
+        return inputs, (mel_padded, gate_padded)
 
     def parse_output(self, outputs: List[Tensor], output_lengths: Optional[Tensor] = None) -> List[Tensor]:
         """
@@ -789,7 +787,9 @@ class Tacotron2(nn.Module):
         Returns:
             List[Tensor]: [mel, mel_postnet, gate, alignments, mu, logvar, z]
         """
-        text_padded, input_lengths, targets, output_lengths = inputs
+        text_padded, input_lengths, targets, output_lengths = inputs[:4]
+        # The style comes from the target audio, or from a separate reference when one is given
+        style_audio, style_lengths = inputs[4:6] if len(inputs) > 4 else (targets, output_lengths)
 
         # Text encoding
         embedded_inputs: Tensor = self.transcript_embedding(text_padded).transpose(1, 2) # (B, embed_dim, T_text)
@@ -800,7 +800,7 @@ class Tacotron2(nn.Module):
         mu: Tensor
         logvar: Tensor
         z: Tensor
-        prosody_outputs, mu, logvar, z = self.vae_gst(targets, output_lengths) # (B, E), (B, L), (B, L), (B, L)
+        prosody_outputs, mu, logvar, z = self.vae_gst(style_audio, style_lengths) # (B, E), (B, L), (B, L), (B, L)
         
         # Inject prosody into encoder outputs
         prosody_outputs = prosody_outputs.unsqueeze(1).expand_as(transcript_outputs) # (B, T_text, encoder_dim)
