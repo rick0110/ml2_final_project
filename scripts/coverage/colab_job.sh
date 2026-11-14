@@ -8,12 +8,16 @@
 # Results go to /content/out/<run>/step_<n>; a finished evaluation is never repeated, so the
 # job can be started again after an interruption.
 #
+# One training step costs the same on any GPU (the decoder runs frame by frame), so the way
+# to go faster is to start several copies of this job on one GPU, each with its own RUNS.
+#
 #   RUNS="n8_k8_s1 n8_k128_s1"   STEPS="2000 4000"   STRENGTHS="1.0 0.6"
 set -ex
 RUNS=${RUNS:?set RUNS, e.g. "n8_k8_s1 n8_k128_s1"}
 STEPS=${STEPS:-"2000 4000"}
 STRENGTHS=${STRENGTHS:-"1.0 0.6"}
 BATCH=${BATCH:-48}
+WORKERS=${WORKERS:-6}   # data-loading processes per training run (lower it when several runs share the machine)
 CPUS=$(nproc)
 cd /content/repo
 
@@ -51,7 +55,7 @@ for RUN in $RUNS; do
     OUT=/content/out/$RUN/step_$STEP
     [ -f "$OUT/done" ] && continue
     echo "$(date -u +%H:%M:%S) training $RUN to step $STEP" >> /content/out/progress.txt
-    COMMON="--artifacts-dir $DATA --text-cleaner english_cleaners --num-workers 6 --learning-rate 1e-4 --warmup-steps 500
+    COMMON="--artifacts-dir $DATA --text-cleaner english_cleaners --num-workers $WORKERS --learning-rate 1e-4 --warmup-steps 500
       --iters-per-checkpoint 500 --keep-last-checkpoints 1 --max-steps $STEP --lr-scheduler-patience 100000
       --batch-size $BATCH --val-split 0.03 --guided-attention-weight 2.0 --guided-attention-sigma 0.4 --seed $SEED"
     if ls "$EXP_DIR"/checkpoints/epoch_* >/dev/null 2>&1; then
