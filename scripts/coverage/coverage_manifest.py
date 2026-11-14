@@ -12,6 +12,8 @@ runs differ only in what was added.
 
 Outputs in --out:
     mels_metadata.csv        training manifest (LJ subset + N speakers x K sentences)
+    test_sentences.txt       LJSpeech sentences outside the training subset, the same in every
+                             run: the text the model must read in each reference voice
     refs/mels_metadata.csv   style references, never used in training: held-out sentences
                              of trained speakers ("seen") and of speakers left out of
                              every run ("unseen"); the column `emotion` holds seen/unseen
@@ -25,6 +27,7 @@ from __future__ import annotations
 import argparse
 import csv
 import random
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
@@ -32,6 +35,7 @@ from typing import Dict, List
 
 MAX_N = 32          # largest number of training speakers in any run
 HELDOUT = 4         # sentences per speaker kept as references
+N_TEST = 25         # test sentences
 FIELDS = ["utt_id", "mel_path", "text", "speaker", "emotion", "duration"]
 
 
@@ -75,7 +79,12 @@ def main() -> None:
     rng = random.Random(0)
     lj = sorted(read(a.lj), key=lambda r: r["utt_id"])
     rng.shuffle(lj)
-    lj = lj[: a.lj_size]
+    lj, lj_rest = lj[: a.lj_size], lj[a.lj_size:]
+    # Plain sentences only: digits and abbreviations make the word error rate depend on the
+    # recognizer's spelling, not on what was said
+    test = [r["text"].strip() for r in lj_rest
+            if 6 <= len(r["text"].split()) <= 14 and re.fullmatch(r"[A-Za-z ,']+[.?]", r["text"].strip())
+            and not re.search(r"\b[A-Z]{2,}\b|\b(Mr|Mrs|Dr|St|No)\b", r["text"])][:N_TEST]
 
     by_speaker: Dict[str, List[dict]] = defaultdict(list)
     for r in sorted(read(a.libritts), key=lambda r: r["utt_id"]):
@@ -92,6 +101,7 @@ def main() -> None:
             print(f"warning: speaker {s} has only {len(chosen)} sentences for K={a.k}")
         train += chosen
     write(a.out, train)
+    (a.out / "test_sentences.txt").write_text("\n".join(test) + "\n", encoding="utf-8")
 
     refs = []
     per_seen = max(1, 8 // a.n)  # 8 seen references in every run

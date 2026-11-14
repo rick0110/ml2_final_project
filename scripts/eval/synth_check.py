@@ -99,6 +99,8 @@ def main() -> None:
     ap.add_argument("--style-strength", type=float, default=1.0, help="Scale of the reference latent code (1 = as is, 0 = prior mean)")
     ap.add_argument("--style-origin", type=Path, default=None,
                     help=".npy latent vector that --style-strength contracts towards (default: the prior mean, 0)")
+    ap.add_argument("--sentences-file", type=Path, default=None,
+                    help="Test sentences, one per line (default: six built-in sentences of --language)")
     ap.add_argument("--whisper", default="small")
     ap.add_argument("--max-decoder-steps", type=int, default=1200)
     a = ap.parse_args()
@@ -129,7 +131,15 @@ def main() -> None:
         refs = [rated[int(p * (len(rated) - 1))] for p in picks]
 
     from faster_whisper import WhisperModel
-    asr = WhisperModel(a.whisper, device="cpu", compute_type="int8")
+    try:  # the GPU build of the recognizer needs cuDNN; fall back to the CPU when it is missing
+        asr = WhisperModel(a.whisper, device=device.type, compute_type="float16" if device.type == "cuda" else "int8")
+        list(asr.transcribe(np.zeros(16000, dtype=np.float32), language=a.language)[0])
+    except Exception as e:
+        print(f"whisper on {device.type} failed ({e}); using the CPU")
+        asr = WhisperModel(a.whisper, device="cpu", compute_type="int8")
+    sentences = SENTENCES[a.language]
+    if a.sentences_file:
+        sentences = [l.strip() for l in a.sentences_file.read_text(encoding="utf-8").splitlines() if l.strip()]
 
     origin = torch.zeros(1, hp.z_latent_dim, device=device)
     if a.style_origin:
@@ -140,7 +150,7 @@ def main() -> None:
         wav = torch.load(ref["mel_path"], map_location="cpu", weights_only=True)["waveform"]
         ref_mel = stft.mel_spectrogram(wav.clamp(-1, 1)).to(device)
         ref_pros = prosody(wav[0].numpy(), len(ref["text"]))
-        for si, sentence in enumerate(SENTENCES[a.language]):
+        for si, sentence in enumerate(sentences):
             seq = torch.LongTensor(tp.text_to_sequence(sentence)).unsqueeze(0).to(device)
             with torch.inference_mode():
                 _, mu, _, _ = model.vae_gst(ref_mel)  # (1, L)
