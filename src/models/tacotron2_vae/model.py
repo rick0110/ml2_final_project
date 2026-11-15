@@ -735,6 +735,7 @@ class Tacotron2(nn.Module):
         self.postnet: Postnet = Postnet(hparams)
         self.vae_gst: VAE_GST = VAE_GST(hparams)
         self.contrastive: bool = getattr(hparams, 'contrastive_weight', 0.0) > 0.0
+        self.style_dropout: float = getattr(hparams, 'style_dropout', 0.0)
         # Second style input: a speaker embedding from a pretrained, frozen speaker encoder,
         # added to the text encoding next to the VAE style vector
         speaker_dim: int = getattr(hparams, 'speaker_embedding_dim', 0)
@@ -816,7 +817,13 @@ class Tacotron2(nn.Module):
         logvar: Tensor
         z: Tensor
         prosody_outputs, mu, logvar, z = self.vae_gst(style_audio, style_lengths) # (B, E), (B, L), (B, L), (B, L)
-        
+
+        # Style dropout: some items train without the VAE style vector, so the voice has to
+        # come through the speaker embedding and the VAE only adds what is left
+        if self.training and self.style_dropout > 0.0:
+            keep: Tensor = (torch.rand(prosody_outputs.size(0), 1, device=prosody_outputs.device) >= self.style_dropout)
+            prosody_outputs = prosody_outputs * keep.to(prosody_outputs.dtype)
+
         # Inject prosody into encoder outputs
         prosody_outputs = prosody_outputs.unsqueeze(1).expand_as(transcript_outputs) # (B, T_text, encoder_dim)
         encoder_outputs: Tensor = transcript_outputs + prosody_outputs # (B, T_text, encoder_dim)

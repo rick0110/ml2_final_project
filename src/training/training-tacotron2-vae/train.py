@@ -93,6 +93,8 @@ def parse_arguments() -> argparse.Namespace:
                         help="Take the style of each training utterance from another utterance of the same speaker")
     parser.add_argument("--contrastive-weight", type=float, default=0.0,
                         help="Weight of the speaker-contrastive loss on the style latent (implies --swap-reference)")
+    parser.add_argument("--style-dropout", type=float, default=0.0,
+                        help="Share of training items decoded without the VAE style vector")
     parser.add_argument("--speaker-embeddings", action="store_true",
                         help="Also condition on the pretrained speaker embeddings in <artifacts-dir>/speaker_embeddings.pt")
     parser.add_argument("--val-split", type=float, default=0.1)
@@ -189,6 +191,7 @@ def main() -> None:
         "guided_attention_sigma": args.guided_attention_sigma,
         "gate_positive_weight": args.gate_positive_weight,
         "contrastive_weight": args.contrastive_weight,
+        "style_dropout": args.style_dropout,
         "speaker_embedding_dim": speaker_embedding_dim,
         "warmup_steps": args.warmup_steps,
         "n_symbols": text_processor.n_symbols,

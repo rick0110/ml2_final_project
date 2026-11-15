@@ -51,13 +51,15 @@ flock -u 9
 for RUN in $RUNS; do
   # Variants, by suffix. n8_k8_s1-swap: style reference from another utterance; -contrast: that
   # plus the contrastive loss; -spk: pretrained speaker embedding as a second style input;
-  # -spkswap: speaker embedding plus the swapped reference
+  # -spkswap: speaker embedding plus the swapped reference; -spkdrop: speaker embedding plus
+  # style dropout (half of the items train without the VAE style vector)
   BASE=${RUN%%-*}; SWAP=""
   case "$RUN" in
     *-swap) SWAP="--swap-reference" ;;
     *-contrast) SWAP="--contrastive-weight 0.5" ;;
     *-spk) SWAP="--speaker-embeddings" ;;
     *-spkswap) SWAP="--speaker-embeddings --swap-reference" ;;
+    *-spkdrop) SWAP="--speaker-embeddings --style-dropout 0.5" ;;
   esac
   N=${BASE#n}; N=${N%%_*}; K=${BASE#*_k}; K=${K%%_*}; SEED=${BASE##*_s}
   DATA=data/processed/cov_n${N}_k${K}
