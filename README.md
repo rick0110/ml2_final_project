@@ -211,6 +211,8 @@ A leitura provável: o VAE vê o áudio alvo e já entrega a voz, então o trein
 
 Com 8 locutores, o vetor sozinho copia as vozes treinadas (71%) e quase nenhuma nova (5%): a projeção decora os locutores do treino. Com 32 locutores e 128 frases ele já copia 47% das vozes novas sozinho, mas o conjunto vetor + VAE fica igual ao treino normal (62% contra 61% / 57%). Com 8 frases por locutor o vetor quase não é aprendido. Ou seja, um codificador de locutor treinado em milhares de vozes não dispensa o decodificador de ver muitos locutores: o que limita a cópia de vozes novas é quantas vozes o decodificador ouviu, seja qual for o caminho por onde a voz chega. As diferenças de até 13 pontos em vozes novas (32 × 8) estão dentro da variação entre sementes.
 
+**Tratativa teórica e solução em teste.** [`reports/teoria_cobertura.md`](reports/teoria_cobertura.md) organiza estes resultados numa lei de amostragem em dois níveis (vozes novas não copiadas ≈ a + A/N + B/(N·K); treinadas ≈ a' + C/K + A'/N), que ajusta os 12 treinos até o nível do ruído entre sementes (`scripts/coverage/fit_law.py`) e explica por que as quatro mudanças acima não ajudaram: nenhuma acrescenta pares (texto, voz) ao treino do decodificador. A solução derivada, em teste, cria pseudo-locutores alterando a velocidade das gravações (`scripts/coverage/augment_voices.py`, variante `-aug`).
+
 Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 14 pontos; a medida de voz copiada depende de um único codificador de locutor.
 
 Reprodução: `scripts/coverage/colab_job.sh` (treino e avaliação), `scripts/coverage/summarize.py` (tabela e figura). Resultados por amostra em `reports/coverage/results/`.
