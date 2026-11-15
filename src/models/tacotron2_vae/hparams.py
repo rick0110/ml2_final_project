@@ -131,6 +131,7 @@ class Tacotron2VAEHparams:
     guided_attention_sigma: float = 0.4   # Gaussian width; larger = more permissive diagonal
 
     # Gate (stop token) loss
+    speaker_embedding_dim: int = 0  # >0: also condition on a pretrained speaker embedding of this size
     contrastive_weight: float = 0.0  # Weight of the speaker-contrastive loss on the style latent (needs --swap-reference)
     contrastive_temperature: float = 0.1
     contrastive_memory: int = 512  # Latents of recent batches kept as extra negatives

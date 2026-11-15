@@ -93,6 +93,8 @@ def parse_arguments() -> argparse.Namespace:
                         help="Take the style of each training utterance from another utterance of the same speaker")
     parser.add_argument("--contrastive-weight", type=float, default=0.0,
                         help="Weight of the speaker-contrastive loss on the style latent (implies --swap-reference)")
+    parser.add_argument("--speaker-embeddings", action="store_true",
+                        help="Also condition on the pretrained speaker embeddings in <artifacts-dir>/speaker_embeddings.pt")
     parser.add_argument("--val-split", type=float, default=0.1)
     parser.add_argument("--anneal-function", type=str, default="cyclical")
     parser.add_argument("--guided-attention-weight", type=float, default=2.0)
@@ -165,6 +167,13 @@ def main() -> None:
     symbols: List[str] = build_symbols_from_texts(texts)
     text_processor: TextProcessor = TextProcessor(symbols=symbols, cleaner_names=[args.text_cleaner])
 
+    # Pretrained speaker embeddings (scripts/preprocess/cache_speaker_embeddings.py)
+    speaker_embeddings: Optional[Dict[str, torch.Tensor]] = None
+    speaker_embedding_dim: int = 0
+    if args.speaker_embeddings:
+        speaker_embeddings = torch.load(Path(args.artifacts_dir) / "speaker_embeddings.pt", map_location="cpu")
+        speaker_embedding_dim = int(next(iter(speaker_embeddings.values())).numel())
+
     hparams_overrides: Dict[str, Any] = {
         "epochs": args.epochs,
         "iters_per_checkpoint": args.iters_per_checkpoint,
@@ -180,6 +189,7 @@ def main() -> None:
         "guided_attention_sigma": args.guided_attention_sigma,
         "gate_positive_weight": args.gate_positive_weight,
         "contrastive_weight": args.contrastive_weight,
+        "speaker_embedding_dim": speaker_embedding_dim,
         "warmup_steps": args.warmup_steps,
         "n_symbols": text_processor.n_symbols,
         "training_data": str(train_file),
@@ -248,8 +258,12 @@ def main() -> None:
     collate_fn: TextMelCollate = TextMelCollate(hparams.n_frames_per_step)
     
     # Initialize DataLoaders
-    if args.swap_reference or args.contrastive_weight > 0.0:
-        train_dataset = SwapReference(train_dataset)
+    swap: bool = args.swap_reference or args.contrastive_weight > 0.0
+    if swap or speaker_embeddings is not None:
+        train_dataset = SwapReference(train_dataset, swap=swap, embeddings=speaker_embeddings)
+    if speaker_embeddings is not None:
+        test_dataset = SwapReference(test_dataset, swap=False, embeddings=speaker_embeddings)
+        val_dataset = SwapReference(val_dataset, swap=False, embeddings=speaker_embeddings)
     train_loader: DataLoader = create_dataloader(train_dataset, args.batch_size, args.num_workers, collate_fn, True)
     test_loader: DataLoader = create_dataloader(test_dataset, args.batch_size, args.num_workers, collate_fn, False)
     val_loader: DataLoader = create_dataloader(val_dataset, args.batch_size, args.num_workers, collate_fn, False)
@@ -286,7 +300,7 @@ def main() -> None:
 
     # Fine-tune from a specific checkpoint (resets optimizer and iteration for fresh start)
     elif args.checkpoint_path:
-        model, _, _, _ = load_checkpoint(Path(args.checkpoint_path), model)
+        model, _, _, _ = load_checkpoint(Path(args.checkpoint_path), model, allow_new=("speaker_projection.",))
         print(f"Fine-tuning from checkpoint: {args.checkpoint_path}")
 
     torch.backends.cudnn.enabled = hparams.cudnn_enabled

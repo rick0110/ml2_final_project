@@ -735,6 +735,12 @@ class Tacotron2(nn.Module):
         self.postnet: Postnet = Postnet(hparams)
         self.vae_gst: VAE_GST = VAE_GST(hparams)
         self.contrastive: bool = getattr(hparams, 'contrastive_weight', 0.0) > 0.0
+        # Second style input: a speaker embedding from a pretrained, frozen speaker encoder,
+        # added to the text encoding next to the VAE style vector
+        speaker_dim: int = getattr(hparams, 'speaker_embedding_dim', 0)
+        self.speaker_projection: Optional[nn.Linear] = (
+            nn.Linear(speaker_dim, hparams.encoder_embedding_dim, bias=False) if speaker_dim > 0 else None
+        )
 
     def parse_batch(self, batch: Any, device: torch.device) -> Tuple[Tuple[Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Tensor]]:
         """
@@ -753,11 +759,16 @@ class Tacotron2(nn.Module):
         gate_padded = to_device(gate_padded, device).float()
         output_lengths = to_device(output_lengths, device).long()
 
-        inputs: Tuple[Tensor, ...] = (text_padded, input_lengths, mel_padded, output_lengths)
-        if len(batch) > 6:  # style reference from another utterance: (ref_mel, ref_lengths)
-            inputs += (to_device(batch[6], device).float(), to_device(batch[7], device).long())
-            if len(batch) > 8 and self.contrastive:  # speaker of each item, for the contrastive loss
-                inputs += (to_device(batch[8], device).long(),)
+        # Optional inputs: a style reference taken from another utterance, the speaker of each
+        # item (for the contrastive loss) and a pretrained speaker embedding
+        extra: Dict[str, Any] = {}
+        if len(batch) > 6:
+            extra["reference"] = (to_device(batch[6], device).float(), to_device(batch[7], device).long())
+        if len(batch) > 8 and self.contrastive:
+            extra["speakers"] = to_device(batch[8], device).long()
+        if len(batch) > 9 and self.speaker_projection is not None:
+            extra["speaker_embedding"] = to_device(batch[9], device).float()
+        inputs: Tuple[Any, ...] = (text_padded, input_lengths, mel_padded, output_lengths, extra)
         return inputs, (mel_padded, gate_padded)
 
     def parse_output(self, outputs: List[Tensor], output_lengths: Optional[Tensor] = None) -> List[Tensor]:
@@ -791,8 +802,9 @@ class Tacotron2(nn.Module):
             List[Tensor]: [mel, mel_postnet, gate, alignments, mu, logvar, z]
         """
         text_padded, input_lengths, targets, output_lengths = inputs[:4]
+        extra: Dict[str, Any] = inputs[4] if len(inputs) > 4 else {}
         # The style comes from the target audio, or from a separate reference when one is given
-        style_audio, style_lengths = inputs[4:6] if len(inputs) > 4 else (targets, output_lengths)
+        style_audio, style_lengths = extra.get("reference", (targets, output_lengths))
 
         # Text encoding
         embedded_inputs: Tensor = self.transcript_embedding(text_padded).transpose(1, 2) # (B, embed_dim, T_text)
@@ -808,6 +820,8 @@ class Tacotron2(nn.Module):
         # Inject prosody into encoder outputs
         prosody_outputs = prosody_outputs.unsqueeze(1).expand_as(transcript_outputs) # (B, T_text, encoder_dim)
         encoder_outputs: Tensor = transcript_outputs + prosody_outputs # (B, T_text, encoder_dim)
+        if self.speaker_projection is not None and "speaker_embedding" in extra:
+            encoder_outputs = encoder_outputs + self.speaker_projection(extra["speaker_embedding"]).unsqueeze(1)
 
         # Autoregressive decoding
         mel_outputs: Tensor
@@ -822,10 +836,10 @@ class Tacotron2(nn.Module):
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet # (B, n_mels, T_mel)
 
         outputs: List[Tensor] = [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, mu, logvar, z]
-        if len(inputs) > 6:
+        if "speakers" in extra:
             # Latent of the target itself and the speakers: the contrastive loss asks the
             # reference and the target (two utterances of one speaker) to share a code
-            outputs += [self.vae_gst(targets, output_lengths)[1], inputs[6]]
+            outputs += [self.vae_gst(targets, output_lengths)[1], extra["speakers"]]
         return self.parse_output(outputs, output_lengths)
 
     @torch.inference_mode()
@@ -881,13 +895,17 @@ class Tacotron2(nn.Module):
         _, mu, _, _ = self.vae_gst(audio)  # (1, L)
         return self.inference_from_latent(text, mu * style_strength)
 
-    def inference_from_latent(self, text: Tensor, z: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def inference_from_latent(
+        self, text: Tensor, z: Tensor, speaker_embedding: Optional[Tensor] = None
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Generate mel-spectrogram from text and a latent style code.
 
         Args:
             text (Tensor): Text sequence tensor (1, T_text).
             z (Tensor): Latent style code (1, L).
+            speaker_embedding (Tensor, optional): Pretrained speaker embedding (1, D), for
+                models trained with one.
 
         Returns:
             Tuple[Tensor, Tensor, Tensor]: mel_outputs, mel_outputs_postnet, alignments
@@ -897,6 +915,8 @@ class Tacotron2(nn.Module):
 
         style = self.vae_gst.fc3(z)  # (1, E)
         encoder_outputs = transcript_outputs + style.unsqueeze(1).expand_as(transcript_outputs)
+        if self.speaker_projection is not None and speaker_embedding is not None:
+            encoder_outputs = encoder_outputs + self.speaker_projection(speaker_embedding).unsqueeze(1)
 
         mel_outputs, _, alignments = self.decoder.inference(encoder_outputs)
         mel_outputs_postnet = mel_outputs + self.postnet(mel_outputs)

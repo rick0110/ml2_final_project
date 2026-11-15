@@ -194,6 +194,7 @@ def load_checkpoint(
     checkpoint_path: Path,
     model: nn.Module,
     warm_start: bool = False,
+    allow_new: Tuple[str, ...] = (),
 ) -> Tuple[nn.Module, Optional[Dict[str, Any]], float, int]:
     """
     Load model and training state.
@@ -201,6 +202,8 @@ def load_checkpoint(
     Args:
         checkpoint_path (Path): Path to .pt file.
         model (nn.Module): Model to load into.
+        allow_new (Tuple[str, ...]): Prefixes of parameters the checkpoint may lack (they
+            keep their initialization).
 
     Returns:
         Tuple: model, optimizer_state, learning_rate, iteration.
@@ -221,7 +224,10 @@ def load_checkpoint(
         iteration = 0
         optimizer = None
     else:
-        model.load_state_dict(checkpoint["state_dict"])
+        missing, unexpected = model.load_state_dict(checkpoint["state_dict"], strict=False)
+        missing = [k for k in missing if not k.startswith(allow_new)] if allow_new else list(missing)
+        if missing or unexpected:
+            raise RuntimeError(f"checkpoint does not match the model: missing {missing}, unexpected {list(unexpected)}")
         learning_rate: float = checkpoint.get("learning_rate", 1e-3)
         iteration: int = checkpoint.get("iteration", 0)
         optimizer: Optional[Dict[str, Any]] = checkpoint.get("optimizer", None)

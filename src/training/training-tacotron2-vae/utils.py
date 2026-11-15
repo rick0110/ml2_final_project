@@ -141,19 +141,23 @@ class TextMelCollate:
             ref_padded,
             ref_lengths,
             torch.LongTensor([batch[i][4] for i in ids_sorted_decreasing]),  # speaker of each item
-        )
+        ) + ((torch.stack([batch[i][5] for i in ids_sorted_decreasing]),) if len(batch[0]) > 5 else ())
 
 
 class SwapReference(Dataset):
     """
-    Training subset in which the style reference of each utterance is another utterance
-    of the same speaker, so the style latent cannot carry the content being reconstructed.
+    Training subset with extra style inputs.
 
-    Each item is (text, mel, emotion, reference_mel, speaker_index). A speaker with a
-    single utterance keeps its own audio as the reference.
+    With swap=True the style reference of each utterance is another utterance of the same
+    speaker, so the style latent cannot carry the content being reconstructed (a speaker
+    with a single utterance keeps its own audio). With `embeddings` (utterance id ->
+    pretrained speaker embedding) each item also carries the embedding of its own audio.
+
+    Each item is (text, mel, emotion, reference_mel, speaker_index[, speaker_embedding]).
     """
-    def __init__(self, subset: Any) -> None:
+    def __init__(self, subset: Any, swap: bool = True, embeddings: Optional[Dict[str, Tensor]] = None) -> None:
         self.subset: Any = subset
+        self.swap: bool = swap
         by_speaker: Dict[str, List[int]] = {}
         for position, idx in enumerate(subset.indices):
             by_speaker.setdefault(subset.dataset.files[idx].get("speaker", ""), []).append(position)
@@ -163,18 +167,26 @@ class SwapReference(Dataset):
             for position in by_speaker[name]:
                 self.others[position] = by_speaker[name]
                 self.speaker[position] = number
+        self.embeddings: Optional[List[Tensor]] = None
+        if embeddings is not None:
+            rows = [subset.dataset.files[idx] for idx in subset.indices]
+            self.embeddings = [embeddings[r.get("utt_id", Path(r["mel_path"]).stem)].float() for r in rows]
 
     def __len__(self) -> int:
         return len(self.subset)
 
-    def __getitem__(self, position: int) -> Tuple[Tensor, Tensor, Tensor, Tensor, int]:
+    def __getitem__(self, position: int) -> Tuple[Any, ...]:
         text, mel, emotion = self.subset[position]
         same: List[int] = self.others[position]
         other: int = position
-        if len(same) > 1:
+        if self.swap and len(same) > 1:
             while other == position:
                 other = same[int(torch.randint(len(same), (1,)))]
-        return text, mel, emotion, self.subset[other][1], self.speaker[position]
+        reference: Tensor = mel if other == position else self.subset[other][1]
+        item: Tuple[Any, ...] = (text, mel, emotion, reference, self.speaker[position])
+        if self.embeddings is not None:
+            item += (self.embeddings[position],)
+        return item
 
 
 def create_dataloader(

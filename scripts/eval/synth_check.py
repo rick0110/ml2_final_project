@@ -101,6 +101,8 @@ def main() -> None:
                     help=".npy latent vector that --style-strength contracts towards (default: the prior mean, 0)")
     ap.add_argument("--sentences-file", type=Path, default=None,
                     help="Test sentences, one per line (default: six built-in sentences of --language)")
+    ap.add_argument("--no-speaker-embedding", action="store_true",
+                    help="Leave out the pretrained speaker embedding of the reference (models trained with one)")
     ap.add_argument("--whisper", default="small")
     ap.add_argument("--max-decoder-steps", type=int, default=1200)
     a = ap.parse_args()
@@ -145,9 +147,17 @@ def main() -> None:
     if a.style_origin:
         origin = torch.from_numpy(np.load(a.style_origin)).float().view(1, -1).to(device)
 
+    # Models trained with a pretrained speaker embedding also take the one of the reference
+    spk_encoder = None
+    if getattr(hp, "speaker_embedding_dim", 0) > 0 and not a.no_speaker_embedding:
+        from models.speaker_encoder import load_speaker_encoder, speaker_embedding
+        spk_encoder = load_speaker_encoder(device)
+
     out_rows = []
     for ref in refs:
-        wav = torch.load(ref["mel_path"], map_location="cpu", weights_only=True)["waveform"]
+        sample = torch.load(ref["mel_path"], map_location="cpu", weights_only=True)
+        wav = sample["waveform"]
+        spk = speaker_embedding(spk_encoder, wav, sample.get("sr", 22050)).view(1, -1).to(device) if spk_encoder else None
         ref_mel = stft.mel_spectrogram(wav.clamp(-1, 1)).to(device)
         ref_pros = prosody(wav[0].numpy(), len(ref["text"]))
         for si, sentence in enumerate(sentences):
@@ -155,7 +165,7 @@ def main() -> None:
             with torch.inference_mode():
                 _, mu, _, _ = model.vae_gst(ref_mel)  # (1, L)
                 z = origin + a.style_strength * (mu - origin)
-                _, mel, align = model.inference_from_latent(seq, z)
+                _, mel, align = model.inference_from_latent(seq, z, spk)
             stopped = mel.size(2) < a.max_decoder_steps
             audio = vocode(voc, mel[0].float()).cpu().numpy()
             name = f"{ref['utt_id']}__s{si}"

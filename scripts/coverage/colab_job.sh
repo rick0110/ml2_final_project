@@ -21,7 +21,7 @@ WORKERS=${WORKERS:-6}   # data-loading processes per training run (lower it when
 CPUS=$(nproc)
 cd /content/repo
 
-python -m pip install -q gruut num2words inflect faster-whisper webrtcvad-wheels
+python -m pip install -q gruut num2words inflect faster-whisper webrtcvad-wheels speechbrain
 python -m pip install -q --no-deps resemblyzer
 # The recognizer looks for the cuDNN that ships inside the PyTorch wheels
 export LD_LIBRARY_PATH="$(python - <<'PY'
@@ -45,11 +45,15 @@ fi
   https://huggingface.co/csdc-atl/hifigan-universal_v1/resolve/main/g_02500000
 
 for RUN in $RUNS; do
-  # n8_k8_s1-swap: style reference from another utterance; -contrast: that plus the contrastive loss
+  # Variants, by suffix. n8_k8_s1-swap: style reference from another utterance; -contrast: that
+  # plus the contrastive loss; -spk: pretrained speaker embedding as a second style input;
+  # -spkswap: speaker embedding plus the swapped reference
   BASE=${RUN%%-*}; SWAP=""
   case "$RUN" in
     *-swap) SWAP="--swap-reference" ;;
     *-contrast) SWAP="--contrastive-weight 0.5" ;;
+    *-spk) SWAP="--speaker-embeddings" ;;
+    *-spkswap) SWAP="--speaker-embeddings --swap-reference" ;;
   esac
   N=${BASE#n}; N=${N%%_*}; K=${BASE#*_k}; K=${K%%_*}; SEED=${BASE##*_s}
   DATA=data/processed/cov_n${N}_k${K}
@@ -57,6 +61,7 @@ for RUN in $RUNS; do
   [ -f "$DATA/test_sentences.txt" ] || python scripts/coverage/coverage_manifest.py --lj data/processed/LJSpeech \
     --libritts data/processed/LibriTTS --n "$N" --k "$K" --out "$DATA"
   python scripts/preprocess/cache_mels.py --data-dir "$DATA" --text-cleaner english_cleaners --num-workers "$CPUS"
+  case "$SWAP" in *speaker-embeddings*) python scripts/preprocess/cache_speaker_embeddings.py --data-dir "$DATA" ;; esac
   for STEP in $STEPS; do
     OUT=/content/out/$RUN/step_$STEP
     [ -f "$OUT/done" ] && continue
@@ -71,7 +76,9 @@ for RUN in $RUNS; do
     fi
     CKPT=$EXP_DIR/checkpoints/epoch_$STEP
     echo "$(date -u +%H:%M:%S) evaluating $RUN at step $STEP" >> /content/out/progress.txt
-    for S in $STRENGTHS; do
+    # With a speaker embedding, strength 0 shows what the embedding alone does
+    RUN_STRENGTHS=$STRENGTHS; case "$SWAP" in *speaker-embeddings*) RUN_STRENGTHS="$STRENGTHS 0.0" ;; esac
+    for S in $RUN_STRENGTHS; do
       # An evaluation interrupted after the synthesis continues from the similarity
       head -n 1 "$OUT/strength_$S/results.csv" 2>/dev/null | grep -q sim_ref && continue
       [ -f "$OUT/strength_$S/results.csv" ] || python scripts/eval/synth_check.py --checkpoint "$CKPT" --hifigan ckpt/hifigan_universal_v1.pt \
