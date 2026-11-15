@@ -193,7 +193,23 @@ Com estilo a 60% a contrastiva muda o compromisso, sem melhorá-lo: no 8 × 128 
 | 2 × 128 | normal | 13% | 8% | 70% | 4% |
 | 2 × 128 | com vetor de locutor | 14% | 8% | 70% | 4% |
 
-A leitura provável: o VAE vê o áudio alvo e já entrega a voz, então o treino não tem motivo para usar a entrada nova. Um teste em curso zera o vetor do VAE em metade dos itens de treino (`--style-dropout 0.5`) para obrigar a voz a passar pelo vetor de locutor.
+A leitura provável: o VAE vê o áudio alvo e já entrega a voz, então o treino não tem motivo para usar a entrada nova.
+
+**Dropout de estilo: o vetor passa a ser usado, mas não reduz a necessidade de locutores.** Zerando o vetor do VAE em metade dos itens de treino (`--style-dropout 0.5`), a voz tem de passar pelo vetor de locutor. Três treinos, uma semente, 2.500 passos; "só vetor" é a força 0,0 (VAE zerado), "vetor + VAE" é a força 1,0:
+
+| N × K | Variante | WER treinadas | WER novas | Voz copiada treinadas | Voz copiada novas |
+|---|---|---|---|---|---|
+| 8 × 128 | normal | 11% | 8% | 91% | 51% |
+| 8 × 128 | dropout, só vetor | 9% | 6% | 71% | 5% |
+| 8 × 128 | dropout, vetor + VAE | 14% | 8% | 88% | 37% |
+| 32 × 8 | normal (2 sementes) | 17% / 17% | 13% / 9% | 58% / 51% | 47% / 47% |
+| 32 × 8 | dropout, só vetor | 11% | 7% | 9% | 1% |
+| 32 × 8 | dropout, vetor + VAE | 22% | 15% | 57% | 60% |
+| 32 × 128 | normal (2 sementes) | 12% / 10% | 5% / 5% | 86% / 86% | 61% / 57% |
+| 32 × 128 | dropout, só vetor | 9% | 6% | 64% | 47% |
+| 32 × 128 | dropout, vetor + VAE | 12% | 6% | 83% | 62% |
+
+Com 8 locutores, o vetor sozinho copia as vozes treinadas (71%) e quase nenhuma nova (5%): a projeção decora os locutores do treino. Com 32 locutores e 128 frases ele já copia 47% das vozes novas sozinho, mas o conjunto vetor + VAE fica igual ao treino normal (62% contra 61% / 57%). Com 8 frases por locutor o vetor quase não é aprendido. Ou seja, um codificador de locutor treinado em milhares de vozes não dispensa o decodificador de ver muitos locutores: o que limita a cópia de vozes novas é quantas vozes o decodificador ouviu, seja qual for o caminho por onde a voz chega. As diferenças de até 13 pontos em vozes novas (32 × 8) estão dentro da variação entre sementes.
 
 Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 14 pontos; a medida de voz copiada depende de um único codificador de locutor.
 
