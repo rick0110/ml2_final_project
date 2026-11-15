@@ -52,7 +52,8 @@ for RUN in $RUNS; do
   # Variants, by suffix. n8_k8_s1-swap: style reference from another utterance; -contrast: that
   # plus the contrastive loss; -spk: pretrained speaker embedding as a second style input;
   # -spkswap: speaker embedding plus the swapped reference; -spkdrop: speaker embedding plus
-  # style dropout (half of the items train without the VAE style vector)
+  # style dropout (half of the items train without the VAE style vector); -aug: every training
+  # utterance also in a second, speed-changed voice (scripts/coverage/augment_voices.py)
   BASE=${RUN%%-*}; SWAP=""
   case "$RUN" in
     *-swap) SWAP="--swap-reference" ;;
@@ -66,6 +67,10 @@ for RUN in $RUNS; do
   EXP_DIR=experiments/tacotron2-vae/cov_$RUN
   [ -f "$DATA/test_sentences.txt" ] || python scripts/coverage/coverage_manifest.py --lj data/processed/LJSpeech \
     --libritts data/processed/LibriTTS --n "$N" --k "$K" --out "$DATA"
+  case "$RUN" in *-aug)
+    [ -f "${DATA}_aug/test_sentences.txt" ] || python scripts/coverage/augment_voices.py --data-dir "$DATA" --out "${DATA}_aug"
+    DATA=${DATA}_aug ;;
+  esac
   python scripts/preprocess/cache_mels.py --data-dir "$DATA" --text-cleaner english_cleaners --num-workers "$CPUS"
   case "$SWAP" in *speaker-embeddings*) flock /content/setup.lock python scripts/preprocess/cache_speaker_embeddings.py --data-dir "$DATA" ;; esac
   for STEP in $STEPS; do
