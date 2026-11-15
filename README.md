@@ -182,6 +182,19 @@ O que os números mostram:
 
 Com estilo a 60% a contrastiva muda o compromisso, sem melhorá-lo: no 8 × 128 as vozes treinadas copiadas sobem de 48% para 70% e as novas de 22% para 29%, mas o WER sobe de 5–7% para 7–9%; no 8 × 8 a cópia sai de 0% para 11–20% e o WER de 5–9% para 13–15%. Ou seja, impedir o latente de carregar a frase não reduz a quantidade de dados necessária; o gargalo parece estar em quantas vozes e frases o decodificador viu. O peso e a temperatura da contrastiva não foram ajustados.
 
+**Vetor de locutor pré-treinado: ignorado pelo treino (resultado negativo).** Três treinos (8 × 8, 8 × 128, 2 × 128) receberam uma segunda entrada de estilo: o vetor de um codificador de locutor congelado (ECAPA-TDNN, `--speaker-embeddings`), somado ao texto codificado ao lado do vetor do VAE. Em 2.500 passos o modelo não usa essa entrada: com o VAE zerado (força 0,0) e só o vetor de locutor, nenhuma voz é copiada (0% nos três treinos) e a fala sai na voz padrão. Com o VAE ligado, os números ficam iguais aos dos treinos normais:
+
+| N × K (semente 1) | Variante | WER treinadas | WER novas | Voz copiada treinadas | Voz copiada novas |
+|---|---|---|---|---|---|
+| 8 × 8 | normal | 21% | 14% | 45% | 26% |
+| 8 × 8 | com vetor de locutor | 18% | 14% | 43% | 30% |
+| 8 × 128 | normal | 11% | 8% | 91% | 51% |
+| 8 × 128 | com vetor de locutor | 13% | 8% | 88% | 46% |
+| 2 × 128 | normal | 13% | 8% | 70% | 4% |
+| 2 × 128 | com vetor de locutor | 14% | 8% | 70% | 4% |
+
+A leitura provável: o VAE vê o áudio alvo e já entrega a voz, então o treino não tem motivo para usar a entrada nova. Um teste em curso zera o vetor do VAE em metade dos itens de treino (`--style-dropout 0.5`) para obrigar a voz a passar pelo vetor de locutor.
+
 Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 14 pontos; a medida de voz copiada depende de um único codificador de locutor.
 
 Reprodução: `scripts/coverage/colab_job.sh` (treino e avaliação), `scripts/coverage/summarize.py` (tabela e figura). Resultados por amostra em `reports/coverage/results/`.
