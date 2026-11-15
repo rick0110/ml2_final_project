@@ -30,6 +30,9 @@ print(":".join(glob.glob(os.path.join(site.getsitepackages()[0], "nvidia", "*", 
 PY
 ):${LD_LIBRARY_PATH:-}"
 
+# Several copies of this job may start together: only one prepares the data, the others wait
+exec 9>/content/setup.lock
+flock 9
 mkdir -p data/raw data/processed ckpt /content/out
 if [ ! -f data/processed/LJSpeech/mels_metadata.csv ]; then
   [ -d data/raw/LJSpeech-1.1 ] || curl -sL https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2 | tar xj -C data/raw
@@ -43,6 +46,7 @@ if [ ! -f data/processed/LibriTTS/mels_metadata.csv ]; then
 fi
 [ -f ckpt/hifigan_universal_v1.pt ] || curl -sL -o ckpt/hifigan_universal_v1.pt \
   https://huggingface.co/csdc-atl/hifigan-universal_v1/resolve/main/g_02500000
+flock -u 9
 
 for RUN in $RUNS; do
   # Variants, by suffix. n8_k8_s1-swap: style reference from another utterance; -contrast: that
@@ -61,7 +65,7 @@ for RUN in $RUNS; do
   [ -f "$DATA/test_sentences.txt" ] || python scripts/coverage/coverage_manifest.py --lj data/processed/LJSpeech \
     --libritts data/processed/LibriTTS --n "$N" --k "$K" --out "$DATA"
   python scripts/preprocess/cache_mels.py --data-dir "$DATA" --text-cleaner english_cleaners --num-workers "$CPUS"
-  case "$SWAP" in *speaker-embeddings*) python scripts/preprocess/cache_speaker_embeddings.py --data-dir "$DATA" ;; esac
+  case "$SWAP" in *speaker-embeddings*) flock /content/setup.lock python scripts/preprocess/cache_speaker_embeddings.py --data-dir "$DATA" ;; esac
   for STEP in $STEPS; do
     OUT=/content/out/$RUN/step_$STEP
     [ -f "$OUT/done" ] && continue
