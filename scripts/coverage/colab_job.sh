@@ -23,6 +23,8 @@ cd /content/repo
 
 python -m pip install -q gruut num2words inflect faster-whisper webrtcvad-wheels speechbrain
 python -m pip install -q --no-deps resemblyzer
+# librosa's pitch tracker crashes with the numba that ships on some Colab images
+python -m pip install -q -U numba llvmlite
 # The recognizer looks for the cuDNN that ships inside the PyTorch wheels
 export LD_LIBRARY_PATH="$(python - <<'PY'
 import glob, os, site
