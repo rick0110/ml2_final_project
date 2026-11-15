@@ -1,6 +1,6 @@
 # Por que copiar uma voz nova exige tantos locutores: tratativa teórica e uma solução
 
-Este texto organiza os resultados do experimento de cobertura (README, seção 9) num modelo simples, verifica o modelo contra os 12 treinos da grade, e tira dele uma solução que está sendo testada. O argumento é heurístico: as fórmulas são uma lei de amostragem ajustada aos dados, não um teorema.
+Este texto organiza os resultados do experimento de cobertura (README, seção 9) num modelo simples, verifica o modelo contra os 12 treinos da grade, e tira dele uma solução e a testa (o teste deu negativo, seção 6). O argumento é heurístico: as fórmulas são uma lei de amostragem ajustada aos dados, não um teorema.
 
 ## 1. O que precisa ser explicado
 
@@ -83,7 +83,7 @@ Passar de 32 para 128 locutores (4 vezes mais dados) renderia cerca de 2 pontos.
 
 A lei diz o que conta: pares (texto, voz) vistos pelo decodificador, com N (vozes distintas) pesando mais que K. Três caminhos:
 
-**(a) Preencher o retângulo com pseudo-locutores (em teste).** Existe uma transformação barata que troca a voz e mantém o texto: tocar a gravação mais rápido ou mais devagar por um fator r sobe ou desce o tom e os formantes por r. Aplicada à linha longa (as 2.000 frases da voz padrão) e às linhas curtas, ela cria vozes novas com as mesmas frases, sem gravar nada. Em reconhecimento de locutor é prática comum tratar cópias com velocidade alterada como locutores novos. Na lei, isso aumenta N (e K) de graça. O limite previsível: as pseudo-vozes variam em uma direção só do espaço de vozes (tamanho do trato vocal/tom); elas contam como locutores apenas na medida em que as vozes reais diferem nessa direção.
+**(a) Preencher o retângulo com pseudo-locutores (testado; não funcionou, seção 6).** Existe uma transformação barata que troca a voz e mantém o texto: tocar a gravação mais rápido ou mais devagar por um fator r sobe ou desce o tom e os formantes por r. Aplicada à linha longa (as 2.000 frases da voz padrão) e às linhas curtas, ela cria vozes novas com as mesmas frases, sem gravar nada. Em reconhecimento de locutor é prática comum tratar cópias com velocidade alterada como locutores novos. Na lei, isso aumenta N (e K) de graça. O limite previsível: as pseudo-vozes variam em uma direção só do espaço de vozes (tamanho do trato vocal/tom); elas contam como locutores apenas na medida em que as vozes reais diferem nessa direção.
 
 Implementação: `scripts/coverage/augment_voices.py` acrescenta, para cada frase de treino, uma cópia com velocidade alterada entre 1,5 e 4 semitons para cima ou para baixo; variante `-aug` em `scripts/coverage/colab_job.sh`. O número de passos de treino é o mesmo.
 
@@ -102,9 +102,26 @@ Como uma semente varia ±5 pontos (até 14 entre sementes), só um ganho acima d
 
 Para a dublagem, (b) e (c) combinam com o cenário: há muito áudio do ator original sem transcrição alinhada, e nenhum texto de treino na voz dele.
 
-## 6. Resultado do teste de (a)
+## 6. Resultado do teste de (a): as pseudo-vozes não contam como locutores
 
-Em curso: `n8_k8_s1-aug` e `n8_k128_s1-aug`. Esta seção será preenchida com os números e a comparação com as previsões da seção 5.
+Dois treinos com pseudo-locutores (`n8_k8_s1-aug`, `n8_k128_s1-aug`; cada frase de treino ganha uma cópia com velocidade alterada, 41 e 54 pseudo-locutores no total), mesma quantidade de passos e mesma avaliação. Passo 2.500, estilo inteiro:
+
+| Treino | Vozes treinadas copiadas | Vozes novas copiadas | WER vozes novas | Previsão "não contam" | Previsão "contam" |
+|---|---|---|---|---|---|
+| 8 × 8 normal (2 sementes) | 45% / 44% | 26% / 39% | 14% / 24% | | |
+| 8 × 8 com pseudo-locutores | 50% | **28%** | 14% | ~31% | ~50% |
+| 8 × 128 normal (2 sementes) | 91% / 88% | 51% / 37% | 8% / 9% | | |
+| 8 × 128 com pseudo-locutores | 84% | **42%** | 8% | ~44% | ~55% |
+
+Os dois resultados caem na previsão "as pseudo-vozes não contam" (28% contra ~31%; 42% contra ~44%) e dentro do intervalo das duas sementes normais. No passo 1.000 o quadro é o mesmo (22% contra 24%; 36% contra 30%). A solução (a) não funciona. É uma semente por configuração, mas a diferença para a previsão "contam" (22 e 13 pontos) é maior que a variação entre sementes.
+
+O que isso diz sobre a teoria:
+
+- A lei de dois níveis previu os dois números com N = 8, sem reajuste. O N que entra nela é o número de vozes **reais**; quinze a vinte vezes mais rótulos de locutor não mudaram nada.
+- O limite antecipado na seção 5 é o que aconteceu: mudar a velocidade desloca a voz em uma direção só (tom e formantes juntos). As vozes novas do teste diferem das treinadas em muitas direções (timbre, fonte glotal, articulação, ritmo), e o decodificador precisa ter visto variação nessas direções.
+- O termo A/N conta, portanto, a variedade real de vozes, e não pares (texto, voz) em geral. Preencher o retângulo com transformações simples do sinal não substitui locutores.
+
+Consequência prática: sobram os caminhos (b) e (c). O (b) é o que ataca o termo A/N diretamente, porque a conversão de voz treina sem transcrição e pode usar milhares de locutores reais; o (c) ataca o piso `a`. Uma versão mais forte de (a) seria gerar as pseudo-vozes com um conversor de voz já treinado em muitos locutores (as 2.000 frases da voz padrão ditas em centenas de vozes reais), o que é o caminho (b) usado como aumento de dados.
 
 ## 7. Limites desta tratativa
 

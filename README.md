@@ -211,7 +211,16 @@ A leitura provável: o VAE vê o áudio alvo e já entrega a voz, então o trein
 
 Com 8 locutores, o vetor sozinho copia as vozes treinadas (71%) e quase nenhuma nova (5%): a projeção decora os locutores do treino. Com 32 locutores e 128 frases ele já copia 47% das vozes novas sozinho, mas o conjunto vetor + VAE fica igual ao treino normal (62% contra 61% / 57%). Com 8 frases por locutor o vetor quase não é aprendido. Ou seja, um codificador de locutor treinado em milhares de vozes não dispensa o decodificador de ver muitos locutores: o que limita a cópia de vozes novas é quantas vozes o decodificador ouviu, seja qual for o caminho por onde a voz chega. As diferenças de até 13 pontos em vozes novas (32 × 8) estão dentro da variação entre sementes.
 
-**Tratativa teórica e solução em teste.** [`reports/teoria_cobertura.md`](reports/teoria_cobertura.md) organiza estes resultados numa lei de amostragem em dois níveis (vozes novas não copiadas ≈ a + A/N + B/(N·K); treinadas ≈ a' + C/K + A'/N), que ajusta os 12 treinos até o nível do ruído entre sementes (`scripts/coverage/fit_law.py`) e explica por que as quatro mudanças acima não ajudaram: nenhuma acrescenta pares (texto, voz) ao treino do decodificador. A solução derivada, em teste, cria pseudo-locutores alterando a velocidade das gravações (`scripts/coverage/augment_voices.py`, variante `-aug`).
+**Tratativa teórica e teste da solução derivada (negativo).** [`reports/teoria_cobertura.md`](reports/teoria_cobertura.md) organiza estes resultados numa lei de amostragem em dois níveis (vozes novas não copiadas ≈ a + A/N + B/(N·K); treinadas ≈ a' + C/K + A'/N), que ajusta os 12 treinos até o nível do ruído entre sementes (`scripts/coverage/fit_law.py`) e explica por que as quatro mudanças acima não ajudaram: nenhuma acrescenta vozes ao treino do decodificador. A solução derivada foi criar pseudo-locutores alterando a velocidade das gravações (`scripts/coverage/augment_voices.py`, variante `-aug`), com as previsões registradas antes do resultado. Ela não funcionou: as pseudo-vozes não contam como locutores.
+
+| Treino (passo 2.500, estilo inteiro) | Vozes treinadas copiadas | Vozes novas copiadas | WER vozes novas |
+|---|---|---|---|
+| 8 × 8 normal (2 sementes) | 45% / 44% | 26% / 39% | 14% / 24% |
+| 8 × 8 com pseudo-locutores | 50% | 28% (previsto ~31% se não contam, ~50% se contam) | 14% |
+| 8 × 128 normal (2 sementes) | 91% / 88% | 51% / 37% | 8% / 9% |
+| 8 × 128 com pseudo-locutores | 84% | 42% (previsto ~44% / ~55%) | 8% |
+
+A lei previu os dois números com N = 8 locutores reais. O que conta é a variedade real de vozes; os caminhos que sobram são separar a leitura do texto da troca de voz (conversão de voz treinada sem transcrição em muitos locutores) e usar várias referências por voz.
 
 Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 14 pontos; a medida de voz copiada depende de um único codificador de locutor.
 
