@@ -169,16 +169,18 @@ O que os números mostram:
 - **O latente explica o erro.** Em 144 referências, quanto mais longe da voz padrão está o código de estilo, mais a voz é copiada (correlação de postos 0,83) e mais palavras saem erradas (0,45). Cerca de 80% da variância do latente é diferença entre locutores.
 - **Estilo a 60%** reduz o erro de palavras para 4–9% em todos os treinos, mas a cópia da voz cai junto; só o treino 32 × 128 ainda copia cerca de 45% das vozes novas.
 
-**Troca de referência (resultado negativo).** Para testar se o problema é o código de estilo carregar o conteúdo da frase, três treinos foram repetidos tirando o estilo de outra frase do mesmo locutor (`--swap-reference`). Em 2.500 passos nada mudou além da variação entre sementes:
+**Duas perdas que não ajudaram (resultado negativo).** Para testar se o problema é o código de estilo carregar o conteúdo da frase, três treinos foram repetidos de duas formas: tirando o estilo de outra frase do mesmo locutor (`--swap-reference`) e, além disso, com uma perda contrastiva que aproxima os códigos de duas frases do mesmo locutor e afasta os de locutores diferentes (`--contrastive-weight 0.5`). Em 2.500 passos, com estilo na força 1,0, nada mudou além da variação entre sementes:
 
 | N × K | Variante | WER treinadas | WER novas | Voz copiada treinadas | Voz copiada novas |
 |---|---|---|---|---|---|
 | 8 × 8 | normal | 21% / 26% | 14% / 24% | 45% / 44% | 26% / 39% |
 | 8 × 8 | troca | 23% / 25% | 21% / 24% | 52% / 48% | 27% / 32% |
+| 8 × 8 | troca + contrastiva | 27% / 23% | 20% / 21% | 42% / 48% | 27% / 31% |
 | 8 × 128 | normal (semente 1) | 11% | 8% | 91% | 51% |
 | 8 × 128 | troca (semente 1) | 12% | 8% | 87% | 38% |
+| 8 × 128 | troca + contrastiva (semente 1) | 14% | 10% | 85% | 39% |
 
-Ou seja, só impedir o latente de ver a frase alvo não reduz a quantidade de dados necessária. Uma perda contrastiva sobre o latente (`--contrastive-weight`) está implementada e em teste.
+Com estilo a 60% a contrastiva muda o compromisso, sem melhorá-lo: no 8 × 128 as vozes treinadas copiadas sobem de 48% para 70% e as novas de 22% para 29%, mas o WER sobe de 5–7% para 7–9%; no 8 × 8 a cópia sai de 0% para 11–20% e o WER de 5–9% para 13–15%. Ou seja, impedir o latente de carregar a frase não reduz a quantidade de dados necessária; o gargalo parece estar em quantas vozes e frases o decodificador viu. O peso e a temperatura da contrastiva não foram ajustados.
 
 Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 14 pontos; a medida de voz copiada depende de um único codificador de locutor.
 

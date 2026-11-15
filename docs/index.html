@@ -434,7 +434,7 @@
     <li><b>Número de locutores decide as vozes novas.</b> Com 128 frases, a cópia de vozes nunca vistas vai de 3% (2 locutores) a 59% (32).</li>
     <li><b>Muitos locutores compensam poucas frases.</b> 32 locutores com 8 frases copiam vozes novas tanto quanto 8 locutores com 128.</li>
     <li><b>O latente explica o erro.</b> Quanto mais longe da voz padrão está o código de estilo, mais a voz é copiada (correlação 0,83) e mais palavras saem erradas (0,45).</li>
-    <li><b>Trocar a referência não ajudou.</b> Treinar com o estilo tirado de outra frase do mesmo locutor não mudou a cópia da voz nem o erro de palavras além da variação entre sementes (8 locutores com 8 frases: 52% / 48% das vozes treinadas copiadas, contra 45% / 44%).</li>
+    <li><b>Duas perdas novas não ajudaram.</b> Treinar com o estilo tirado de outra frase do mesmo locutor, com ou sem uma perda contrastiva sobre o código de estilo, não mudou a cópia da voz nem o erro de palavras além da variação entre sementes (8 locutores com 8 frases: 42–52% das vozes treinadas copiadas, contra 45% / 44%). O gargalo parece ser quantas vozes e frases o modelo viu, não o conteúdo da frase no código.</li>
     <li><b>Limites.</b> Duas configurações têm uma semente só, cada treino avalia 4 vozes novas, e entre sementes a cópia de vozes novas varia até 14 pontos.</li>
   </ul>
 </section>
