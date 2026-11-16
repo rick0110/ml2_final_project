@@ -183,11 +183,36 @@ Refazendo o ajuste com os 14 treinos, a lei a + A/N + B/(NK) dá a = 0,39 e RMSE
 
 Nenhuma das duas hipóteses se confirma por inteiro. Com K = 8 as vozes novas sobem 20 pontos já com 4 referências; com K = 32, onde a cópia já era alta, nada muda nas novas e as treinadas caem. A semelhança média com o locutor sobe em todos os grupos (por exemplo 0,713 → 0,743 nas novas com K = 32), mas a semelhança com a voz padrão sobe junto, porque a média dos códigos fica mais perto do centro. O WER das vozes externas cai (16% → 9% com K = 32; 13% → 10% com K = 8) e o das outras fica igual. Pela medida por frase (`sim_ref`), a cópia cai com R, como esperado: o código deixa de ser o daquela frase. Leitura: a média de códigos ajuda quando o modelo copia mal e deixa a fala mais estável, mas não é um ganho geral; um ganho consistente pediria treinar com o código médio do locutor, e não só usá-lo no teste.
 
-**8.5 Réplica em curso, com previsões.** `n128_k32_s2` (mesma configuração, outra semente) e `n200_k32_s1` (200 locutores). Se os 74% forem reais, a réplica fica em 64% ou mais; se forem sorte da semente, perto de 60%. Para 200 × 32, a lei em 1/N reajustada prevê 60% e a lei com raízes prevê 68%.
+**8.5 Réplica e 200 locutores: previsões.** `n128_k32_s2` (mesma configuração, outra semente) e `n200_k32_s1` (200 locutores). Se os 74% forem reais, a réplica fica em 64% ou mais; se forem sorte da semente, perto de 60%. Para 200 × 32, a lei em 1/N reajustada prevê 60% e a lei com raízes prevê 68%.
+
+**8.6 Resultado da réplica e dos 200 locutores.** Passo 2.500, estilo a 100%:
+
+| Treino | Treinadas copiadas | Novas copiadas | Externas copiadas | WER treinadas / novas / externas |
+|---|---|---|---|---|
+| 128 × 32, semente 1 | 76% | 74% | 86% | 12% / 8% / 16% |
+| 128 × 32, semente 2 | 66% | 56% | 86% | 13% / 8% / 11% |
+| 200 × 32, semente 1 | 66% | 64% | 91% | 12% / 7% / 11% |
+
+- **Os 74% eram em boa parte sorte da semente.** A réplica deu 56%, abaixo do limiar de 64% registrado; a média das duas sementes é 65%. A diferença de 18 pontos entre sementes é a maior do projeto (antes, 14).
+- **200 locutores não passam de 128.** 64%, entre as duas previsões (60% e 68%) e igual à média de 128 × 32. Nenhuma das duas leis é rejeitada.
+- Reajustadas nos 16 treinos, as duas leis ficam equivalentes: a + A/N + B/(NK) com a = 0,39 (RMSE 0,060) e a + A/√N + C/√K com a = 0,19 (RMSE 0,056). Para 128 × 32 e 200 × 32 elas preveem 60% e 65–66%; só divergem de fato para N na casa dos milhares (61% contra 70% com 1.000 locutores).
+- **O que limita a conclusão agora é a medida, não o treino.** Com 4 vozes novas × 25 frases, o ruído entre sementes (até 18 pontos) é maior que a diferença entre as leis (5 pontos). Para separar as leis é preciso avaliar cada treino em dezenas de vozes novas (o LibriTTS tem locutores de sobra fora do treino), o que custa só avaliação.
+- A frase "mais locutores rendem cada vez menos" da seção 4 volta a valer como descrição: de 32 para 128 locutores há ganho com K = 32 (52% → 65%), de 128 para 200 não há ganho mensurável.
+
+Várias referências (R = 4), pela medida por locutor, nos três treinos novos e nos dois da seção 8.4:
+
+| Treino | Treinadas R = 1 → 4 | Novas R = 1 → 4 | Externas R = 1 → 4 |
+|---|---|---|---|
+| 128 × 8 | 66% → 66% | 47% → 67% | 77% → 83% |
+| 128 × 32, semente 1 | 84% → 71% | 74% → 78% | 95% → 94% |
+| 128 × 32, semente 2 | 73% → 68% | 59% → 69% | 74% → 97% |
+| 200 × 32 | 77% → 68% | 57% → 75% | 76% → 90% |
+
+Com os treinos novos o quadro fica mais claro que na seção 8.4: a média de 4 referências **sobe a cópia das vozes novas nos quatro treinos** (+4 a +20 pontos, chegando a 67–78%) e das externas em três de quatro, e **baixa a das treinadas** em três de quatro. É a previsão da decomposição da seção 2: a média remove a parte do código que é da frase e não do locutor, o que ajuda onde o modelo não decorou a voz e atrapalha onde decorou. Como solução prática, é a única das testadas que melhora vozes novas sem treinar nada.
 
 ## 9. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.
-- 7 configurações, N ≤ 32, 4 vozes novas por avaliação, uma medida de voz (um codificador de locutor).
+- 10 configurações, N ≤ 200, 4 vozes novas por avaliação (ruído entre sementes de até 18 pontos), uma medida de voz (um codificador de locutor).
 - A medida é binária por amostra (voz mais perto da referência que da voz padrão); não mede naturalidade.
 - A decomposição da seção 2 é sobre o erro esperado; não foi medida termo a termo.
