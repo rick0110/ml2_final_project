@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Dict, List
 
 
-MAX_N = 32          # largest number of training speakers in any run
+MAX_N = 32          # number of training speakers of the original grid (larger runs add speakers after these)
 EXTERNAL = 4        # reference speakers taken from --external
 HELDOUT = 4         # sentences per speaker kept as references
 N_TEST = 25         # test sentences
@@ -61,11 +61,12 @@ FIRST_SEEN = ["3486", "4137", "8088", "7178", "2952", "5163", "6209", "6147"]
 UNSEEN = ["4297", "696", "6415", "7800"]
 
 
-def speaker_order(by_speaker: Dict[str, List[dict]]) -> List[str]:
-    """FIRST_SEEN, then the speakers with most sentences (up to MAX_N in total), then UNSEEN."""
+def speaker_order(by_speaker: Dict[str, List[dict]]) -> tuple:
+    """(training order, unseen speakers). Training order: FIRST_SEEN, then the 24 speakers with
+    most sentences (the 32 of the original grid), then all the others by number of sentences."""
     pinned = set(FIRST_SEEN + UNSEEN)
     rest = sorted((s for s in by_speaker if s not in pinned), key=lambda s: (-len(by_speaker[s]), s))
-    return FIRST_SEEN + sorted(rest[: MAX_N - len(FIRST_SEEN)]) + UNSEEN
+    return FIRST_SEEN + sorted(rest[: MAX_N - len(FIRST_SEEN)]) + rest[MAX_N - len(FIRST_SEEN):], list(UNSEEN)
 
 
 def main() -> None:
@@ -79,7 +80,6 @@ def main() -> None:
     ap.add_argument("--external", type=Path, default=None,
                     help="Processed corpus of other speakers (e.g. LibriTTS test-clean) for extra references")
     a = ap.parse_args()
-    assert a.n <= MAX_N
 
     rng = random.Random(0)
     lj = sorted(read(a.lj), key=lambda r: r["utt_id"])
@@ -96,8 +96,9 @@ def main() -> None:
         by_speaker[r["speaker"]].append(r)
     for rows in by_speaker.values():
         random.Random(1).shuffle(rows)
-    order = speaker_order(by_speaker)
-    seen, unseen = order[: a.n], order[MAX_N:]
+    order, unseen = speaker_order(by_speaker)
+    assert a.n <= len(order), f"only {len(order)} speakers available"
+    seen = order[: a.n]
 
     train = list(lj)
     for s in seen:

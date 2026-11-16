@@ -103,6 +103,10 @@ def main() -> None:
                     help="Test sentences, one per line (default: six built-in sentences of --language)")
     ap.add_argument("--no-speaker-embedding", action="store_true",
                     help="Leave out the pretrained speaker embedding of the reference (models trained with one)")
+    ap.add_argument("--n-refs", type=int, default=1,
+                    help="Average the latent code over this many utterances of the reference speaker (the reference plus others from --pool)")
+    ap.add_argument("--pool", type=Path, action="append", default=[],
+                    help="Processed corpora with more utterances of the reference speakers (repeatable; used with --n-refs)")
     ap.add_argument("--whisper", default="small")
     ap.add_argument("--max-decoder-steps", type=int, default=1200)
     a = ap.parse_args()
@@ -153,6 +157,14 @@ def main() -> None:
         from models.speaker_encoder import load_speaker_encoder, speaker_embedding
         spk_encoder = load_speaker_encoder(device)
 
+    pool: Dict[str, List[dict]] = {}
+    if a.n_refs > 1:
+        for p in a.pool:
+            if (p / "mels_metadata.csv").exists():
+                with open(p / "mels_metadata.csv", encoding="utf-8") as f:
+                    for r in csv.DictReader(f):
+                        pool.setdefault(r["speaker"], []).append(r)
+
     out_rows = []
     for ref in refs:
         sample = torch.load(ref["mel_path"], map_location="cpu", weights_only=True)
@@ -160,10 +172,19 @@ def main() -> None:
         spk = speaker_embedding(spk_encoder, wav, sample.get("sr", 22050)).view(1, -1).to(device) if spk_encoder else None
         ref_mel = stft.mel_spectrogram(wav.clamp(-1, 1)).to(device)
         ref_pros = prosody(wav[0].numpy(), len(ref["text"]))
+        with torch.inference_mode():
+            _, mu, _, _ = model.vae_gst(ref_mel)  # (1, L)
+            others = sorted((r for r in pool.get(ref.get("speaker", ""), []) if r["utt_id"] != ref["utt_id"]),
+                            key=lambda r: r["utt_id"])[: a.n_refs - 1]
+            if others:  # several references of the same speaker: mean of their codes
+                mus = [mu]
+                for r in others:
+                    w2 = torch.load(r["mel_path"], map_location="cpu", weights_only=True)["waveform"]
+                    mus.append(model.vae_gst(stft.mel_spectrogram(w2.clamp(-1, 1)).to(device))[1])
+                mu = torch.stack(mus).mean(0)
         for si, sentence in enumerate(sentences):
             seq = torch.LongTensor(tp.text_to_sequence(sentence)).unsqueeze(0).to(device)
             with torch.inference_mode():
-                _, mu, _, _ = model.vae_gst(ref_mel)  # (1, L)
                 z = origin + a.style_strength * (mu - origin)
                 _, mel, align = model.inference_from_latent(seq, z, spk)
             stopped = mel.size(2) < a.max_decoder_steps

@@ -17,9 +17,11 @@ RUNS=${RUNS:?set RUNS, e.g. "n8_k8_s1 n8_k128_s1"}
 STEPS=${STEPS:-"2000 4000"}
 STRENGTHS=${STRENGTHS:-"1.0 0.6"}
 VC_REFS=${VC_REFS:-""}  # e.g. "1 8": also convert every evaluation to the reference voice (vc_cascade.py)
+MULTI_REFS=${MULTI_REFS:-""}  # e.g. "4 16": also evaluate with the latent code averaged over that many utterances of the reference speaker
 BATCH=${BATCH:-48}
 WORKERS=${WORKERS:-6}   # data-loading processes per training run (lower it when several runs share the machine)
 CPUS=$(nproc)
+POOL="--pool data/processed/LibriTTS --pool data/processed/LibriTTS_test"  # more utterances of the reference speakers
 cd /content/repo
 
 python -m pip install -q gruut num2words inflect faster-whisper webrtcvad-wheels speechbrain
@@ -123,17 +125,26 @@ for RUN in $RUNS; do
       [ -f "$OUT/strength_$S/results.csv" ] || python scripts/eval/synth_check.py --checkpoint "$CKPT" --hifigan ckpt/hifigan_universal_v1.pt \
         --data-dir "$DATA/refs" --all-references --sentences-file "$DATA/test_sentences.txt" \
         --text-cleaner english_cleaners --language en --style-strength "$S" --out-dir "$OUT/strength_$S"
-      python scripts/coverage/speaker_similarity.py --eval-dir "$OUT/strength_$S" --refs "$DATA/refs" --train "$DATA"
+      python scripts/coverage/speaker_similarity.py --eval-dir "$OUT/strength_$S" --refs "$DATA/refs" --train "$DATA" $POOL
       for R in $RUN_VC; do
         V=$OUT/strength_${S}_vc$R
         head -n 1 "$V/results.csv" 2>/dev/null | grep -q sim_ref && continue
         python scripts/coverage/vc_cascade.py --eval-dir "$OUT/strength_$S" --out-dir "$V" --refs "$DATA/refs" \
-          --pool data/processed/LibriTTS --pool data/processed/LibriTTS_test --n-refs "$R"
-        python scripts/coverage/speaker_similarity.py --eval-dir "$V" --refs "$DATA/refs" --train "$DATA"
+          $POOL --n-refs "$R"
+        python scripts/coverage/speaker_similarity.py --eval-dir "$V" --refs "$DATA/refs" --train "$DATA" $POOL
         find "$V" -name '*.wav' ! -name '*__s0.wav' ! -name '*__s1.wav' ! -name '*__s2.wav' -delete
       done
       # Keep the audio of the first three sentences only (for listening); the numbers are in results.csv
       find "$OUT/strength_$S" -name '*.wav' ! -name '*__s0.wav' ! -name '*__s1.wav' ! -name '*__s2.wav' -delete
+    done
+    for R in $MULTI_REFS; do
+      V=$OUT/strength_1.0_r$R
+      head -n 1 "$V/results.csv" 2>/dev/null | grep -q sim_ref && continue
+      python scripts/eval/synth_check.py --checkpoint "$CKPT" --hifigan ckpt/hifigan_universal_v1.pt \
+        --data-dir "$DATA/refs" --all-references --sentences-file "$DATA/test_sentences.txt" \
+        --text-cleaner english_cleaners --language en --style-strength 1.0 --n-refs "$R" $POOL --out-dir "$V"
+      python scripts/coverage/speaker_similarity.py --eval-dir "$V" --refs "$DATA/refs" --train "$DATA" $POOL
+      find "$V" -name '*.wav' ! -name '*__s0.wav' ! -name '*__s1.wav' ! -name '*__s2.wav' -delete
     done
     python scripts/eval/latent_dump.py --checkpoint "$CKPT" --manifest "$DATA" --manifest "$DATA/refs" \
       --max-per-manifest 1500 --out "$OUT/latents.npz"

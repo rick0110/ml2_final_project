@@ -144,7 +144,20 @@ Previsões:
 
 O critério é o mesmo: só mais de ~10 pontos acima da média normal conta como efeito.
 
-## 8. Limites desta tratativa
+**Situação de 7.1 e 7.2:** os scripts estão no repositório, mas não foram executados. Rodar o conversor de voz de terceiros foi barrado pelo controle de permissões do ambiente em que os experimentos são lançados; depende de autorização do autor.
+
+## 8. Dois testes só com o nosso modelo, com previsões registradas
+
+**8.1 A previsão arriscada: 128 locutores.** Treinos `n128_k8_s1` e `n128_k32_s1` (os 32 locutores da grade mais 96 do mesmo corpus; mesmas vozes novas, mesmos passos). A lei ajustada na seção 3 prevê, para as vozes novas copiadas, 56% (K = 8) e 57% (K = 32): quase nada acima dos 32 locutores (medido: 51% / 47% com K = 8; 61% / 57% com K = 128). Para as treinadas, 52% (K = 8) e 82% (K = 32). Se a queda real for mais lenta que 1/N, as vozes novas passam de 67% (previsão + 10 pontos) e a lei está errada nesse ponto, o que seria uma boa notícia: mais locutores ainda renderiam.
+
+**8.2 Várias referências por voz (caminho c).** Na avaliação, o código de estilo passa a ser a média dos códigos de R = 4 e 16 frases do mesmo locutor (`--n-refs` em `scripts/eval/synth_check.py`), sem treinar nada. A medida de voz ganha uma segunda coluna, a semelhança com a média de 20 frases do locutor (`sim_spk`), comparável à da voz padrão. Duas hipóteses para o piso `a`:
+
+- o piso é ruído de estimar a voz a partir de uma frase só: a cópia das vozes novas sobe 10 pontos ou mais de R = 1 para R = 16;
+- o piso é do decodificador, que não sabe produzir a voz mesmo com o código certo: nada muda (ou piora, se a média puxar o código para perto da voz padrão).
+
+As referências incluem agora 4 locutores externos (LibriTTS test-clean), além dos 8 treinados e 4 novos de sempre.
+
+## 9. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.
 - 7 configurações, N ≤ 32, 4 vozes novas por avaliação, uma medida de voz (um codificador de locutor).

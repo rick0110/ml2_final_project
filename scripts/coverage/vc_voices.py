@@ -27,7 +27,7 @@ import librosa
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from coverage_manifest import speaker_order  # noqa: E402
+from coverage_manifest import MAX_N, speaker_order  # noqa: E402
 from vc_cascade import VC_SR, load_knn_vc, stored_16k  # noqa: E402
 
 
@@ -53,7 +53,8 @@ def main() -> None:
     with open(a.libritts / "mels_metadata.csv", encoding="utf-8") as f:
         for r in sorted(csv.DictReader(f), key=lambda r: r["utt_id"]):
             by_speaker[r["speaker"]].append(r)
-    used = set(speaker_order(by_speaker))  # trained speakers of any run and the unseen test speakers
+    order, unseen = speaker_order(by_speaker)
+    used = set(order[:MAX_N]) | set(unseen)  # trained speakers of the grid and the unseen test speakers
     voices = sorted(s for s in by_speaker if s not in used and len(by_speaker[s]) >= a.utts_per_voice)
     random.Random(a.seed).shuffle(voices)
     voices = voices[: a.n_voices]

@@ -6,6 +6,8 @@ Reads the results.csv written by scripts/eval/synth_check.py and adds two column
     sim_ref      cosine similarity between the generated audio and its reference audio
     sim_default  cosine similarity between the generated audio and the default voice
                  (mean embedding of utterances of the main speaker of the training set)
+With --pool it also adds sim_spk, the similarity to the mean embedding of up to 20 utterances
+of the reference speaker (the reference included), comparable to sim_default.
 The voice was copied when sim_ref is high and above sim_default. Embeddings come from
 Resemblyzer (a speaker-verification encoder trained on other data).
 
@@ -41,11 +43,27 @@ def main() -> None:
     ap.add_argument("--train", type=Path, required=True, help="Processed folder of the training set")
     ap.add_argument("--default-speaker", default=None, help="Default: the speaker with most training utterances")
     ap.add_argument("--n-default", type=int, default=20)
+    ap.add_argument("--pool", type=Path, action="append", default=[],
+                    help="Processed corpora with more utterances of the reference speakers (adds sim_spk)")
     a = ap.parse_args()
 
     enc = VoiceEncoder(verbose=False)
     with open(a.refs / "mels_metadata.csv", encoding="utf-8") as f:
-        ref_emb = {r["utt_id"]: embed(enc, stored(r["mel_path"])) for r in csv.DictReader(f)}
+        refs = list(csv.DictReader(f))
+    ref_emb = {r["utt_id"]: embed(enc, stored(r["mel_path"])) for r in refs}
+    spk_emb = {}
+    if a.pool:
+        by_speaker = {}
+        for p in a.pool:
+            if (p / "mels_metadata.csv").exists():
+                with open(p / "mels_metadata.csv", encoding="utf-8") as f:
+                    for r in csv.DictReader(f):
+                        by_speaker.setdefault(r["speaker"], []).append(r)
+        for r in refs:
+            others = sorted((x for x in by_speaker.get(r["speaker"], []) if x["utt_id"] != r["utt_id"]),
+                            key=lambda x: x["utt_id"])[: a.n_default - 1]
+            e = np.mean([ref_emb[r["utt_id"]]] + [embed(enc, stored(x["mel_path"])) for x in others], axis=0)
+            spk_emb[r["utt_id"]] = e / np.linalg.norm(e)
     with open(a.train / "mels_metadata.csv", encoding="utf-8") as f:
         train = list(csv.DictReader(f))
     name = a.default_speaker or Counter(r["speaker"] for r in train).most_common(1)[0][0]
@@ -62,6 +80,8 @@ def main() -> None:
         e = embed(enc, audio)
         r["sim_ref"] = round(float(e @ ref_emb[r["reference"]]), 3)
         r["sim_default"] = round(float(e @ default_emb), 3)
+        if spk_emb:
+            r["sim_spk"] = round(float(e @ spk_emb[r["reference"]]), 3)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
