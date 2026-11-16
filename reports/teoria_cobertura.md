@@ -157,6 +157,34 @@ O critério é o mesmo: só mais de ~10 pontos acima da média normal conta como
 
 As referências incluem agora 4 locutores externos (LibriTTS test-clean), além dos 8 treinados e 4 novos de sempre.
 
+**8.3 Resultado** (passo 2.500, estilo inteiro; uma semente por treino; `sim_ref > sim_default` como nas seções anteriores):
+
+| Treino | Treinadas copiadas (previsto → medido) | Novas copiadas (previsto → medido) | Externas copiadas | WER treinadas / novas / externas |
+|---|---|---|---|---|
+| 128 × 8 | 52% → **52%** | 56% → **55%** | 86% | 12% / 8% / 13% |
+| 128 × 32 | 82% → **76%** | 57% → **74%** | 86% | 12% / 8% / 16% |
+
+- Com K = 8 a lei acertou os dois números a menos de 1 ponto.
+- Com K = 32 as vozes novas ficaram 17 pontos acima do previsto, além do limite de 67% que eu tinha fixado. Nesse ponto a lei errou: com 128 locutores, mais frases por locutor ainda rendem, e o teto de 58% não vale. É o melhor resultado do projeto para vozes novas (74% copiadas com 8% de WER; o melhor anterior era 61% / 57% com 32 × 128).
+- As vozes externas (outro conjunto de gravações) são copiadas mais que as novas do mesmo corpus. Elas estão mais longe da voz padrão (`sim_default` menor), o que facilita o critério; não é sinal de que sejam mais fáceis de imitar.
+
+Refazendo o ajuste com os 14 treinos, a lei a + A/N + B/(NK) dá a = 0,39 e RMSE 0,063 (antes 0,050), e continua prevendo 60% para 128 × 32. Leis com raiz quadrada, como a + A/√N + C/√K, ajustam igualmente bem os 12 treinos antigos (RMSE 0,052) e, ajustadas só neles, previam 58% e 65% para os dois treinos novos; nelas o piso `a` cai para 0,16. Conclusão honesta: **os dados não identificam o piso nem a forma da queda**. O que se mantém é a estrutura em dois níveis (N para vozes novas, K para treinadas, e K ajudando também as novas quando N é grande). A frase "mais locutores rendem cada vez menos" da seção 4 fica em suspenso até a réplica (seção 8.5).
+
+**8.4 Resultado das várias referências.** Vozes copiadas pela medida por locutor (`sim_spk > sim_default`), que é a adequada quando o código vem de várias frases:
+
+| Treino | Grupo | R = 1 | R = 4 | R = 16 |
+|---|---|---|---|---|
+| 128 × 8 | treinadas | 66% | 66% | 66% |
+| 128 × 8 | novas | 47% | 67% | 67% |
+| 128 × 8 | externas | 77% | 83% | 90% |
+| 128 × 32 | treinadas | 84% | 71% | 75% |
+| 128 × 32 | novas | 74% | 78% | 72% |
+| 128 × 32 | externas | 95% | 94% | 99% |
+
+Nenhuma das duas hipóteses se confirma por inteiro. Com K = 8 as vozes novas sobem 20 pontos já com 4 referências; com K = 32, onde a cópia já era alta, nada muda nas novas e as treinadas caem. A semelhança média com o locutor sobe em todos os grupos (por exemplo 0,713 → 0,743 nas novas com K = 32), mas a semelhança com a voz padrão sobe junto, porque a média dos códigos fica mais perto do centro. O WER das vozes externas cai (16% → 9% com K = 32; 13% → 10% com K = 8) e o das outras fica igual. Pela medida por frase (`sim_ref`), a cópia cai com R, como esperado: o código deixa de ser o daquela frase. Leitura: a média de códigos ajuda quando o modelo copia mal e deixa a fala mais estável, mas não é um ganho geral; um ganho consistente pediria treinar com o código médio do locutor, e não só usá-lo no teste.
+
+**8.5 Réplica em curso, com previsões.** `n128_k32_s2` (mesma configuração, outra semente) e `n200_k32_s1` (200 locutores). Se os 74% forem reais, a réplica fica em 64% ou mais; se forem sorte da semente, perto de 60%. Para 200 × 32, a lei em 1/N reajustada prevê 60% e a lei com raízes prevê 68%.
+
 ## 9. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.

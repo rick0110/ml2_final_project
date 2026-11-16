@@ -222,6 +222,13 @@ Com 8 locutores, o vetor sozinho copia as vozes treinadas (71%) e quase nenhuma 
 
 A lei previu os dois números com N = 8 locutores reais. O que conta é a variedade real de vozes; os caminhos que sobram são separar a leitura do texto da troca de voz (conversão de voz treinada sem transcrição em muitos locutores) e usar várias referências por voz.
 
+**128 locutores e várias referências por voz.** Previsões registradas antes (seção 8 da nota teórica). Com 128 locutores × 8 frases a lei acertou (55% das vozes novas copiadas, previsto 56%; treinadas 52%, previsto 52%). Com 128 × 32 ela errou para cima: 74% das vozes novas copiadas com 8% de WER (previsto 57%), o melhor resultado do projeto. O piso da lei, portanto, não está identificado pelos dados; uma réplica com outra semente e um treino com 200 locutores estão em curso. Usar a média do código de estilo de 4 ou 16 frases do mesmo locutor (`--n-refs` em `scripts/eval/synth_check.py`) sobe a cópia das vozes novas de 47% para 67% no treino 128 × 8 e não muda no 128 × 32 (74% → 78% → 72%); o WER das vozes de outro corpus cai de 16% para 9%. As referências passam a incluir 4 locutores do LibriTTS test-clean ("externos"). Os scripts de conversão de voz (`vc_cascade.py`, `vc_voices.py`) estão prontos mas não foram executados.
+
+| Treino (passo 2.500) | Treinadas copiadas | Novas copiadas | Externas copiadas | WER novas |
+|---|---|---|---|---|
+| 128 × 8 | 52% | 55% | 86% | 8% |
+| 128 × 32 | 76% | 74% | 86% | 8% |
+
 Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 14 pontos; a medida de voz copiada depende de um único codificador de locutor.
 
 Reprodução: `scripts/coverage/colab_job.sh` (treino e avaliação), `scripts/coverage/summarize.py` (tabela e figura). Resultados por amostra em `reports/coverage/results/`.
