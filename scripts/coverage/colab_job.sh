@@ -45,14 +45,24 @@ if [ ! -f data/processed/LJSpeech/mels_metadata.csv ]; then
     --out-dir data/processed/LJSpeech --num-workers "$CPUS"
 fi
 if [ ! -f data/processed/LibriTTS/mels_metadata.csv ]; then
-  [ -d data/raw/LibriTTS/train-clean-100 ] || curl -sL https://www.openslr.org/resources/60/train-clean-100.tar.gz | tar xz -C data/raw
+  if [ ! -d data/raw/LibriTTS/train-clean-100 ]; then
+    # A copy of the OpenSLR archive (openslr.org can be very slow); checked against the published MD5
+    curl -sL -o /content/train-clean-100.tar.gz "${LIBRITTS_URL:-https://huggingface.co/datasets/Respair/libri_zipped/resolve/main/train-clean-100.tar.gz}"
+    echo "4a8c202b78fe1bc0c47916a98f3a2ea8  /content/train-clean-100.tar.gz" | md5sum -c -
+    tar xzf /content/train-clean-100.tar.gz -C data/raw && rm /content/train-clean-100.tar.gz
+  fi
   python scripts/preprocess/make_manifest.py --corpus libritts --input-dir data/raw/LibriTTS/train-clean-100 \
     --out-dir data/processed/LibriTTS --min-duration 1.5 --max-duration 10 --num-workers "$CPUS"
 fi
 # Speakers that neither the models trained here nor the voice-conversion model have heard
 if [ ! -f data/processed/LibriTTS_test/mels_metadata.csv ]; then
-  [ -d data/raw/LibriTTS/test-clean ] || curl -sL https://www.openslr.org/resources/60/test-clean.tar.gz | tar xz -C data/raw
-  python scripts/preprocess/make_manifest.py --corpus libritts --input-dir data/raw/LibriTTS/test-clean \
+  # Optional: without it (slow server) the runs go on with no "external" references
+  if [ ! -d data/raw/LibriTTS/test-clean ]; then
+    curl -sL --max-time 1200 -o /content/test-clean.tar.gz https://www.openslr.org/resources/60/test-clean.tar.gz \
+      && tar xzf /content/test-clean.tar.gz -C data/raw || echo "no test-clean"
+    rm -f /content/test-clean.tar.gz
+  fi
+  [ -d data/raw/LibriTTS/test-clean ] && python scripts/preprocess/make_manifest.py --corpus libritts --input-dir data/raw/LibriTTS/test-clean \
     --out-dir data/processed/LibriTTS_test --min-duration 1.5 --max-duration 10 --num-workers "$CPUS"
 fi
 [ -f ckpt/hifigan_universal_v1.pt ] || curl -sL -o ckpt/hifigan_universal_v1.pt \
