@@ -215,9 +215,27 @@ Com os treinos novos o quadro fica mais claro que na seção 8.4: a média de 4 
 - Pela lei em 1/N, a parcela não copiada cai 13 pontos de N = 8 para 32 e 3 pontos de 32 para 128 (razão 0,25). Pela lei com raízes, cai 18 e 9 pontos (razão 0,5). Se o ganho de 32 para 128 ficar abaixo de um terço do ganho de 8 para 32, a lei em 1/N fica de pé; se passar de 40%, a lei com raízes.
 - Com R = 4, a cópia por locutor sobe nas vozes externas nos três treinos.
 
+**8.8 Resultado da avaliação larga.** Passo 2.500, estilo a 100%, 38 locutores do LibriTTS test-clean × 25 frases (950 amostras por treino), nenhum deles ouvido por nenhum modelo:
+
+| Treino | Externas copiadas (IC 95%) | WER externas | Por locutor, R = 1 → 4 | 4 vozes novas da grade |
+|---|---|---|---|---|
+| 8 × 32 | 57% (43–70) | 13% | 66% → 64% | 36% |
+| 32 × 32 | 70% (58–81) | 12% | 81% → 79% | 48% |
+| 128 × 32 | 79% (68–89) | 12% | 88% → 84% | 75% |
+
+Os intervalos vêm de reamostrar os 38 locutores (10.000 vezes); as diferenças entre treinos são pareadas nos mesmos locutores.
+
+- **O ganho de 32 para 128 locutores é real**: 9 pontos (IC 95% de 1,5 a 17), contra 13 pontos de 8 para 32 (4 a 23). A razão entre os dois ganhos é 0,7; em 80% das reamostragens ela passa de 0,4 (critério da lei com raízes) e em 14% fica abaixo de 1/3 (critério da lei em 1/N). **A lei com raízes sai favorecida, sem certeza**: cada vez que o número de locutores quadruplica, a cópia sobe cerca de 10 pontos, sem sinal de piso até N = 128. Isso reverte a leitura das seções 4 e 8.6 de que mais locutores rendem cada vez menos; aquela leitura vinha do ruído de avaliar em 4 vozes.
+- O WER das vozes externas não muda com N (12–13%): mais locutores melhoram a cópia sem custo de inteligibilidade.
+- **A previsão sobre várias referências falhou.** Nas 38 vozes externas a média de 4 referências não sobe a cópia por locutor em nenhum dos três treinos (cai 2 a 4 pontos). O ganho visto nas seções 8.4 e 8.6 era das 4 vozes novas da grade (aqui de novo 34% → 62% com N = 32) e não se generaliza; o que a média faz de consistente é baixar o WER (13% → 12%, 12% → 10%, 12% → 9%). A "solução sem treino" da seção 8.6 fica, portanto, rebaixada a um estabilizador da fala.
+- As 4 vozes novas da grade são mais difíceis que a média (36–75% contra 57–79%) e, sozinhas, dão a ordem certa mas valores instáveis. O treino 128 × 32 com a semente 1 repetiu nelas o valor da primeira vez (75% contra 74%): a diferença para a semente 2 (56%) é da semente, não do acaso da avaliação.
+- Por locutor externo, o número de vozes copiadas em mais da metade das frases vai de 21 a 27 e 30 (de 38). Em todos os treinos há locutores com 0% e com 100%: a cópia é quase tudo-ou-nada por voz.
+
+Uma falha de execução: o primeiro treino de 8 locutores foi avaliado sem as vozes externas (download falhou) e reavaliado depois a partir do mesmo checkpoint; os números acima são da reavaliação.
+
 ## 9. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.
-- 10 configurações, N ≤ 200, 4 vozes novas por avaliação (ruído entre sementes de até 18 pontos), uma medida de voz (um codificador de locutor).
+- 10 configurações, N ≤ 200, 4 vozes novas por avaliação (ruído entre sementes de até 18 pontos); a avaliação larga da seção 8.8 tem 38 vozes, mas uma semente e só K = 32, uma medida de voz (um codificador de locutor).
 - A medida é binária por amostra (voz mais perto da referência que da voz padrão); não mede naturalidade.
 - A decomposição da seção 2 é sobre o erro esperado; não foi medida termo a termo.
