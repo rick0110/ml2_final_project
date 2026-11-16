@@ -24,6 +24,9 @@ CPUS=$(nproc)
 POOL="--pool data/processed/LibriTTS --pool data/processed/LibriTTS_test"  # more utterances of the reference speakers
 cd /content/repo
 
+# Several copies of this job may start together: only one installs and prepares the data, the others wait
+exec 9>/content/setup.lock
+flock 9
 python -m pip install -q gruut num2words inflect faster-whisper webrtcvad-wheels speechbrain
 python -m pip install -q --no-deps resemblyzer
 # librosa's pitch tracker crashes with the numba that ships on some Colab images
@@ -35,9 +38,6 @@ print(":".join(glob.glob(os.path.join(site.getsitepackages()[0], "nvidia", "*", 
 PY
 ):${LD_LIBRARY_PATH:-}"
 
-# Several copies of this job may start together: only one prepares the data, the others wait
-exec 9>/content/setup.lock
-flock 9
 mkdir -p data/raw data/processed ckpt /content/out
 if [ ! -f data/processed/LJSpeech/mels_metadata.csv ]; then
   [ -d data/raw/LJSpeech-1.1 ] || curl -sL https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2 | tar xj -C data/raw
