@@ -18,6 +18,7 @@ STEPS=${STEPS:-"2000 4000"}
 STRENGTHS=${STRENGTHS:-"1.0 0.6"}
 VC_REFS=${VC_REFS:-""}  # e.g. "1 8": also convert every evaluation to the reference voice (vc_cascade.py)
 MULTI_REFS=${MULTI_REFS:-""}  # e.g. "4 16": also evaluate with the latent code averaged over that many utterances of the reference speaker
+EXTERNAL_REFS=${EXTERNAL_REFS:-4}  # reference speakers from LibriTTS test-clean (it has 39)
 BATCH=${BATCH:-48}
 WORKERS=${WORKERS:-6}   # data-loading processes per training run (lower it when several runs share the machine)
 CPUS=$(nproc)
@@ -76,7 +77,8 @@ for RUN in $RUNS; do
   # style dropout (half of the items train without the VAE style vector); -aug: every training
   # utterance also in a second, speed-changed voice (scripts/coverage/augment_voices.py);
   # -vcaug: every default-voice utterance also converted to one of 200 other real voices
-  # (scripts/coverage/vc_voices.py); -notrain: no training, the English model is evaluated as is
+  # (scripts/coverage/vc_voices.py); -notrain: no training, the English model is evaluated as is;
+  # -wide: a normal run under another name, for evaluations with more reference speakers
   BASE=${RUN%%-*}; SWAP=""
   case "$RUN" in
     *-swap) SWAP="--swap-reference" ;;
@@ -92,7 +94,7 @@ for RUN in $RUNS; do
   case "$RUN" in *-notrain) RUN_STEPS=0; RUN_STRENGTHS="0.0 1.0"; RUN_VC="1 4 16 64" ;; esac
   flock 9  # runs that share a data folder prepare it one at a time
   [ -f "$DATA/test_sentences.txt" ] || python scripts/coverage/coverage_manifest.py --lj data/processed/LJSpeech \
-    --libritts data/processed/LibriTTS --external data/processed/LibriTTS_test --n "$N" --k "$K" --out "$DATA"
+    --libritts data/processed/LibriTTS --external data/processed/LibriTTS_test --external-n "$EXTERNAL_REFS" --n "$N" --k "$K" --out "$DATA"
   case "$RUN" in *-vcaug)
     [ -f "${DATA}_vc/test_sentences.txt" ] || python scripts/coverage/vc_voices.py --data-dir "$DATA" \
       --libritts data/processed/LibriTTS --audio-dir data/processed/vc_voices --out "${DATA}_vc"

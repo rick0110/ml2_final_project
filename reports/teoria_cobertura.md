@@ -210,6 +210,11 @@ Várias referências (R = 4), pela medida por locutor, nos três treinos novos e
 
 Com os treinos novos o quadro fica mais claro que na seção 8.4: a média de 4 referências **sobe a cópia das vozes novas nos quatro treinos** (+4 a +20 pontos, chegando a 67–78%) e das externas em três de quatro, e **baixa a das treinadas** em três de quatro. É a previsão da decomposição da seção 2: a média remove a parte do código que é da frase e não do locutor, o que ajuda onde o modelo não decorou a voz e atrapalha onde decorou. Como solução prática, é a única das testadas que melhora vozes novas sem treinar nada.
 
+**8.7 Avaliação larga: previsões.** Três treinos com K = 32 (N = 8, 32 e 128; sufixo `-wide`) avaliados em todas as vozes do LibriTTS test-clean com frases suficientes (até 39 locutores, 25 frases cada, cerca de 10 vezes mais vozes novas que antes), com R = 1 e R = 4. As vozes externas são copiadas com mais facilidade que as 4 "novas" da grade (86–91% contra 56–74%), então a previsão é sobre a forma, não sobre o nível. Registrado antes de rodar:
+
+- Pela lei em 1/N, a parcela não copiada cai 13 pontos de N = 8 para 32 e 3 pontos de 32 para 128 (razão 0,25). Pela lei com raízes, cai 18 e 9 pontos (razão 0,5). Se o ganho de 32 para 128 ficar abaixo de um terço do ganho de 8 para 32, a lei em 1/N fica de pé; se passar de 40%, a lei com raízes.
+- Com R = 4, a cópia por locutor sobe nas vozes externas nos três treinos.
+
 ## 9. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.

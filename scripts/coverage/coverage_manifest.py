@@ -36,7 +36,6 @@ from typing import Dict, List
 
 
 MAX_N = 32          # number of training speakers of the original grid (larger runs add speakers after these)
-EXTERNAL = 4        # reference speakers taken from --external
 HELDOUT = 4         # sentences per speaker kept as references
 N_TEST = 25         # test sentences
 FIELDS = ["utt_id", "mel_path", "text", "speaker", "emotion", "duration"]
@@ -79,6 +78,7 @@ def main() -> None:
     ap.add_argument("--lj-size", type=int, default=2000)
     ap.add_argument("--external", type=Path, default=None,
                     help="Processed corpus of other speakers (e.g. LibriTTS test-clean) for extra references")
+    ap.add_argument("--external-n", type=int, default=4, help="Reference speakers taken from --external")
     a = ap.parse_args()
 
     rng = random.Random(0)
@@ -119,7 +119,7 @@ def main() -> None:
         ext: Dict[str, List[dict]] = defaultdict(list)
         for r in sorted(read(a.external), key=lambda r: r["utt_id"]):
             ext[r["speaker"]].append(r)
-        for s in sorted(ext, key=lambda s: (-len(ext[s]), s))[:EXTERNAL]:
+        for s in sorted(ext, key=lambda s: (-len(ext[s]), s))[: a.external_n]:
             random.Random(1).shuffle(ext[s])
             refs.append(dict(ext[s][0], emotion="external"))
     write(a.out / "refs", refs)
