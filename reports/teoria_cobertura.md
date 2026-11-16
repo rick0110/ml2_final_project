@@ -123,7 +123,28 @@ O que isso diz sobre a teoria:
 
 Consequência prática: sobram os caminhos (b) e (c). O (b) é o que ataca o termo A/N diretamente, porque a conversão de voz treina sem transcrição e pode usar milhares de locutores reais; o (c) ataca o piso `a`. Uma versão mais forte de (a) seria gerar as pseudo-vozes com um conversor de voz já treinado em muitos locutores (as 2.000 frases da voz padrão ditas em centenas de vozes reais), o que é o caminho (b) usado como aumento de dados.
 
-## 7. Limites desta tratativa
+## 7. Próximo teste: conversão de voz (caminho b), com previsões registradas
+
+Dois experimentos com um conversor de voz pré-treinado (kNN-VC: troca as características WavLM do áudio pelas mais próximas entre as do locutor-alvo; não usa texto e não é treinado aqui).
+
+**7.1 Cascata: ler na voz padrão, depois converter** (`scripts/coverage/vc_cascade.py`). O modelo de inglês, sem nenhum treino com outros locutores, lê as 25 frases na voz padrão; o conversor leva cada áudio para a voz da referência, descrita por R = 1, 4, 16 ou 64 frases do mesmo locutor. As referências agora incluem 4 locutores "externos" (LibriTTS test-clean), que nem os nossos modelos nem o conversor ouviram.
+
+Previsões:
+
+- O WER fica perto do da voz padrão (até ~8%) em todos os grupos, porque o termo de interação texto × voz some.
+- A cópia da voz não depende de a voz ser treinada, nova ou externa.
+- A cópia sobe com R (caminho c: mais referência baixa o piso). Com R ≥ 16, passa de 58% nas vozes novas, o teto que a lei dá ao modelo atual com infinitos locutores. Se com R = 64 ficar abaixo de 58%, o caminho (b) com este conversor falha.
+
+**7.2 Vozes reais por conversão no treino** (`scripts/coverage/vc_voices.py`, variante `-vcaug`). As 2.000 frases da voz padrão ganham uma cópia convertida para 200 locutores reais do LibriTTS (10 frases por voz; locutores fora de todos os treinos e de todas as referências; só o áudio deles é usado). É o teste do que a seção 6 concluiu: se o termo A/N conta variedade real de vozes, estas cópias devem contar, ao contrário das de velocidade alterada.
+
+| Treino | Normal (2 sementes) | Se as vozes convertidas não contarem | Se contarem (N ≈ 208) |
+|---|---|---|---|
+| 8 × 8 | 26% / 39% | ~31% | ~55% |
+| 8 × 128 | 51% / 37% | ~44% | ~57% |
+
+O critério é o mesmo: só mais de ~10 pontos acima da média normal conta como efeito.
+
+## 8. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.
 - 7 configurações, N ≤ 32, 4 vozes novas por avaliação, uma medida de voz (um codificador de locutor).

@@ -16,7 +16,9 @@ Outputs in --out:
                              run: the text the model must read in each reference voice
     refs/mels_metadata.csv   style references, never used in training: held-out sentences
                              of trained speakers ("seen") and of speakers left out of
-                             every run ("unseen"); the column `emotion` holds seen/unseen
+                             every run ("unseen"); the column `emotion` holds seen/unseen.
+                             With --external, also speakers of another corpus split
+                             ("external"), which no model used here has heard
 
 Example:
     python scripts/coverage/coverage_manifest.py --lj data/processed/LJSpeech \
@@ -34,6 +36,7 @@ from typing import Dict, List
 
 
 MAX_N = 32          # largest number of training speakers in any run
+EXTERNAL = 4        # reference speakers taken from --external
 HELDOUT = 4         # sentences per speaker kept as references
 N_TEST = 25         # test sentences
 FIELDS = ["utt_id", "mel_path", "text", "speaker", "emotion", "duration"]
@@ -73,6 +76,8 @@ def main() -> None:
     ap.add_argument("--k", type=int, required=True, help="Sentences per LibriTTS speaker in training")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--lj-size", type=int, default=2000)
+    ap.add_argument("--external", type=Path, default=None,
+                    help="Processed corpus of other speakers (e.g. LibriTTS test-clean) for extra references")
     a = ap.parse_args()
     assert a.n <= MAX_N
 
@@ -109,6 +114,13 @@ def main() -> None:
         refs += [dict(r, emotion="seen") for r in by_speaker[s][:per_seen]]
     for s in unseen:
         refs += [dict(r, emotion="unseen") for r in by_speaker[s][:1]]
+    if a.external and (a.external / "mels_metadata.csv").exists():
+        ext: Dict[str, List[dict]] = defaultdict(list)
+        for r in sorted(read(a.external), key=lambda r: r["utt_id"]):
+            ext[r["speaker"]].append(r)
+        for s in sorted(ext, key=lambda s: (-len(ext[s]), s))[:EXTERNAL]:
+            random.Random(1).shuffle(ext[s])
+            refs.append(dict(ext[s][0], emotion="external"))
     write(a.out / "refs", refs)
     print(f"N={a.n} K={a.k}: {len(train)} training utterances ({len(train) - len(lj)} LibriTTS), {len(refs)} references")
 
