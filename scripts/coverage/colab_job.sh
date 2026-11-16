@@ -59,8 +59,11 @@ fi
 if [ ! -f data/processed/LibriTTS_test/mels_metadata.csv ]; then
   # Optional: without it (slow server) the runs go on with no "external" references
   if [ ! -d data/raw/LibriTTS/test-clean ]; then
-    curl -sL --max-time 1200 -o /content/test-clean.tar.gz https://www.openslr.org/resources/60/test-clean.tar.gz \
-      && tar xzf /content/test-clean.tar.gz -C data/raw || echo "no test-clean"
+    for U in https://openslr.elda.org/resources/60/test-clean.tar.gz https://www.openslr.org/resources/60/test-clean.tar.gz; do
+      curl -sL --max-time 1200 -o /content/test-clean.tar.gz "$U"
+      [ "$(stat -c %s /content/test-clean.tar.gz)" = 1230670113 ] && break
+    done
+    tar xzf /content/test-clean.tar.gz -C data/raw || echo "no test-clean"
     rm -f /content/test-clean.tar.gz
   fi
   [ -d data/raw/LibriTTS/test-clean ] && python scripts/preprocess/make_manifest.py --corpus libritts --input-dir data/raw/LibriTTS/test-clean \
