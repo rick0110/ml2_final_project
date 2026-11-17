@@ -225,7 +225,7 @@ Com os treinos novos o quadro fica mais claro que na seção 8.4: a média de 4 
 
 Os intervalos vêm de reamostrar os 38 locutores (10.000 vezes); as diferenças entre treinos são pareadas nos mesmos locutores.
 
-- **O ganho de 32 para 128 locutores é real**: 9 pontos (IC 95% de 1,5 a 17), contra 13 pontos de 8 para 32 (4 a 23). A razão entre os dois ganhos é 0,7; em 80% das reamostragens ela passa de 0,4 (critério da lei com raízes) e em 14% fica abaixo de 1/3 (critério da lei em 1/N). **A lei com raízes sai favorecida, sem certeza**: cada vez que o número de locutores quadruplica, a cópia sobe cerca de 10 pontos, sem sinal de piso até N = 128. Isso reverte a leitura das seções 4 e 8.6 de que mais locutores rendem cada vez menos; aquela leitura vinha do ruído de avaliar em 4 vozes.
+- **O ganho de 32 para 128 locutores é real**: 9 pontos (IC 95% de 1,5 a 17), contra 13 pontos de 8 para 32 (4 a 23). A razão entre os dois ganhos é 0,7; em 80% das reamostragens ela passa de 0,4 (critério da lei com raízes) e em 14% fica abaixo de 1/3 (critério da lei em 1/N). ~~A lei com raízes sai favorecida~~ (revisto na seção 8.10: as leis não se distinguem). Isso reverte a leitura das seções 4 e 8.6 de que mais locutores rendem cada vez menos; aquela leitura vinha do ruído de avaliar em 4 vozes.
 - O WER das vozes externas não muda com N (12–13%): mais locutores melhoram a cópia sem custo de inteligibilidade.
 - **A previsão sobre várias referências falhou.** Nas 38 vozes externas a média de 4 referências não sobe a cópia por locutor em nenhum dos três treinos (cai 2 a 4 pontos). O ganho visto nas seções 8.4 e 8.6 era das 4 vozes novas da grade (aqui de novo 34% → 62% com N = 32) e não se generaliza; o que a média faz de consistente é baixar o WER (13% → 12%, 12% → 10%, 12% → 9%). A "solução sem treino" da seção 8.6 fica, portanto, rebaixada a um estabilizador da fala.
 - As 4 vozes novas da grade são mais difíceis que a média (36–75% contra 57–79%) e, sozinhas, dão a ordem certa mas valores instáveis. O treino 128 × 32 com a semente 1 repetiu nelas o valor da primeira vez (75% contra 74%): a diferença para a semente 2 (56%) é da semente, não do acaso da avaliação.
@@ -240,6 +240,23 @@ Uma falha de execução: o primeiro treino de 8 locutores foi avaliado sem as vo
 - **A distância à voz treinada mais próxima prevê a falha com poucos locutores e deixa de prever com muitos:** −0,33 (N = 8), −0,40 (N = 32), +0,13 (N = 128). É o que a leitura de "cobertura" prevê: com poucos locutores, o decodificador só reproduz vozes perto das que ouviu; com 128, quase toda voz tem uma vizinha, e o que sobra de falha é a atração pela voz padrão.
 
 Leitura conjunta com as seções 8.4–8.8: o gargalo não é o codificador descrever a voz nova (o vetor ECAPA, treinado em milhares de vozes, não ajuda; a média de referências não ajuda), e sim o decodificador conseguir **renderizá-la**. Isso é uma hipótese sobre a arquitetura, testável.
+
+**8.10 Revisão crítica, sem treino novo** (relatórios completos em `reports/teoria/02_derivacao.md`, `03_informacao.md` e `04_dados.md`; scripts em `reports/teoria/analises/`). Correções ao que está acima:
+
+- **O expoente 0,26 não tem apoio estatístico.** É o que dois parâmetros fazem passar por três pontos de uma semente. Simulando o desenho com a variância medida, um expoente verdadeiro de 0,26 aparece estimado entre 0,06 e 0,53, e a lei certa é escolhida em 16–62% dos casos. O "80% a favor da lei com raízes" (8.8) e as extrapolações para 247 e 1.000 locutores ficam retirados. Na grade de 4 vozes, a lei com raízes só vence por causa dos treinos com N = 2.
+- **A medida distorce a dificuldade das vozes.** Com vetores normalizados, a margem é exatamente m = (½ − ρ)·‖e_ref − e_0‖², com ρ a atração da saída para a voz padrão; vozes parecidas com a voz padrão têm margem minúscula e trocam de lado por ruído. Pitch e semelhança com a voz padrão explicam 28–59% da dificuldade das vozes na medida binária e 2–9% na semelhança direta com a referência. Sem a voz padrão na medida, o expoente aparente sobe para 0,41–0,55 (mesma ressalva de poucos pontos).
+- **Bits de voz não crescem como log N** (seção 8.8 e tabela da proposta): a estimativa gaussiana fica perto de 17 bits na média do latente, estável de N = 32 a 200; o viés é pequeno, mas ela mede um vetor de voz contínuo. A dimensão intrínseca das médias por locutor é 7–10, o que descarta "falha ∝ distância" (pediria d ≈ 4) e é compatível com "falha ∝ distância²" (d ≈ 7,7), sem ser teste.
+- **Mantém-se:** vozes treinadas seguem só K (colapso K^0,46, efeito de N nulo ± 0,07); cópia quase tudo-ou-nada por voz (ICC 0,83–0,94); a variação vem da voz de referência, não da frase; média de 4 referências não ajuda nas 38 vozes (−2,5 pontos, IC [−6,4; +0,8]); o ganho de 32 para 128 locutores é real.
+- **Modelo de cobertura + atração pela voz padrão:** copiada ⇔ K·Σ_i k(v, v_i) > M·k(v, v_0), com M = 2.000 frases da voz padrão e espectro de vozes λ_j ∝ 1/j (o latente mede 1,05–1,1). Reproduz curva, sinais das correlações e grade (r = 0,97), mas com 5 parâmetros escolhidos em 3 pontos; e prevê que os pseudo-locutores (seção 6) deveriam ter contado, o que não aconteceu.
+
+Previsões registradas agora, antes de qualquer treino:
+
+1. Metade das frases da voz padrão (M = 1.000) tem sobre as vozes novas o mesmo efeito que dobrar K.
+2. Latente de 8 dimensões não muda a cópia; com 2, cai. A taxa pode descer a 25–30 bits por frase sem perda.
+3. N = 2.456, K = 32: cerca de 9% de vozes não copiadas sob cobertura contra 16% ou mais sob as leis com piso (exige pelo menos 200 vozes de avaliação).
+4. Duas etapas: a cópia segue N_voz desde que as unidades vazem pouca voz; vazamento de peso 0,2 impõe piso de cerca de 15%.
+
+Desenho recomendado para os próximos treinos (simulação de poder): 60–100 vozes fixas × 10 frases, N ∈ {8, 32, 128, 512, 2.048}, 3–5 sementes por N, métrica contínua sem voz padrão como principal, síntese com estilo zerado por voz e ressíntese dupla de cada checkpoint.
 
 ## 9. Limites desta tratativa
 

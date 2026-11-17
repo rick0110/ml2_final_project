@@ -39,7 +39,7 @@
 \maketitle
 
 \begin{abstract}
-\noindent Este documento reúne tudo o que o projeto tem até agora, para que alguém de fora entenda o trabalho só por ele. Partimos de um sistema de síntese de fala com estilo copiado de um áudio de referência (Tacotron~2 + VAE) e o usamos como bancada barata para uma pergunta de dados: \emph{quantos locutores, e quantas frases por locutor, um modelo precisa ver no treino para copiar a voz de alguém que nunca ouviu?} Em 33 treinos controlados (grade de $N$ locutores $\times$ $K$ frases, até $N=200$), as vozes treinadas dependem de $K$ e as vozes novas dependem de $N$. Medida em 38 vozes nunca ouvidas, a cópia sobe de 57\% para 70\% e 79\% com 8, 32 e 128 locutores, sem custo de inteligibilidade e sem sinal de teto: cerca de 10 pontos a cada vez que $N$ quadruplica. Cinco tentativas de contornar a falta de locutores falharam (troca de referência, perda contrastiva, vetor de locutor pré-treinado, pseudo-locutores por mudança de velocidade, média de referências), e a análise por voz indica que o gargalo é o \emph{decodificador} conseguir renderizar a voz, não o codificador descrevê-la. A partir disso propomos (i) uma lei de escala com regimes paramétrico e não paramétrico e (ii) uma arquitetura em duas etapas em que a voz é aprendida com áudio \emph{sem transcrição}, com previsões falseáveis a testar numa GPU dedicada. A aplicação-alvo é a dublagem para línguas com poucos locutores gravados, como o português.
+\noindent Este documento reúne tudo o que o projeto tem até agora, para que alguém de fora entenda o trabalho só por ele. Partimos de um sistema de síntese de fala com estilo copiado de um áudio de referência (Tacotron~2 + VAE) e o usamos como bancada barata para uma pergunta de dados: \emph{quantos locutores, e quantas frases por locutor, um modelo precisa ver no treino para copiar a voz de alguém que nunca ouviu?} Em 33 treinos controlados (grade de $N$ locutores $\times$ $K$ frases, até $N=200$), as vozes treinadas dependem de $K$ e as vozes novas dependem de $N$. Medida em 38 vozes nunca ouvidas, a cópia sobe de 57\% para 70\% e 79\% com 8, 32 e 128 locutores, sem custo de inteligibilidade; com só três pontos e uma semente, a forma dessa curva (o expoente) ainda não é identificável. Cinco tentativas de contornar a falta de locutores falharam (troca de referência, perda contrastiva, vetor de locutor pré-treinado, pseudo-locutores por mudança de velocidade, média de referências), e a análise por voz indica que o gargalo é o \emph{decodificador} conseguir renderizar a voz, não o codificador descrevê-la. Uma revisão crítica mostra que parte da dificuldade medida vem da própria régua (a cópia é medida contra a voz padrão) e propõe um modelo de ``cobertura + atração pela voz padrão''. A partir disso propomos (i) uma lei de escala com regimes paramétrico e não paramétrico e (ii) uma arquitetura em duas etapas em que a voz é aprendida com áudio \emph{sem transcrição}, com previsões falseáveis a testar numa GPU dedicada. A aplicação-alvo é a dublagem para línguas com poucos locutores gravados, como o português.
 \end{abstract}
 
 \tableofcontents
@@ -204,7 +204,7 @@ Como 4 vozes dão uma medida ruidosa, três treinos com $K=32$ foram avaliados e
 \addplot+[azul, mark=*, thick, error bars/.cd, y dir=both, y explicit] coordinates {(8,57) +- (0,13.5) (32,70) +- (0,11.5) (128,79) +- (0,10.5)};
 \addlegendentry{medido (IC 95\%)}
 \addplot[laranja, dashed, thick, domain=5:200, samples=40] {100*(1-0.74*x^(-0.26))};
-\addlegendentry{$1-c\,N^{-0{,}26}$}
+\addlegendentry{$1-c\,N^{-\alpha}$ (só descreve)}
 \end{axis}
 \end{tikzpicture}
 \end{minipage}\hfill
@@ -222,11 +222,11 @@ $128\times32$ & 79\% (68--89) & 12\% & 88\% $\rightarrow$ 84\%\\
 \end{tabular}\\[6pt]
 Ganho pareado: 13 pontos de 8 para 32 (IC 4--23); 9 pontos de 32 para 128 (IC 1,5--17).
 \end{minipage}
-\caption{Cópia de voz em 38 vozes nunca ouvidas. A curva tracejada é uma lei de potência passando pelos três pontos (dois parâmetros, três pontos: é descrição, não teste). ``$R=4$'': código de estilo tirado da média de 4 frases do locutor.}
+\caption{Cópia de voz em 38 vozes nunca ouvidas. A curva tracejada é uma potência passando pelos três pontos ($\alpha=0{,}26$); com dois parâmetros, três pontos e uma semente, ela descreve e não testa nada: qualquer $\alpha$ entre cerca de 0,06 e 0,53 seria compatível (Seção~\ref{sec:revisao}). ``$R=4$'': código de estilo tirado da média de 4 frases do locutor.}
 \label{fig:larga}
 \end{figure}
 
-\caixa{verde}{\textbf{Resultado 2 (escala sem teto visível).} A cada vez que $N$ quadruplica, a cópia de vozes novas sobe cerca de 10 pontos, com WER constante (12--13\%). O ganho de 32 para 128 locutores é real (IC não inclui zero). A impressão anterior, vinda das 4 vozes, de que acima de 128 locutores não havia ganho era ruído de medida.}
+\caixa{verde}{\textbf{Resultado 2 (mais locutores continuam rendendo).} De 8 para 32 e de 32 para 128 locutores a cópia de vozes novas sobe 13 e 9 pontos, com WER constante (12--13\%); o ganho de 32 para 128 é real (IC não inclui zero). A impressão anterior, vinda das 4 vozes, de que acima de 128 locutores não havia ganho era ruído de medida. O que \emph{não} está estabelecido é a forma da curva: o expoente e qualquer extrapolação para milhares de locutores.}
 
 \subsection{Tentativas de contornar a falta de locutores (todas negativas)}
 
@@ -274,11 +274,11 @@ $128\times32$ & 73 & 19 & 6,9\\
 $200\times32$ & 72 & 20 & 7,4\\
 \bottomrule
 \end{tabular}
-\caption{O KL por frase é uma cota superior da informação que passa pelo latente (as 32 dimensões estão ativas em todos os treinos). ``Bits sobre o locutor'' usa uma aproximação gaussiana (covariância total sobre covariância dentro do locutor), viesada para cima com poucas frases por locutor: ordem de grandeza. Cerca de 80\% da variância do latente é entre locutores, e a distância do código à voz padrão tem correlação 0,83 com a cópia.}
+\caption{O KL por frase é uma cota superior da informação que passa pelo latente (as 32 dimensões estão ativas em todos os treinos). ``Bits sobre o locutor'' usa uma aproximação gaussiana (covariância total sobre covariância dentro do locutor); a revisão (Seção~\ref{sec:revisao}) mostra que o viés é pequeno, mas que o número mede um vetor de voz contínuo, não a identidade entre os $N$ locutores. Cerca de 80\% da variância do latente é entre locutores, e a distância do código à voz padrão tem correlação 0,83 com a cópia.}
 \label{tab:info}
 \end{table}
 
-O canal de estilo carrega 65--73 bits por frase, mas só 10--20 bits descrevem a voz, crescendo devagar com $\log N$. O latente não está saturado: o limite não é capacidade, é quantas vozes o decodificador ouviu.
+O canal de estilo carrega 65--73 bits por frase (KL), mas a maior parte paga o posterior estreito; a informação estimada sobre a voz fica perto de 17 bits e não cresce de $N=32$ a 200. O latente não está saturado: o limite não é capacidade, é quantas vozes o decodificador ouviu.
 
 %=====================================================================
 \section{Teoria}
@@ -294,20 +294,20 @@ Ajuste em 16 treinos: $a'=0{,}14$, $C=2{,}87$, $A'=0{,}22$ (RMSE 0,057); $a=0{,}
 
 \subsection{Dois regimes e o expoente}
 
-A forma acima prevê queda em $1/N$ até um piso $a\approx0{,}39$. A alternativa $a + A/\sqrt N + C/\sqrt K$ ajusta igualmente bem (RMSE 0,056, piso 0,19). A avaliação larga (Fig.~\ref{fig:larga}) mostra queda lenta e sem piso: não copiadas 43\% $\rightarrow$ 30\% $\rightarrow$ 21\%, razão 0,7 nos dois passos, uma potência $N^{-0{,}26}$. Pelo critério registrado antes do experimento, a razão entre os ganhos (0,7) favorece a lei com raízes (acima de 0,4 em 80\% das reamostragens) sobre a lei em $1/N$ (abaixo de 1/3 em 14\%).
+A forma acima prevê queda em $1/N$ até um piso $a\approx0{,}39$. A alternativa $a + A/\sqrt N + C/\sqrt K$ ajusta igualmente bem (RMSE 0,056, piso 0,19). A avaliação larga (Fig.~\ref{fig:larga}) mostra não copiadas 43\% $\rightarrow$ 30\% $\rightarrow$ 21\%, que uma potência $N^{-0{,}26}$ atravessa exatamente. Pelo critério registrado antes do experimento a razão entre os ganhos (0,7) favorecia a lei com raízes, mas a revisão estatística (Seção~\ref{sec:revisao}) mostra que nenhuma das leis se distingue das outras com estes dados.
 
 \caixa{azul}{\textbf{Interpretação proposta.} Há dois regimes:
 \begin{itemize}[leftmargin=12pt]
 \item \emph{paramétrico}: a voz vive numa família de baixa dimensão $k$ que o decodificador aprende como regra; o erro cai como $k/N$ (rápido);
 \item \emph{não paramétrico} (``cobertura''): o decodificador só reproduz vozes perto das que ouviu; o erro é governado pela distância à voz treinada mais próxima, que cai como $N^{-1/d}$ num espaço de vozes de dimensão intrínseca $d$ (lento).
 \end{itemize}
-O expoente 0,26 corresponde a $d\approx4$ sob $N^{-1/d}$ (ou $d\approx 6$ a 15 sob outras taxas não paramétricas). A análise por voz (distância à voz mais próxima prevê a falha com $N$ pequeno) e o fracasso de codificadores e referências melhores apontam para o regime de cobertura.}
+A dimensão do espaço de vozes medida no latente é de 7 a 10 (Seção~\ref{sec:revisao}), o que descarta a versão mais simples (falha proporcional à distância, que pediria $d\approx4$ para $\alpha=0{,}26$); falha proporcional ao quadrado da distância pede $d\approx7{,}7$ e é compatível, sem ser um teste. A análise por voz (distância à voz mais próxima prevê a falha com $N$ pequeno) e o fracasso de codificadores e referências melhores apontam para o regime de cobertura.}
 
 \subsection{Consequências e previsões da teoria}
 \begin{itemize}
 \item Se o regime é de cobertura, \textbf{melhorar o codificador não muda o expoente}; mudar o que o decodificador ouviu, sim (consistente com a Tabela~\ref{tab:neg}).
-\item Uma arquitetura que force a dependência da voz a uma família de baixa dimensão deveria levar o expoente de cerca de 0,26 para perto de 1.
-\item Extrapolação da potência medida (só válida se o regime se mantiver): cerca de 82\% de vozes copiadas com 247 locutores e 88\% com 1.000.
+\item Uma arquitetura que force a dependência da voz a uma família de baixa dimensão deveria trocar a queda lenta pela queda em $1/N$, ao preço de um piso se o espaço real de vozes tiver mais dimensões que o módulo.
+\item As extrapolações para milhares de locutores que constavam da versão anterior deste documento foram retiradas: não têm apoio estatístico.
 \item O latente de 32 dimensões está superdimensionado para a voz: 8 a 10 dimensões deveriam bastar para a cópia (previsão do ``modelo mínimo'').
 \end{itemize}
 
@@ -315,12 +315,45 @@ O expoente 0,26 corresponde a $d\approx4$ sob $N^{-1/d}$ (ou $d\approx 6$ a 15 s
 Um levantamento (cerca de 35 buscas e 5 artigos lidos na íntegra) não encontrou lei explícita de cópia de voz em função de $N$ e $K$. O fato qualitativo ``são precisos milhares de locutores'' aparece desde \cite{jia2018}, cuja tabela de codificador de locutor dá um expoente aparente de 0,21--0,25 (conta nossa, com fatores misturados). O análogo em verificação de locutor (poucos locutores vs.\ muitas sessões) está em \cite{tinyvox}. As formas $1/N + 1/(NK)$ e $1/\sqrt N + 1/\sqrt K$ vêm de meta-aprendizado \cite{du2021,maurer2016}; expoentes ligados à dimensão dos dados, de \cite{sharma2020,bahri2021}. A capacidade do latente de estilo em bits já foi usada em \cite{capacitron}. O que parece novo: a lei fatorial $N\times K$ para clonagem, a ligação do expoente com a dimensão do espaço de \emph{locutores} (as amostras são grupos, não frases) e a decomposição dos bits do latente em voz e resto. A busca não cobriu o ISCA Archive nem o IEEE Xplore.
 
 %=====================================================================
+\section{Revisão crítica (três análises sem treino novo)}
+\label{sec:revisao}
+
+Três análises independentes, só com CPU sobre os dados salvos, revisaram as afirmações acima (relatórios completos em \texttt{reports/teoria/}). O que mudou:
+
+\paragraph{A régua.} Com vetores de locutor normalizados, a margem medida tem uma forma exata:
+\[
+m = \mathrm{sim}_{\text{ref}} - \mathrm{sim}_{\text{padrão}} = \left(\tfrac12 - \rho\right)\lVert e_{\text{ref}} - e_0\rVert^2,
+\]
+em que $\rho$ é quanto a saída é puxada para a voz padrão ao longo do eixo referência--padrão. A voz conta como copiada se e só se $\rho<\tfrac12$, e o tamanho da margem é proporcional a $\lVert e_{\text{ref}}-e_0\rVert^2$: vozes parecidas com a voz padrão têm margens minúsculas e mudam de lado por ruído. Pitch e semelhança com a voz padrão explicam 28--59\% da dificuldade das vozes na medida binária e só 2--9\% na semelhança direta com a referência. Parte da ``dificuldade das vozes agudas'' é, portanto, da régua.
+
+\paragraph{O expoente.} A potência $N^{-0{,}26}$ é exatamente o que dois parâmetros fazem passar por três pontos de uma semente. Numa simulação com a variância medida, esse desenho recupera expoentes entre 0,06 e 0,53 quando o verdadeiro é 0,26, e escolhe a lei certa entre 16\% e 62\% das vezes. Com medidas que não usam a voz padrão o expoente aparente sobe para 0,41--0,55. Na grade de 4 vozes, a lei com raízes só ganha por causa dos treinos com $N=2$; sem eles, as quatro leis testadas empatam.
+
+\paragraph{O que se mantém.} Vozes treinadas seguem só $K$ (colapso em $K^{0{,}46}$, efeito de $N$ igual a zero $\pm 0{,}07$). A cópia é quase tudo-ou-nada por voz (correlação intraclasse 0,83--0,94; dois terços das 38 vozes ficam abaixo de 10\% ou acima de 90\%). A variação vem da voz de referência (desvio 0,095 na margem) e não da frase (0,007); entre sementes, o desvio da fração copiada é de 7,7 pontos, dos quais cerca de 40\% é só ruído de ressíntese. A média de 4 referências não melhora a cópia nas 38 vozes ($-2{,}5$ pontos, IC $[-6{,}4; +0{,}8]$) e reduz o WER em 1,8 ponto.
+
+\paragraph{Informação e dimensão.} Dos 64--75 bits por frase do KL, 62--70 pagam o posterior estreito; a informação gaussiana sobre a frase fica em 17--29 bits e a informação sobre a voz em cerca de 17 bits na média $\mu$, estável de $N=32$ a 200. Um classificador com validação cruzada recupera 5,1--5,3 dos 6,9 bits possíveis com 128 locutores. A voz ocupa 6--8 direções úteis (razão de participação 5,8--9,7) e a dimensão intrínseca das médias por locutor é 7--10 (TwoNN 9,7--10,6; Levina--Bickel 7,0--7,5).
+
+\paragraph{Um modelo que reproduz os fatos.} Um suavizador que pondera as vozes treinadas pelo número de frases e compete com a voz padrão (2.000 frases) dá a regra
+\[
+\text{copiada} \iff K\textstyle\sum_i k(v,v_i) > M\,k(v,v_0),
+\]
+com $M$ o número de frases da voz padrão. Com um espectro de vozes $\lambda_j\propto 1/j$ (o latente mede expoente 1,05--1,1), esse modelo reproduz a curva, os sinais das correlações por voz e a grade ($r=0{,}97$). São cinco parâmetros escolhidos com três pontos, então isto não é um teste. O modelo também prevê que os pseudo-locutores por mudança de velocidade deveriam ter contado, e eles não contaram: é a principal tensão em aberto.
+
+\paragraph{Previsões novas e baratas.}
+\begin{itemize}
+\item \textbf{Metade das frases da voz padrão equivale a dobrar $K$} para as vozes novas (consequência direta da regra acima). Custa dois treinos.
+\item \textbf{Latente de 8 dimensões} não muda a cópia; com 2 dimensões, cai. A taxa pode descer a 25--30 bits por frase sem perda.
+\item \textbf{$N=2.456$, $K=32$}: cerca de 9\% de vozes não copiadas sob o modelo de cobertura contra 16\% ou mais sob as leis com piso; decidir isso exige pelo menos 200 vozes de avaliação.
+\item \textbf{Sem treino}: o espectro dos vetores de locutor do LibriTTS decide entre os regimes e fixa o piso de um módulo de voz de dimensão $k$.
+\item \textbf{Duas etapas}: a cópia segue $N_{\text{voz}}$ se as unidades de conteúdo vazarem pouca informação de voz; um vazamento de peso 0,2 já impõe um piso de cerca de 15\% de vozes não copiadas.
+\end{itemize}
+
+%=====================================================================
 \section{Limites do que temos}
 \label{sec:limites}
 \begin{itemize}
 \item \textbf{Arquitetura antiga.} Tacotron~2 (2017) foi superado por modelos de linguagem sobre tokens de codec e por modelos de \textit{flow matching}/difusão treinados em dezenas de milhares de horas. A atenção do Tacotron é frágil e a qualidade bate num teto. O resultado só vale para a área se se repetir num modelo atual.
 \item \textbf{Escala pequena.} $N\le200$, uma semente na maior parte das células, 2.500 passos. Três pontos na avaliação larga não distinguem potência de logaritmo.
-\item \textbf{Uma medida.} A cópia depende de um codificador de locutor e é relativa à voz padrão; não há teste de escuta nem medida de naturalidade.
+\item \textbf{Uma medida.} A cópia depende de um codificador de locutor e é relativa à voz padrão, o que distorce a dificuldade das vozes parecidas com ela (Seção~\ref{sec:revisao}); não há teste de escuta nem medida de naturalidade.
 \item \textbf{Sem checkpoints.} A conta de bits por parâmetro do decodificador não pode ser feita com o que foi guardado.
 \end{itemize}
 
@@ -381,14 +414,15 @@ A separação em etapas não é nova em si: há sistemas que geram primeiro toke
 \toprule
 & Experimento & Previsão registrada & O que decide\\
 \midrule
-E0 & Separar atração pela voz padrão de artefato da medida: margem contínua, outro codificador, pequeno teste de escuta (sem treino) & A ordem dos treinos se mantém; a correlação com o F0 cai com a margem contínua & Se a curva é da voz ou da régua\\
-E1 & Repetir a varredura de $N$ (8 a 2.456, LibriTTS completo) numa arquitetura atual aberta, em configuração pequena; 2--3 sementes & Mesma forma de potência; expoente entre 0,2 e 0,5 & Se a lei é do Tacotron ou da tarefa\\
+E0 & Sem treino: espectro dos vetores de locutor do LibriTTS; pequeno teste de escuta nas vozes agudas & Espectro em $1/j$ (cobertura); ouvintes não confirmam a ``dificuldade'' das vozes agudas & Regime; quanto da curva é da régua\\
+E0b & Metade das frases da voz padrão ($M=1.000$) contra o dobro de $K$ & Mesmo efeito nas vozes novas & O modelo de cobertura + atração\\
+E1 & Repetir a varredura de $N$ (8 a 2.456, LibriTTS completo) numa arquitetura atual aberta, em configuração pequena; $N\in\{8,32,128,512,2048\}$, 3--5 sementes, 60--100 vozes de avaliação $\times$ 10 frases, métrica contínua sem voz padrão & Ganho continua até 2.048; não copiadas $\approx$9\% (cobertura) ou $\ge$16\% (piso) & Se a lei é do Tacotron ou da tarefa, e qual\\
 E2 & Arquitetura em duas etapas: $N_{\text{texto}}=8$ fixo, $N_{\text{voz}}$ de 8 a 2.456 & Cópia segue $N_{\text{voz}}$ com o expoente de E1; WER segue $N_{\text{texto}}$ & A hipótese central\\
 E3 & Etapa B em inglês, etapa A em português com poucos locutores & Cópia de vozes novas próxima da de E2; WER do português próximo do sistema atual (10\%) & Dublagem com poucos dados\\
-E4 & Latente de voz menor (32 $\rightarrow$ 16, 8, 4) e KL maior & Cópia inalterada até cerca de 8 dimensões; cai abaixo & O ``modelo mínimo''\\
+E4 & Latente de voz menor (32 $\rightarrow$ 16, 8, 4, 2) e KL maior & Cópia inalterada com 8 dimensões e taxa de 25--30 bits; cai com 2 & O ``modelo mínimo''\\
 \bottomrule
 \end{tabular}
-\caption{Plano. Cada previsão é escrita na nota teórica antes de rodar. Checkpoints passam a ser guardados para a análise de informação por parâmetro.}
+\caption{Plano. Cada previsão é escrita na nota teórica antes de rodar. O desenho de avaliação vem de uma simulação de poder com a variância medida: a partir de cerca de 40 vozes o gargalo é o número de sementes. Checkpoints passam a ser guardados para a análise de informação por parâmetro.}
 \end{table}
 
 \paragraph{Critério de sucesso.} A tese vale se, em E2, a cópia de vozes novas com 8 locutores transcritos e milhares de locutores sem transcrição ficar dentro do intervalo de um modelo treinado com milhares de locutores transcritos. Se E1 não reproduzir a lei numa arquitetura atual, o trabalho se reduz a um estudo sobre o Tacotron, e a proposta de arquitetura deve ser revista antes de E2.

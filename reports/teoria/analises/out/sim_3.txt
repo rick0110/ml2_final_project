@@ -1,0 +1,67 @@
+parametros: {'dec': 'nw', 'd': 16, 'ell': 0.5, 'amp2': 4.0, 'delta': 2.0, 'sb2': 0.05, 's2': 0.5, 'K': 32, 'sref': 0.2, 'seta': 0.1, 'alpha': 1.0}
+N     :      8     32    128    247   1000   2456  10000
+q     :  0.427  0.292  0.212  0.177  0.115  0.086  0.062
+sd sem:  0.039  0.019  0.015  0.015  0.015  0.014  0.011
+expoente local -dlnq/dlnN entre pontos: [0.275 0.23  0.274 0.312 0.313 0.237]
+observado (38 vozes): q(8,32,128)= [0.434 0.302 0.211] ; sd_entre/sd_dentro da margem ~ 2.5 (0.09/0.036)
+  N=8: sd_entre/sd_dentro = 2.51
+  N=32: sd_entre/sd_dentro = 2.73
+  N=128: sd_entre/sd_dentro = 2.82
+correlacoes de postos por voz (media sobre sementes), copia vs:
+  N=   8: dist. voz padrao +0.77 | tom -0.83 | dist. vizinho treinado -0.25
+  N=  32: dist. voz padrao +0.85 | tom -0.89 | dist. vizinho treinado -0.18
+  N= 128: dist. voz padrao +0.81 | tom -0.85 | dist. vizinho treinado -0.15
+  N=1000: dist. voz padrao +0.71 | tom -0.75 | dist. vizinho treinado -0.12
+  observado: dist.padrao +.47/+.58/+.53; F0 -.53/-.52/-.37; vizinho -.33/-.40/+.13 (N=8/32/128)
+  N=8: fracao de vozes com 10%<copia<90%: 0.27; copia=0: 0.24; copia=1: 0.32
+  N=32: fracao de vozes com 10%<copia<90%: 0.22; copia=0: 0.14; copia=1: 0.51
+  N=128: fracao de vozes com 10%<copia<90%: 0.20; copia=0: 0.08; copia=1: 0.61
+  corr. postos copia N=8 vs 32: 0.86
+  corr. postos copia N=32 vs 128: 0.91
+  corr. postos copia N=8 vs 128: 0.80
+  corr(ganho de margem 8->128, margem em 8) = -0.40 (observado -0.55)
+ruido de painel (mesmas vozes, sementes de treino diferentes):
+  N=  8 painel  4 vozes: sd entre sementes=0.192  amplitude media=0.562
+  N=  8 painel 38 vozes: sd entre sementes=0.067  amplitude media=0.204
+  N= 32 painel  4 vozes: sd entre sementes=0.181  amplitude media=0.519
+  N= 32 painel 38 vozes: sd entre sementes=0.055  amplitude media=0.158
+  N=128 painel  4 vozes: sd entre sementes=0.161  amplitude media=0.459
+  N=128 painel 38 vozes: sd entre sementes=0.045  amplitude media=0.131
+efeito de K e de M (nw), q por N:
+  K=  8: 0.520 0.362 0.276 0.165
+  K= 32: 0.446 0.296 0.215 0.115
+  K=128: 0.383 0.240 0.160 0.080
+=====
+parametros: {'dec': 'nw', 'd': 32, 'ell': 0.3, 'amp2': 4.0, 'delta': 2.0, 'sb2': 0.05, 's2': 0.5, 'K': 32, 'sref': 0.2, 'seta': 0.1, 'alpha': 1.0}
+N     :      8     32    128    247   1000   2456  10000
+q     :  0.418  0.297  0.207  0.173  0.126  0.102  0.072
+sd sem:  0.060  0.039  0.021  0.017  0.012  0.012  0.009
+expoente local -dlnq/dlnN entre pontos: [0.247 0.261 0.268 0.226 0.237 0.244]
+observado (38 vozes): q(8,32,128)= [0.434 0.302 0.211] ; sd_entre/sd_dentro da margem ~ 2.5 (0.09/0.036)
+  N=8: sd_entre/sd_dentro = 2.05
+  N=32: sd_entre/sd_dentro = 2.10
+  N=128: sd_entre/sd_dentro = 2.08
+correlacoes de postos por voz (media sobre sementes), copia vs:
+  N=   8: dist. voz padrao +0.72 | tom -0.79 | dist. vizinho treinado -0.35
+  N=  32: dist. voz padrao +0.78 | tom -0.83 | dist. vizinho treinado -0.30
+  N= 128: dist. voz padrao +0.78 | tom -0.83 | dist. vizinho treinado -0.21
+  N=1000: dist. voz padrao +0.73 | tom -0.79 | dist. vizinho treinado -0.19
+  observado: dist.padrao +.47/+.58/+.53; F0 -.53/-.52/-.37; vizinho -.33/-.40/+.13 (N=8/32/128)
+  N=8: fracao de vozes com 10%<copia<90%: 0.34; copia=0: 0.20; copia=1: 0.30
+  N=32: fracao de vozes com 10%<copia<90%: 0.29; copia=0: 0.11; copia=1: 0.42
+  N=128: fracao de vozes com 10%<copia<90%: 0.27; copia=0: 0.06; copia=1: 0.50
+  corr. postos copia N=8 vs 32: 0.82
+  corr. postos copia N=32 vs 128: 0.84
+  corr. postos copia N=8 vs 128: 0.76
+  corr(ganho de margem 8->128, margem em 8) = -0.55 (observado -0.55)
+ruido de painel (mesmas vozes, sementes de treino diferentes):
+  N=  8 painel  4 vozes: sd entre sementes=0.187  amplitude media=0.544
+  N=  8 painel 38 vozes: sd entre sementes=0.080  amplitude media=0.244
+  N= 32 painel  4 vozes: sd entre sementes=0.171  amplitude media=0.492
+  N= 32 painel 38 vozes: sd entre sementes=0.062  amplitude media=0.184
+  N=128 painel  4 vozes: sd entre sementes=0.142  amplitude media=0.406
+  N=128 painel 38 vozes: sd entre sementes=0.047  amplitude media=0.139
+efeito de K e de M (nw), q por N:
+  K=  8: 0.499 0.330 0.234 0.146
+  K= 32: 0.462 0.302 0.210 0.126
+  K=128: 0.440 0.284 0.194 0.115

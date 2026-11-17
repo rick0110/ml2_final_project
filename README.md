@@ -238,7 +238,7 @@ A lei previu os dois números com N = 8 locutores reais. O que conta é a varied
 | 32 × 32 | 70% (58–81) | 12% |
 | 128 × 32 | 79% (68–89) | 12% |
 
-O ganho de 32 para 128 locutores é de 9 pontos (IC 95% de 1,5 a 17), quase tanto quanto de 8 para 32 (13 pontos), sem piorar o WER: a cada vez que o número de locutores quadruplica a cópia sobe cerca de 10 pontos, sem sinal de piso. Isso favorece a lei com raízes sobre a lei em 1/N (sem certeza: 80% das reamostragens) e desfaz a impressão, vinda das 4 vozes, de que acima de 128 locutores não há ganho. Nessa avaliação a média de 4 referências não melhora a cópia (cai 2 a 4 pontos) e só reduz o WER em 1 a 3 pontos; o ganho que ela mostrava era das 4 vozes da grade.
+O ganho de 32 para 128 locutores é de 9 pontos (IC 95% de 1,5 a 17), quase tanto quanto de 8 para 32 (13 pontos), sem piorar o WER, o que desfaz a impressão, vinda das 4 vozes, de que acima de 128 locutores não há ganho. A forma da curva não está estabelecida: uma revisão estatística (seção 8.10 da nota teórica, [`reports/teoria/04_dados.md`](reports/teoria/04_dados.md)) mostra que três pontos de uma semente não distinguem as leis candidatas nem fixam o expoente, e que parte da dificuldade das vozes vem da própria medida, que compara com a voz padrão. Nessa avaliação a média de 4 referências não melhora a cópia (cai 2 a 4 pontos) e só reduz o WER em 1 a 3 pontos; o ganho que ela mostrava era das 4 vozes da grade.
 
 Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 18 pontos; a medida de voz copiada depende de um único codificador de locutor.
 

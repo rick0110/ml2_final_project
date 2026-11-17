@@ -1,0 +1,8 @@
+N                                      rmse=0.0737 params=[ 1.147 -0.316  0.033]
+N K (total de frases)                  rmse=0.1373 params=[ 0.452  0.133 -0.017]
+N/(1+K0/K)                             rmse=0.0666 params=[ 1.129 -0.335  0.037  5.819]
+N K/M                                  rmse=0.1373 params=[ 0.48  -0.125 -0.017]
+min(N*, ...) misto: N^(1-w) (NK)^w     rmse=0.0683 params=[ 1.451 -0.407  0.039  0.166]
+so N>=32 (regime de muitos vizinhos):
+  N      rmse=0.0651
+  N K    rmse=0.0485

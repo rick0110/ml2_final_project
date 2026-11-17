@@ -1,0 +1,93 @@
+diferenca media (R - R1), IC95 bootstrap de locutores (pareado), n locutores que sobem/descem, Wilcoxon sobre medias por locutor
+     R     grupo conjunto      metrica  n_treinos  n_loc     dif      lo      hi  loc_sobe  loc_desce  p_wilcoxon_loc  treinos_sobe    base
+0    4  external    plain       copied          4      4 -0.2375 -0.7275  0.0150         1          1             NaN             0  0.8725
+1    4  external    plain   copied_spk          4      4  0.1050 -0.0175  0.3225         2          1             NaN             3  0.8050
+2    4  external    plain            m          4      4 -0.0423 -0.1189  0.0004         1          3             NaN             0  0.0874
+3    4  external    plain           ms          4      4  0.0094 -0.0097  0.0335         2          2             NaN             3  0.0729
+5    4  external    plain      sim_spk          4      4  0.0292  0.0031  0.0712         4          0             NaN             4  0.7193
+6    4  external    plain  sim_default          4      4  0.0198  0.0061  0.0358         4          0             NaN             4  0.6464
+7    4  external    plain          wer          4      4 -0.0327 -0.0705  0.0051         1          3             NaN             1  0.1235
+8    4  external     wide       copied          3     38 -0.0968 -0.1691 -0.0347         9         23          0.0064             0  0.6846
+9    4  external     wide   copied_spk          3     38 -0.0253 -0.0642  0.0084        14         18          0.1676             0  0.7814
+10   4  external     wide            m          3     38 -0.0201 -0.0333 -0.0088        11         27          0.0016             0  0.0406
+11   4  external     wide           ms          3     38 -0.0020 -0.0101  0.0061        20         18          0.7308             1  0.0660
+13   4  external     wide      sim_spk          3     38  0.0047 -0.0016  0.0119        20         18          0.4294             3  0.6969
+14   4  external     wide  sim_default          3     38  0.0066 -0.0029  0.0167        23         15          0.1365             3  0.6309
+15   4  external     wide          wer          3     38 -0.0177 -0.0279 -0.0085        15         23          0.0087             0  0.1222
+16   4      seen    plain       copied          4      8 -0.1413 -0.3125 -0.0125         1          5          0.0625             0  0.6475
+17   4      seen    plain   copied_spk          4      8 -0.0650 -0.2738  0.0775         2          2             NaN             0  0.7500
+18   4      seen    plain            m          4      8 -0.0325 -0.0619 -0.0050         1          7          0.0391             0  0.0651
+19   4      seen    plain           ms          4      8 -0.0158 -0.0433  0.0067         3          5          0.3828             0  0.0899
+21   4      seen    plain      sim_spk          4      8  0.0025 -0.0133  0.0172         5          3          0.5469             4  0.7364
+22   4      seen    plain  sim_default          4      8  0.0183 -0.0062  0.0504         5          3          0.4609             4  0.6465
+23   4      seen    plain          wer          4      8 -0.0158 -0.0361  0.0030         4          4          0.4609             0  0.1226
+24   4      seen     wide       copied          3      8 -0.1317 -0.3433  0.0333         1          4          0.3125             0  0.7733
+25   4      seen     wide   copied_spk          3      8 -0.0700 -0.1983  0.0150         2          2             NaN             0  0.8317
+26   4      seen     wide            m          3      8 -0.0320 -0.0618 -0.0072         2          6          0.1094             0  0.0981
+27   4      seen     wide           ms          3      8 -0.0111 -0.0292  0.0055         3          5          0.3125             0  0.1165
+29   4      seen     wide      sim_spk          3      8  0.0057 -0.0105  0.0220         3          5          0.8438             3  0.7621
+30   4      seen     wide  sim_default          3      8  0.0168 -0.0033  0.0431         5          3          0.4609             3  0.6456
+31   4      seen     wide          wer          3      8 -0.0163 -0.0393  0.0025         4          4          0.3125             0  0.1270
+32   4    unseen    plain       copied          4      4 -0.2775 -0.5800  0.0250         1          2             NaN             0  0.6225
+33   4    unseen    plain   copied_spk          4      4  0.1300  0.0100  0.3450         3          0             NaN             4  0.5925
+34   4    unseen    plain            m          4      4 -0.0410 -0.0820 -0.0091         0          4             NaN             0  0.0278
+35   4    unseen    plain           ms          4      4  0.0244 -0.0027  0.0516         3          1             NaN             4  0.0359
+37   4    unseen    plain      sim_spk          4      4  0.0297 -0.0224  0.0727         3          1             NaN             4  0.7224
+38   4    unseen    plain  sim_default          4      4  0.0053 -0.0191  0.0321         2          2             NaN             2  0.6865
+39   4    unseen    plain          wer          4      4  0.0022 -0.0105  0.0177         2          2             NaN             3  0.0767
+40   4    unseen     wide       copied          3      4 -0.2367 -0.4900 -0.0800         0          4             NaN             0  0.5300
+41   4    unseen     wide   copied_spk          3      4  0.0400 -0.0333  0.1400         2          1             NaN             2  0.5800
+42   4    unseen     wide            m          3      4 -0.0336 -0.0607 -0.0117         0          4             NaN             0  0.0101
+43   4    unseen     wide           ms          3      4  0.0078 -0.0085  0.0194         3          1             NaN             2  0.0213
+45   4    unseen     wide      sim_spk          3      4  0.0303  0.0046  0.0614         3          1             NaN             3  0.6929
+46   4    unseen     wide  sim_default          3      4  0.0225  0.0010  0.0476         3          1             NaN             3  0.6716
+47   4    unseen     wide          wer          3      4 -0.0004 -0.0207  0.0338         1          3             NaN             2  0.0846
+48  16  external    plain       copied          2      4 -0.1650 -0.7050  0.2100         1          1             NaN             0  0.8600
+49  16  external    plain   copied_spk          2      4  0.0850 -0.0750  0.3000         2          1             NaN             2  0.8600
+50  16  external    plain            m          2      4 -0.0467 -0.1238  0.0087         1          3             NaN             0  0.0887
+51  16  external    plain           ms          2      4  0.0076 -0.0182  0.0335         2          2             NaN             2  0.0798
+53  16  external    plain      sim_spk          2      4  0.0402  0.0066  0.0744         4          0             NaN             2  0.7206
+54  16  external    plain  sim_default          2      4  0.0326  0.0162  0.0490         4          0             NaN             2  0.6408
+55  16  external    plain          wer          2      4 -0.0487 -0.1118 -0.0075         1          3             NaN             0  0.1419
+56  16      seen    plain       copied          2      8 -0.1175 -0.3200  0.0375         2          3          0.4375             0  0.6350
+57  16      seen    plain   copied_spk          2      8 -0.0425 -0.2725  0.1250         2          2             NaN             0  0.7500
+58  16      seen    plain            m          2      8 -0.0275 -0.0576 -0.0022         4          4          0.3125             0  0.0622
+59  16      seen    plain           ms          2      8 -0.0082 -0.0411  0.0160         4          4          0.9453             0  0.0903
+61  16      seen    plain      sim_spk          2      8  0.0069 -0.0066  0.0211         5          3          0.5469             2  0.7394
+62  16      seen    plain  sim_default          2      8  0.0151 -0.0106  0.0487         3          5          0.9453             2  0.6491
+63  16      seen    plain          wer          2      8 -0.0212 -0.0535  0.0071         4          4          0.5469             0  0.1204
+64  16    unseen    plain       copied          2      4 -0.3750 -0.7000 -0.0500         0          3             NaN             0  0.6450
+65  16    unseen    plain   copied_spk          2      4  0.0900 -0.0800  0.3300         2          1             NaN             1  0.6050
+66  16    unseen    plain            m          2      4 -0.0675 -0.1216 -0.0302         0          4             NaN             0  0.0327
+67  16    unseen    plain           ms          2      4  0.0173 -0.0229  0.0574         2          2             NaN             2  0.0411
+69  16    unseen    plain      sim_spk          2      4  0.0280 -0.0284  0.0802         3          1             NaN             2  0.7220
+70  16    unseen    plain  sim_default          2      4  0.0107 -0.0272  0.0486         2          2             NaN             1  0.6809
+71  16    unseen    plain          wer          2      4  0.0155 -0.0123  0.0596         2          2             NaN             2  0.0790
+     R               run     grupo  copied  copied_spk    wer  copied_R  copied_spk_R  wer_R
+0    4       n128_k32_s1  external   0.860       0.950  0.157     0.660         0.940  0.091
+1    4       n128_k32_s2  external   0.860       0.740  0.105     0.570         0.970  0.107
+2    4        n128_k8_s1  external   0.860       0.770  0.126     0.640         0.830  0.104
+3    4       n200_k32_s1  external   0.910       0.760  0.105     0.670         0.900  0.061
+4    4  n128_k32_s1-wide  external   0.789       0.878  0.117     0.678         0.838  0.094
+5    4   n32_k32_s1-wide  external   0.698       0.805  0.116     0.622         0.787  0.104
+6    4    n8_k32_s1-wide  external   0.566       0.661  0.134     0.463         0.643  0.115
+7    4       n128_k32_s1      seen   0.755       0.835  0.120     0.525         0.710  0.110
+8    4       n128_k32_s2      seen   0.655       0.730  0.128     0.540         0.685  0.101
+9    4        n128_k8_s1      seen   0.515       0.665  0.121     0.460         0.660  0.104
+10   4       n200_k32_s1      seen   0.665       0.770  0.122     0.500         0.685  0.112
+11   4  n128_k32_s1-wide      seen   0.780       0.835  0.120     0.585         0.720  0.101
+12   4   n32_k32_s1-wide      seen   0.760       0.815  0.121     0.635         0.760  0.099
+13   4    n8_k32_s1-wide      seen   0.780       0.845  0.140     0.705         0.805  0.131
+14   4       n128_k32_s1    unseen   0.740       0.740  0.077     0.510         0.780  0.090
+15   4       n128_k32_s2    unseen   0.560       0.590  0.076     0.280         0.690  0.063
+16   4        n128_k8_s1    unseen   0.550       0.470  0.081     0.270         0.670  0.081
+17   4       n200_k32_s1    unseen   0.640       0.570  0.073     0.320         0.750  0.082
+18   4  n128_k32_s1-wide    unseen   0.750       0.730  0.071     0.340         0.770  0.081
+19   4   n32_k32_s1-wide    unseen   0.480       0.340  0.077     0.310         0.620  0.080
+20   4    n8_k32_s1-wide    unseen   0.360       0.670  0.106     0.230         0.470  0.092
+21  16       n128_k32_s1  external   0.860       0.950  0.157     0.730         0.990  0.086
+22  16        n128_k8_s1  external   0.860       0.770  0.126     0.660         0.900  0.100
+23  16       n128_k32_s1      seen   0.755       0.835  0.120     0.570         0.750  0.105
+24  16        n128_k8_s1      seen   0.515       0.665  0.121     0.465         0.665  0.093
+25  16       n128_k32_s1    unseen   0.740       0.740  0.077     0.280         0.720  0.089
+26  16        n128_k8_s1    unseen   0.550       0.470  0.081     0.260         0.670  0.100

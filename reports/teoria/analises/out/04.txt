@@ -1,0 +1,159 @@
+
+=== 4 vozes novas (unseen), grade plain: 16 treinos, 10 configuracoes; mistura probit: u_s=[ 0.117  0.015 -0.019 -0.113], sig=0.047 ===
+                                            k   rmse     cv   dAICc    dBIC  copia 247x32  copia 1000x32  copia 2456x32  copia 128x128
+L1: a + A/N + B/(NK)                      3.0  0.060  0.103   2.208   2.208         0.601          0.606          0.606          0.598
+L2: a + A/sqrtN + C/sqrtK                 3.0  0.056  0.075   0.000   0.000         0.670          0.703          0.714          0.682
+L3: c N^-alpha K^-beta                    3.0  0.078  0.136  10.450  10.450         0.718          0.801          0.841          0.686
+L4: Phi(a + b lnN + c lnK) direto         3.0  0.099  0.146  18.275  18.275         0.744          0.865          0.918          0.705
+L4m: margem a+b lnN+c lnK -> probit       3.0  0.103  0.147  19.437  19.437         0.745          0.867          0.930          0.711
+L4m': margem a+b/sqrtN+c/sqrtK -> probit  3.0  0.070  0.079   7.115   7.115         0.680          0.707          0.717          0.693
+   L3: c N^-alpha K^-beta: c=1.284 alpha=0.25 beta=0.04
+
+ -- bootstrap aval (reamostra locutores=False; frases sempre) (B=500, ruido extra por treino sd=0.000) --
+                                        lei  cv_med   cv_lo   cv_hi  dif_vs_ref  dif_lo  dif_hi  P_pior  P_melhor_de_todas
+0                      L1: a + A/N + B/(NK)  0.1121  0.0734  0.1564      0.0308 -0.0107  0.0858   0.890              0.078
+1                 L2: a + A/sqrtN + C/sqrtK  0.0795  0.0551  0.1077      0.0000  0.0000  0.0000   0.000              0.646
+2                    L3: c N^-alpha K^-beta  0.1402  0.1163  0.1638      0.0598  0.0492  0.0706   1.000              0.000
+3         L4: Phi(a + b lnN + c lnK) direto  0.1495  0.1306  0.1683      0.0693  0.0552  0.0811   1.000              0.000
+4       L4m: margem a+b lnN+c lnK -> probit  0.1495  0.1375  0.1626      0.0693  0.0497  0.0876   1.000              0.000
+5  L4m': margem a+b/sqrtN+c/sqrtK -> probit  0.0831  0.0688  0.0989      0.0033 -0.0116  0.0153   0.688              0.276
+    (referencia das diferencas: L2: a + A/sqrtN + C/sqrtK)
+cfg                                                  1000x32             128x128             2456x32              247x32
+lei                                                                                                                     
+L1: a + A/N + B/(NK)                      0.606 [0.58, 0.63]  0.598 [0.57, 0.62]  0.606 [0.58, 0.63]  0.601 [0.57, 0.63]
+L2: a + A/sqrtN + C/sqrtK                 0.703 [0.67, 0.73]  0.682 [0.65, 0.71]  0.714 [0.68, 0.74]    0.67 [0.64, 0.7]
+L3: c N^-alpha K^-beta                    0.801 [0.77, 0.83]  0.686 [0.65, 0.71]  0.841 [0.81, 0.86]  0.718 [0.69, 0.74]
+L4: Phi(a + b lnN + c lnK) direto          0.865 [0.83, 0.9]  0.705 [0.67, 0.74]  0.918 [0.89, 0.94]  0.744 [0.71, 0.78]
+L4m': margem a+b/sqrtN+c/sqrtK -> probit  0.707 [0.69, 0.72]  0.693 [0.68, 0.71]   0.717 [0.7, 0.73]   0.68 [0.66, 0.69]
+L4m: margem a+b lnN+c lnK -> probit       0.867 [0.84, 0.89]  0.711 [0.69, 0.73]   0.93 [0.91, 0.95]  0.745 [0.73, 0.76]
+
+ -- bootstrap aval+semente (reamostra locutores=False; frases sempre) (B=500, ruido extra por treino sd=0.077) --
+                                        lei  cv_med   cv_lo   cv_hi  dif_vs_ref  dif_lo  dif_hi  P_pior  P_melhor_de_todas
+0                      L1: a + A/N + B/(NK)  0.1551  0.0894  0.2969      0.0409 -0.0216  0.1792   0.842              0.120
+1                 L2: a + A/sqrtN + C/sqrtK  0.1123  0.0697  0.1707      0.0000  0.0000  0.0000   0.000              0.440
+2                    L3: c N^-alpha K^-beta  0.1558  0.0963  0.2211      0.0438  0.0002  0.0762   0.974              0.008
+3         L4: Phi(a + b lnN + c lnK) direto  0.1643  0.1160  0.2158      0.0520  0.0131  0.0785   0.996              0.000
+4       L4m: margem a+b lnN+c lnK -> probit  0.1696  0.1184  0.2331      0.0558  0.0088  0.1075   0.994              0.000
+5  L4m': margem a+b/sqrtN+c/sqrtK -> probit  0.1128  0.0754  0.1635      0.0005 -0.0259  0.0294   0.522              0.432
+    (referencia das diferencas: L2: a + A/sqrtN + C/sqrtK)
+cfg                                                  1000x32             128x128             2456x32              247x32
+lei                                                                                                                     
+L1: a + A/N + B/(NK)                      0.606 [0.55, 0.66]  0.598 [0.54, 0.65]  0.606 [0.55, 0.66]  0.601 [0.55, 0.65]
+L2: a + A/sqrtN + C/sqrtK                 0.703 [0.63, 0.77]  0.682 [0.61, 0.76]  0.714 [0.64, 0.78]   0.67 [0.61, 0.73]
+L3: c N^-alpha K^-beta                    0.801 [0.73, 0.85]  0.686 [0.62, 0.75]  0.841 [0.78, 0.89]  0.718 [0.65, 0.77]
+L4: Phi(a + b lnN + c lnK) direto         0.865 [0.78, 0.93]   0.705 [0.62, 0.8]  0.918 [0.84, 0.96]  0.744 [0.66, 0.82]
+L4m': margem a+b/sqrtN+c/sqrtK -> probit  0.707 [0.68, 0.78]  0.693 [0.66, 0.76]   0.717 [0.69, 0.8]   0.68 [0.65, 0.75]
+L4m: margem a+b lnN+c lnK -> probit       0.867 [0.83, 0.96]  0.711 [0.67, 0.77]   0.93 [0.89, 0.99]  0.745 [0.71, 0.83]
+
+=== 4 vozes novas, sem N=2: 14 treinos, 9 configuracoes; mistura probit: u_s=[ 0.125  0.02  -0.023 -0.122], sig=0.042 ===
+                                            k   rmse     cv  dAICc   dBIC  copia 247x32  copia 1000x32  copia 2456x32  copia 128x128
+L1: a + A/N + B/(NK)                      3.0  0.064  0.114  4.596  4.596         0.602          0.607          0.607          0.599
+L2: a + A/sqrtN + C/sqrtK                 3.0  0.054  0.058  0.000  0.000         0.649          0.675          0.685          0.669
+L3: c N^-alpha K^-beta                    3.0  0.056  0.066  0.830  0.830         0.667          0.737          0.775          0.667
+L4: Phi(a + b lnN + c lnK) direto         3.0  0.056  0.064  0.865  0.865         0.684          0.780          0.832          0.690
+L4m: margem a+b lnN+c lnK -> probit       3.0  0.057  0.074  1.275  1.275         0.690          0.771          0.820          0.699
+L4m': margem a+b/sqrtN+c/sqrtK -> probit  3.0  0.056  0.059  0.950  0.950         0.666          0.689          0.697          0.683
+   L3: c N^-alpha K^-beta: c=1.121 alpha=0.17 beta=0.08
+
+ -- bootstrap aval (reamostra locutores=False; frases sempre) (B=500, ruido extra por treino sd=0.000) --
+                                        lei  cv_med   cv_lo   cv_hi  dif_vs_ref  dif_lo  dif_hi  P_pior  P_melhor_de_todas
+0                      L1: a + A/N + B/(NK)  0.1183  0.0862  0.1605      0.0527  0.0146  0.0984   0.998              0.000
+1                 L2: a + A/sqrtN + C/sqrtK  0.0651  0.0463  0.0844      0.0000  0.0000  0.0000   0.000              0.408
+2                    L3: c N^-alpha K^-beta  0.0717  0.0528  0.0917      0.0066 -0.0041  0.0178   0.862              0.008
+3         L4: Phi(a + b lnN + c lnK) direto  0.0705  0.0515  0.0928      0.0054 -0.0056  0.0171   0.808              0.064
+4       L4m: margem a+b lnN+c lnK -> probit  0.0779  0.0623  0.0955      0.0132 -0.0024  0.0268   0.928              0.002
+5  L4m': margem a+b/sqrtN+c/sqrtK -> probit  0.0644  0.0489  0.0795     -0.0007 -0.0094  0.0062   0.436              0.518
+    (referencia das diferencas: L2: a + A/sqrtN + C/sqrtK)
+cfg                                                  1000x32             128x128             2456x32              247x32
+lei                                                                                                                     
+L1: a + A/N + B/(NK)                      0.607 [0.58, 0.63]  0.599 [0.57, 0.62]  0.607 [0.58, 0.63]  0.602 [0.58, 0.63]
+L2: a + A/sqrtN + C/sqrtK                 0.675 [0.64, 0.71]   0.669 [0.64, 0.7]  0.685 [0.65, 0.72]  0.649 [0.62, 0.68]
+L3: c N^-alpha K^-beta                     0.737 [0.7, 0.77]   0.667 [0.64, 0.7]   0.775 [0.74, 0.8]  0.667 [0.64, 0.69]
+L4: Phi(a + b lnN + c lnK) direto          0.78 [0.73, 0.82]   0.69 [0.66, 0.72]  0.832 [0.78, 0.87]  0.684 [0.65, 0.72]
+L4m': margem a+b/sqrtN+c/sqrtK -> probit  0.689 [0.67, 0.71]   0.683 [0.67, 0.7]  0.697 [0.68, 0.71]  0.666 [0.65, 0.68]
+L4m: margem a+b lnN+c lnK -> probit       0.771 [0.75, 0.79]  0.699 [0.68, 0.71]    0.82 [0.8, 0.85]   0.69 [0.67, 0.71]
+
+ -- bootstrap aval+semente (reamostra locutores=False; frases sempre) (B=500, ruido extra por treino sd=0.077) --
+                                        lei  cv_med   cv_lo   cv_hi  dif_vs_ref  dif_lo  dif_hi  P_pior  P_melhor_de_todas
+0                      L1: a + A/N + B/(NK)  0.1451  0.0872  0.2926      0.0344 -0.0252  0.1664   0.826              0.082
+1                 L2: a + A/sqrtN + C/sqrtK  0.1082  0.0655  0.1586      0.0000  0.0000  0.0000   0.000              0.120
+2                    L3: c N^-alpha K^-beta  0.1129  0.0682  0.1691      0.0042 -0.0129  0.0249   0.676              0.034
+3         L4: Phi(a + b lnN + c lnK) direto  0.1120  0.0688  0.1655      0.0026 -0.0164  0.0273   0.594              0.062
+4       L4m: margem a+b lnN+c lnK -> probit  0.1082  0.0722  0.1558      0.0011 -0.0337  0.0278   0.546              0.148
+5  L4m': margem a+b/sqrtN+c/sqrtK -> probit  0.1001  0.0647  0.1441     -0.0076 -0.0278  0.0067   0.152              0.554
+    (referencia das diferencas: L2: a + A/sqrtN + C/sqrtK)
+cfg                                                  1000x32             128x128             2456x32              247x32
+lei                                                                                                                     
+L1: a + A/N + B/(NK)                      0.607 [0.55, 0.67]  0.599 [0.54, 0.66]  0.607 [0.55, 0.67]  0.602 [0.54, 0.66]
+L2: a + A/sqrtN + C/sqrtK                 0.675 [0.59, 0.76]  0.669 [0.58, 0.75]   0.685 [0.6, 0.77]  0.649 [0.57, 0.72]
+L3: c N^-alpha K^-beta                    0.737 [0.64, 0.81]  0.667 [0.59, 0.74]  0.775 [0.67, 0.85]  0.667 [0.59, 0.74]
+L4: Phi(a + b lnN + c lnK) direto          0.78 [0.66, 0.87]    0.69 [0.6, 0.77]   0.832 [0.7, 0.92]   0.684 [0.6, 0.77]
+L4m': margem a+b/sqrtN+c/sqrtK -> probit  0.689 [0.66, 0.73]  0.683 [0.65, 0.72]  0.697 [0.67, 0.74]  0.666 [0.64, 0.71]
+L4m: margem a+b lnN+c lnK -> probit       0.771 [0.73, 0.84]  0.699 [0.67, 0.74]    0.82 [0.77, 0.9]   0.69 [0.66, 0.74]
+
+=== 38 vozes externas (wide), K=32, 3 treinos, 1 semente: 3 treinos, 3 configuracoes; mistura probit: u_s=[ 0.068  0.084 -0.091 -0.037  0.013  0.112  0.07  -0.064  0.015 -0.051
+ -0.015  0.076 -0.046 -0.024 -0.154 -0.116  0.162  0.051 -0.125 -0.077
+  0.016  0.093 -0.081 -0.108 -0.028 -0.014  0.039  0.128  0.045  0.003
+  0.014  0.031 -0.051  0.108  0.072 -0.036 -0.158  0.075], sig=0.058 ===
+                                     k   rmse     cv   dAICc    dBIC  copia 247x32  copia 1000x32  copia 2456x32  copia 128x128
+L1n: a + A/N                       2.0  0.021  0.142  27.074  27.074         0.774          0.779          0.780          0.767
+L2n: a + A/sqrtN                   2.0  0.008  0.035  21.278  21.278         0.803          0.829          0.839          0.782
+L3n: c N^-alpha                    2.0  0.000  0.000   0.000   0.000         0.822          0.876          0.902          0.789
+L4n: Phi(a + b lnN) direto         2.0  0.005  0.019  18.788  18.788         0.835          0.903          0.934          0.794
+L4mn: margem a+b lnN -> probit     2.0  0.043  0.040  31.374  31.374         0.836          0.919          0.954          0.785
+L4mn': margem a+b/sqrtN -> probit  2.0  0.046  0.064  31.788  31.788         0.793          0.819          0.828          0.771
+   L3n: c N^-alpha: c=0.744 alpha=0.26 beta=0.00
+
+ -- bootstrap aval (reamostra locutores=True; frases sempre) (B=500, ruido extra por treino sd=0.000) --
+                                 lei  cv_med   cv_lo   cv_hi  dif_vs_ref  dif_lo  dif_hi  P_pior  P_melhor_de_todas
+0                       L1n: a + A/N  0.1420  0.0096  0.3746      0.1056 -0.0550  0.2158   0.826              0.104
+1                   L2n: a + A/sqrtN  0.0588  0.0028  0.1677      0.0000  0.0000  0.0000   0.000              0.202
+2                    L3n: c N^-alpha  0.0504  0.0037  0.1775     -0.0084 -0.0457  0.0414   0.454              0.128
+3         L4n: Phi(a + b lnN) direto  0.0450  0.0015  0.1412     -0.0143 -0.0882  0.0554   0.464              0.250
+4     L4mn: margem a+b lnN -> probit  0.0490  0.0175  0.1184     -0.0010 -0.1354  0.0710   0.498              0.220
+5  L4mn': margem a+b/sqrtN -> probit  0.0681  0.0180  0.1515      0.0048 -0.0714  0.0900   0.574              0.096
+    (referencia das diferencas: L2n: a + A/sqrtN)
+cfg                                           1000x32             128x128             2456x32              247x32
+lei                                                                                                              
+L1n: a + A/N                       0.779 [0.66, 0.88]  0.767 [0.65, 0.86]   0.78 [0.66, 0.88]  0.774 [0.66, 0.87]
+L2n: a + A/sqrtN                   0.829 [0.71, 0.94]  0.782 [0.67, 0.88]  0.839 [0.71, 0.95]  0.803 [0.68, 0.91]
+L3n: c N^-alpha                    0.876 [0.76, 0.95]  0.789 [0.68, 0.88]  0.902 [0.79, 0.97]  0.822 [0.71, 0.91]
+L4mn': margem a+b/sqrtN -> probit   0.819 [0.73, 0.9]  0.771 [0.67, 0.86]  0.828 [0.74, 0.91]   0.793 [0.7, 0.88]
+L4mn: margem a+b lnN -> probit     0.919 [0.84, 0.97]  0.785 [0.69, 0.87]  0.954 [0.89, 0.99]  0.836 [0.75, 0.91]
+L4n: Phi(a + b lnN) direto         0.903 [0.78, 0.97]  0.794 [0.68, 0.89]  0.934 [0.82, 0.99]  0.835 [0.72, 0.93]
+
+ -- bootstrap aval+semente (reamostra locutores=True; frases sempre) (B=500, ruido extra por treino sd=0.054) --
+                                 lei  cv_med   cv_lo   cv_hi  dif_vs_ref  dif_lo  dif_hi  P_pior  P_melhor_de_todas
+0                       L1n: a + A/N  0.1722  0.0072  0.6112      0.1044 -0.0584  0.3408   0.704              0.138
+1                   L2n: a + A/sqrtN  0.0941  0.0053  0.2837      0.0000  0.0000  0.0000   0.000              0.140
+2                    L3n: c N^-alpha  0.0975  0.0046  0.5108      0.0080 -0.0452  0.3099   0.606              0.068
+3         L4n: Phi(a + b lnN) direto  0.0856  0.0035  0.2896      0.0010 -0.0949  0.0743   0.504              0.170
+4     L4mn: margem a+b lnN -> probit  0.0708  0.0213  0.2273     -0.0075 -0.1654  0.0762   0.462              0.314
+5  L4mn': margem a+b/sqrtN -> probit  0.0886  0.0224  0.3122      0.0018 -0.0901  0.1287   0.516              0.170
+    (referencia das diferencas: L2n: a + A/sqrtN)
+cfg                                           1000x32             128x128             2456x32              247x32
+lei                                                                                                              
+L1n: a + A/N                       0.779 [0.62, 0.91]   0.767 [0.61, 0.9]   0.78 [0.62, 0.92]  0.774 [0.61, 0.91]
+L2n: a + A/sqrtN                   0.829 [0.65, 0.96]   0.782 [0.63, 0.9]  0.839 [0.66, 0.98]  0.803 [0.64, 0.93]
+L3n: c N^-alpha                     0.876 [0.7, 0.97]  0.789 [0.63, 0.91]  0.902 [0.72, 0.98]  0.822 [0.66, 0.94]
+L4mn': margem a+b/sqrtN -> probit  0.819 [0.71, 0.94]   0.771 [0.66, 0.9]  0.828 [0.72, 0.94]  0.793 [0.69, 0.92]
+L4mn: margem a+b lnN -> probit     0.919 [0.81, 0.99]  0.785 [0.68, 0.91]   0.954 [0.85, 1.0]  0.836 [0.73, 0.95]
+L4n: Phi(a + b lnN) direto         0.903 [0.71, 0.99]  0.794 [0.64, 0.93]   0.934 [0.71, 1.0]  0.835 [0.67, 0.96]
+
+=== identificabilidade, 4 vozes: y = lei ajustada + N(0, 0.077^2) por treino; B=200 ===
+escolha por CV (linhas: lei geradora)
+        L1    L2    L3    L4   L4m  L4m'
+L1    0.40  0.30  0.02  0.00  0.00  0.28
+L2    0.06  0.59  0.12  0.01  0.00  0.22
+L3    0.00  0.14  0.47  0.17  0.00  0.20
+L4    0.00  0.04  0.13  0.41  0.16  0.26
+L4m   0.00  0.02  0.09  0.34  0.28  0.28
+L4m'  0.02  0.34  0.12  0.05  0.00  0.47
+escolha por AICc
+        L1    L2    L3    L4   L4m  L4m'
+L1    0.80  0.18  0.02  0.00  0.00  0.00
+L2    0.14  0.68  0.16  0.01  0.00  0.00
+L3    0.02  0.14  0.62  0.16  0.00  0.05
+L4    0.00  0.03  0.24  0.72  0.02  0.00
+L4m   0.00  0.02  0.20  0.73  0.05  0.00
+L4m'  0.09  0.47  0.24  0.06  0.00  0.14

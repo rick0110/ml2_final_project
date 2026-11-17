@@ -1,0 +1,49 @@
+(1) peso da voz padrao M e frases por locutor K (q, vozes novas):
+   N=  32 K=  32 M= 2000 K/M=0.016: q=0.297
+   N=  32 K=  64 M= 2000 K/M=0.032: q=0.267
+   N=  32 K=  32 M= 1000 K/M=0.032: q=0.268
+   N=  32 K= 128 M= 2000 K/M=0.064: q=0.238
+   N=  32 K=  32 M=  500 K/M=0.064: q=0.240
+   N=  32 K=   8 M= 2000 K/M=0.004: q=0.364
+   N=  32 K=   8 M=  500 K/M=0.016: q=0.301
+   N= 128 K=  32 M= 2000 K/M=0.016: q=0.213
+   N= 128 K=  64 M= 2000 K/M=0.032: q=0.185
+   N= 128 K=  32 M= 1000 K/M=0.032: q=0.185
+   N= 128 K= 128 M= 2000 K/M=0.064: q=0.156
+   N= 128 K=  32 M=  500 K/M=0.064: q=0.157
+   N= 128 K=   8 M= 2000 K/M=0.004: q=0.277
+   N= 128 K=   8 M=  500 K/M=0.016: q=0.215
+(2) orcamento N*K=4096 e 16384 (M=2000):
+   B=4096 N= 2048 K=   2: q=0.205
+   B=4096 N= 1024 K=   4: q=0.205
+   B=4096 N=  512 K=   8: q=0.211
+   B=4096 N=  256 K=  16: q=0.215
+   B=4096 N=  128 K=  32: q=0.224
+   B=4096 N=   64 K=  64: q=0.235
+   B=4096 N=   32 K= 128: q=0.246
+   B=16384 N= 8192 K=   2: q=0.144
+   B=16384 N= 4096 K=   4: q=0.143
+   B=16384 N= 2048 K=   8: q=0.146
+   B=16384 N= 1024 K=  16: q=0.149
+   B=16384 N=  512 K=  32: q=0.149
+   B=16384 N=  256 K=  64: q=0.157
+   B=16384 N=  128 K= 128: q=0.169
+(3) pseudo-locutores: cada voz treinada ganha copias deslocadas so no tom (coord. 0)
+   N=8: real q=0.437 | +4 copias/voz (+-0.5) q=0.332 | +4 copias (+-1.0) q=0.329 | real com 5N vozes q=0.284
+   N=32: real q=0.297 | +4 copias/voz (+-0.5) q=0.227 | +4 copias (+-1.0) q=0.227 | real com 5N vozes q=0.204
+(4) media de R referencias (ruido do codigo sref^2/R):
+   N=8: R=1: 0.437 R=4: 0.439 R=16: 0.438
+   N=128: R=1: 0.213 R=4: 0.222 R=16: 0.223
+(5) modulo parametrico de dimensao k: yhat = mu_hat + P_k (c - mu_hat), P_k = PCA das N vozes (com ruido)
+   k= 2: q(N=8,32,128,1000)=0.336 0.222 0.231 0.229 | piso previsto q_floor(k)=0.207
+   k= 4: q(N=8,32,128,1000)=0.203 0.131 0.105 0.101 | piso previsto q_floor(k)=0.086
+   k= 8: q(N=8,32,128,1000)=0.069 0.036 0.025 0.018 | piso previsto q_floor(k)=0.009
+   k=12: q(N=8,32,128,1000)=0.043 0.005 0.005 0.003 | piso previsto q_floor(k)=0.000
+   k=16: q(N=8,32,128,1000)=0.043 0.000 0.000 0.000 | piso previsto q_floor(k)=0.000
+(6) duas etapas: yhat = (1-w) B_Nvoz(c) + w v_A ; B = nw sem voz padrao forte (M_B=K), v_A = v0 (voz do texto)
+   w=0.0: q(Nvoz=8,32,128,1000,2456)=0.252 0.159 0.098 0.058 0.054
+   w=0.1: q(Nvoz=8,32,128,1000,2456)=0.330 0.200 0.137 0.086 0.089
+   w=0.2: q(Nvoz=8,32,128,1000,2456)=0.470 0.273 0.206 0.150 0.150
+   w=0.3: q(Nvoz=8,32,128,1000,2456)=0.672 0.438 0.366 0.300 0.307
+   w=0.4: q(Nvoz=8,32,128,1000,2456)=0.864 0.713 0.674 0.661 0.671
+   referencia etapa unica (M=2000): 0.411 0.303 0.224 0.123 0.095

@@ -1,0 +1,78 @@
+forca 0 (-spk): sim_default medio = 0.905; c_s verdadeiro (4 vozes novas) = {'4297': 0.6, '6415': 0.61, '696': 0.603, '7800': 0.69}
+validacao da extrapolacao (vozes novas, treinos plain forca 0.6 e 1.0):
+      c_hat  inclinacao  c_true  sim_default_max_obs
+4297  0.727       0.030   0.600                0.891
+6415  0.681      -0.019   0.610                0.920
+696   0.662       0.149   0.603                0.914
+7800  0.724      -0.135   0.690                0.955
+extrapolacao nas 38 externas: media 0.745 dp 0.116 (nao usada)
+
+c_hat (38 externas): media 0.631, dp 0.078, intervalo [0.541, 0.859]; corr(c_hat, f0) Spearman = 0.69
+sim_default medio por locutor (media dos 3 treinos) vs c_hat: Spearman 1.0
+
+=== decomposicao da variancia (38 locutores x 3 N) ===
+q       : fracao do SS total: N 0.06, locutor 0.74, resto 0.21 | do efeito de locutor, R2 explicado por f0 0.28, c_hat 0.55, ambos 0.55
+m       : fracao do SS total: N 0.13, locutor 0.72, resto 0.16 | do efeito de locutor, R2 explicado por f0 0.30, c_hat 0.59, ambos 0.59
+sim_ref : fracao do SS total: N 0.08, locutor 0.72, resto 0.20 | do efeito de locutor, R2 explicado por f0 0.03, c_hat 0.09, ambos 0.09
+sim_spk : fracao do SS total: N 0.06, locutor 0.72, resto 0.22 | do efeito de locutor, R2 explicado por f0 0.02, c_hat 0.06, ambos 0.06
+
+Spearman por N (taxa de copia 1-q, margem) com f0 e c_hat:
+  N=8: copia~f0 -0.53, copia~c_hat -0.64, margem~c_hat -0.69, sim_ref~c_hat +0.22, sim_spk~c_hat +0.05, sim_ref~f0 +0.14, sim_def~f0 +0.63
+  N=32: copia~f0 -0.52, copia~c_hat -0.67, margem~c_hat -0.71, sim_ref~c_hat +0.38, sim_spk~c_hat +0.30, sim_ref~f0 +0.30, sim_def~f0 +0.68
+  N=128: copia~f0 -0.37, copia~c_hat -0.61, margem~c_hat -0.64, sim_ref~c_hat -0.07, sim_spk~c_hat -0.13, sim_ref~f0 -0.01, sim_def~f0 +0.54
+
+regressao logistica amostra a amostra (sem penalizacao); pseudo-R2 de McFadden (c_hat = sim_default medio do locutor):
+  lnN          pseudoR2=0.031 coefs=[0.38]
+  cz           pseudoR2=0.234 coefs=[-1.37]
+  f0z          pseudoR2=0.117 coefs=[-0.89]
+  lnN+cz       pseudoR2=0.278 coefs=[ 0.55 -1.46]
+  lnN+f0z      pseudoR2=0.154 coefs=[ 0.45 -0.94]
+  lnN+cz+f0z   pseudoR2=0.279 coefs=[ 0.55 -1.38 -0.12]
+  lnN + locutor (fator) pseudoR2=0.540 (teto do que propriedades fixas da voz explicam)
+
+=== curva em N, metricas alternativas (media sobre os 38 locutores) e expoente pela razao de ganhos ===
+alpha_g = log4[(y32 - y8)/(y128 - y32)] vale para y = y_inf - A N^-alpha com piso livre; alpha_0 = -log4(q128/q8)/2 para q = c N^-alpha sem piso
+                                                     subconjunto                          metrica     y8    y32   y128  ganho_8_32  ganho_32_128  alpha_g     lo     hi  P_alpha_maior_0_5  frac_indef  alpha0
+0                                                     todos (38)                      copia (1-q)  0.566  0.698  0.789       0.132         0.092    0.261 -0.725  1.565              0.306       0.006   0.261
+1                                                     todos (38)                         margem m -0.004  0.048  0.078       0.052         0.030    0.385 -0.087  0.948              0.316       0.000     NaN
+2                                                     todos (38)                          sim_ref  0.648  0.677  0.690       0.029         0.014    0.550 -0.174  1.875              0.555       0.024     NaN
+3                                                     todos (38)                          sim_spk  0.678  0.700  0.713       0.022         0.013    0.410 -0.588  1.996              0.420       0.046     NaN
+4                                                     todos (38)                     -sim_default -0.651 -0.629 -0.612       0.022         0.017    0.214 -0.947  1.543              0.270       0.022     NaN
+5                                                     todos (38)            margem por locutor ms  0.026  0.071  0.101       0.045         0.029    0.306 -0.224  0.810              0.216       0.000     NaN
+6                                                     todos (38)  copia por sim_spk > sim_default  0.661  0.805  0.878       0.144         0.073    0.495 -0.299  1.801              0.502       0.010   0.368
+7    saida longe da voz padrao (sim_default medio < mediana, 19)                      copia (1-q)  0.811  0.916  0.914       0.105        -0.002      NaN -1.356  2.836              0.641       0.566   0.284
+8    saida longe da voz padrao (sim_default medio < mediana, 19)                         margem m  0.059  0.097  0.121       0.038         0.024    0.333 -0.807  1.773              0.364       0.020     NaN
+9    saida longe da voz padrao (sim_default medio < mediana, 19)                          sim_ref  0.637  0.654  0.689       0.018         0.035   -0.475 -2.203  0.512              0.027       0.024     NaN
+10   saida longe da voz padrao (sim_default medio < mediana, 19)                          sim_spk  0.674  0.681  0.718       0.006         0.037   -1.302 -3.037  0.045              0.002       0.282     NaN
+11   saida longe da voz padrao (sim_default medio < mediana, 19)                     -sim_default -0.577 -0.557 -0.568       0.020        -0.011      NaN -1.145  3.078              0.665       0.890     NaN
+12   saida longe da voz padrao (sim_default medio < mediana, 19)            margem por locutor ms  0.097  0.123  0.150       0.026         0.026   -0.014 -1.417  1.154              0.187       0.028     NaN
+13   saida longe da voz padrao (sim_default medio < mediana, 19)  copia por sim_spk > sim_default  0.924  0.977  0.971       0.053        -0.006      NaN -1.000  2.598              0.701       0.712   0.341
+14  saida perto da voz padrao (sim_default medio >= mediana, 19)                      copia (1-q)  0.322  0.480  0.665       0.158         0.185   -0.115 -1.127  0.658              0.057       0.004   0.255
+15  saida perto da voz padrao (sim_default medio >= mediana, 19)                         margem m -0.067 -0.002  0.035       0.065         0.037    0.417 -0.042  0.881              0.322       0.000     NaN
+16  saida perto da voz padrao (sim_default medio >= mediana, 19)                          sim_ref  0.659  0.699  0.692       0.040        -0.007      NaN  0.815  4.004              1.000       0.830     NaN
+17  saida perto da voz padrao (sim_default medio >= mediana, 19)                          sim_spk  0.681  0.720  0.708       0.039        -0.012      NaN  0.747  3.914              1.000       0.922     NaN
+18  saida perto da voz padrao (sim_default medio >= mediana, 19)                     -sim_default -0.725 -0.701 -0.656       0.025         0.044   -0.413 -2.114  0.264              0.004       0.070     NaN
+19  saida perto da voz padrao (sim_default medio >= mediana, 19)            margem por locutor ms -0.044  0.019  0.051       0.064         0.032    0.492  0.015  1.073              0.487       0.000     NaN
+20  saida perto da voz padrao (sim_default medio >= mediana, 19)  copia por sim_spk > sim_default  0.398  0.634  0.785       0.236         0.152    0.319 -0.540  1.380              0.338       0.002   0.372
+21                                     f0 < mediana (graves, 19)                      copia (1-q)  0.760  0.827  0.882       0.067         0.055    0.150 -1.792  2.160              0.325       0.239   0.256
+22                                     f0 < mediana (graves, 19)                         margem m  0.041  0.079  0.109       0.038         0.030    0.177 -0.955  1.189              0.221       0.009     NaN
+23                                     f0 < mediana (graves, 19)                          sim_ref  0.635  0.649  0.680       0.015         0.031   -0.544 -2.141  0.355              0.013       0.027     NaN
+24                                     f0 < mediana (graves, 19)                          sim_spk  0.675  0.679  0.710       0.004         0.031   -1.562 -3.210  0.309              0.013       0.362     NaN
+25                                     f0 < mediana (graves, 19)                     -sim_default -0.594 -0.570 -0.571       0.023        -0.001      NaN -0.890  3.302              0.665       0.595     NaN
+26                                     f0 < mediana (graves, 19)            margem por locutor ms  0.082  0.109  0.139       0.027         0.030   -0.072 -1.600  0.915              0.127       0.032     NaN
+27                                     f0 < mediana (graves, 19)  copia por sim_spk > sim_default  0.907  0.920  0.973       0.013         0.053   -1.029 -2.822  1.500              0.161       0.348   0.440
+28                                    f0 >= mediana (agudas, 19)                      copia (1-q)  0.373  0.568  0.697       0.196         0.128    0.304 -0.714  1.569              0.322       0.020   0.262
+29                                    f0 >= mediana (agudas, 19)                         margem m -0.049  0.016  0.047       0.065         0.031    0.543  0.038  1.340              0.548       0.001     NaN
+30                                    f0 >= mediana (agudas, 19)                          sim_ref  0.661  0.704  0.700       0.044        -0.004      NaN  0.575  3.735              0.987       0.687     NaN
+31                                    f0 >= mediana (agudas, 19)                          sim_spk  0.680  0.722  0.716       0.041        -0.006      NaN  0.760  4.098              0.995       0.713     NaN
+32                                    f0 >= mediana (agudas, 19)                     -sim_default -0.709 -0.688 -0.653       0.021         0.035   -0.352 -1.878  0.369              0.011       0.058     NaN
+33                                    f0 >= mediana (agudas, 19)            margem por locutor ms -0.029  0.034  0.062       0.063         0.029    0.561  0.059  1.186              0.577       0.001     NaN
+34                                    f0 >= mediana (agudas, 19)  copia por sim_spk > sim_default  0.415  0.691  0.783       0.276         0.093    0.787 -0.025  2.105              0.729       0.022   0.358
+
+alpha_g com reamostragem de locutores + ruido de semente N(0, sd^2) em cada um dos 3 treinos:
+  copia (1-q)  sd_semente=0.0000: IC95 [-0.70, 1.49], ganho 32->128 <= 0 ou indefinido em 0.01, P(alpha>0.5)=0.31, P(alpha<0)=0.26
+  copia (1-q)  sd_semente=0.0272: IC95 [-1.15, 1.93], ganho 32->128 <= 0 ou indefinido em 0.06, P(alpha>0.5)=0.31, P(alpha<0)=0.35
+  copia (1-q)  sd_semente=0.0544: IC95 [-1.89, 2.33], ganho 32->128 <= 0 ou indefinido em 0.19, P(alpha>0.5)=0.34, P(alpha<0)=0.42
+  margem m     sd_semente=0.0000: IC95 [-0.10, 0.90], ganho 32->128 <= 0 ou indefinido em 0.00, P(alpha>0.5)=0.33, P(alpha<0)=0.06
+  margem m     sd_semente=0.0064: IC95 [-0.38, 1.50], ganho 32->128 <= 0 ou indefinido em 0.00, P(alpha>0.5)=0.38, P(alpha<0)=0.16
+  margem m     sd_semente=0.0127: IC95 [-0.94, 2.01], ganho 32->128 <= 0 ou indefinido em 0.07, P(alpha>0.5)=0.40, P(alpha<0)=0.28

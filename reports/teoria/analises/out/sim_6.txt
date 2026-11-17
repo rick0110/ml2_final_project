@@ -1,0 +1,27 @@
+lei | parametros | rmse | q(247) q(1000) q(2456) | N p/ 90% | N p/ 95%
+potencia c N^-b                    [0.746 0.26 ] 0.0003 | 0.178 0.123 0.098 | 2.24e+03 | 3.21e+04
+a + A/N                            [0.219 1.762] 0.0207 | 0.226 0.221 0.220 | inf | inf
+a + A/sqrt(N)                      [0.145 0.828] 0.0077 | 0.198 0.171 0.162 | inf | inf
+probit: Phi(a - b lnN)             [0.308 0.232] 0.0055 | 0.166 0.097 0.066 | 935 | 4.47e+03
+probit-raiz: Phi(-sqrt(a+b lnN))   [0.    0.076] 0.0620 | 0.259 0.234 0.221 | 2.43e+09 | inf
+modelo cobertura+atrator (sim_3 nw d=16 a=1): q(247,1000,2456,10000)=.177 .115 .086 .062 -> N90~1.7e3, N95~2e4 (extrap. b=0.25)
+
+elo binario: q observado vs E_s Phi(-mu_s/sigma_w) com sigma_w=0.036 (margens medias por voz)
+  N=8: q obs=0.434  previsto=0.442  probit gaussiano das margens=0.514  fracao de vozes com 10%<copia<90%: 0.34
+  N=32: q obs=0.302  previsto=0.304  probit gaussiano das margens=0.289  fracao de vozes com 10%<copia<90%: 0.37
+  N=128: q obs=0.211  previsto=0.217  probit gaussiano das margens=0.206  fracao de vozes com 10%<copia<90%: 0.26
+
+grade (4 vozes novas, media das sementes) vs modelo (sem reajuste; regressao linear q_obs = a + b q_modelo):
+  N   K     q  modelo
+  2 128 0.970   0.670
+  8   8 0.675   0.510
+  8  32 0.530   0.437
+  8 128 0.560   0.374
+ 32   8 0.530   0.364
+ 32  32 0.480   0.297
+ 32 128 0.410   0.238
+128   8 0.450   0.277
+128  32 0.350   0.213
+200  32 0.360   0.190
+  a=0.108 b=1.187 rmse=0.041 corr=0.97
+  ruido esperado de uma media de 1-2 sementes em 4 vozes: ~0.05-0.08

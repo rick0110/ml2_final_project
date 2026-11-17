@@ -1,0 +1,16 @@
+1-NN sem ruido: inclinacao de log(erro) vs log N, previsto -2/d
+  d=2: -1.011  (previsto -1.000)  erros=[0.0486 0.0197 0.0099 0.0051 0.0026 0.0013 0.0007 0.0003]
+  d=4: -0.529  (previsto -0.500)  erros=[0.235  0.1715 0.1215 0.0822 0.0592 0.0397 0.0275 0.0195]
+  d=8: -0.225  (previsto -0.250)  erros=[0.6145 0.536  0.4694 0.3926 0.3375 0.3006 0.2508 0.2112]
+1-NN com ruido s2_eff=0.05: erro -> piso ~ s2_eff (K so entra no piso)
+  d=4: erros=[0.295  0.2178 0.1776 0.1341 0.1079 0.0884 0.0782 0.0686]
+Nadaraya-Watson banda otima, s2_eff=0.1: previsto -4/(4+d)
+  d=2: -0.693  (previsto -0.667)  erros=[0.0391 0.0236 0.0139 0.009  0.0056 0.0033 0.0022]
+  d=4: -0.511  (previsto -0.500)  erros=[0.1301 0.0938 0.0696 0.0443 0.0319 0.0239 0.016 ]
+  d=8: -0.277  (previsto -0.333)  erros=[0.3669 0.3158 0.2695 0.23   0.1962 0.1581 0.1172]
+NW, efeito de K via s2_eff = sb2 + s2/K (sb2=0.02, s2=0.5), d=4: erro depende de N/s2_eff?
+  N=   64 K=   8 s2_eff=0.083 N/s2_eff=     776 erro=0.0983
+  N=   64 K= 128 s2_eff=0.024 N/s2_eff=    2677 erro=0.0787
+  N=  256 K=   8 s2_eff=0.083 N/s2_eff=    3103 erro=0.0430
+  N=  256 K= 128 s2_eff=0.024 N/s2_eff=   10708 erro=0.0346
+  N= 1024 K=   8 s2_eff=0.083 N/s2_eff=   12412 erro=0.0205

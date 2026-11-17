@@ -1,0 +1,4 @@
+sref=0.2 seta=0.1 k=4: q=[0.1493 0.1329 0.1035 0.0992 0.0968 0.0946] piso formula=0.0860 expoentes locais do excesso=[0.51 1.05 0.48 0.56]
+sref=0.2 seta=0.1 k=8: q=[0.0496 0.0394 0.027  0.0216 0.0186 0.0185] piso formula=0.0090 expoentes locais do excesso=[0.57 0.65 0.74 2.46]
+sref=0.0 seta=0.0 k=4: q=[0.1327 0.119  0.0857 0.086  0.082  0.0747] piso formula=0.0860 expoentes locais do excesso=[ 0.39  1.01 -0.02  0.31]
+sref=0.0 seta=0.0 k=8: q=[0.034  0.0263 0.017  0.0117 0.0087 0.0107] piso formula=0.0090 expoentes locais do excesso=[0.57 0.65 1.33 1.66]
