@@ -233,6 +233,14 @@ Os intervalos vêm de reamostrar os 38 locutores (10.000 vezes); as diferenças 
 
 Uma falha de execução: o primeiro treino de 8 locutores foi avaliado sem as vozes externas (download falhou) e reavaliado depois a partir do mesmo checkpoint; os números acima são da reavaliação.
 
+**8.9 Quais vozes falham, e por quê** (`scripts/coverage/voice_hardness.py`, sem treino novo; correlações de postos sobre os 38 locutores externos):
+
+- **A dificuldade é da voz, não do acaso:** a taxa de cópia por locutor se correlaciona 0,75 entre N = 8 e 32, 0,74 entre 32 e 128 e 0,59 entre 8 e 128.
+- **Vozes agudas falham mais:** correlação de −0,53, −0,52 e −0,37 entre a cópia e o F0 da referência. A voz padrão (LJSpeech) é feminina; vozes perto dela são mais difíceis de "vencer" pela medida `sim_ref > sim_default`. A cópia sobe com a distância (no latente) da referência à voz padrão: 0,47, 0,58 e 0,53. Parte do "não copiado" é, portanto, a voz puxada para a voz padrão, e parte pode ser artefato da medida; separar as duas pede a margem contínua ou um teste de escuta.
+- **A distância à voz treinada mais próxima prevê a falha com poucos locutores e deixa de prever com muitos:** −0,33 (N = 8), −0,40 (N = 32), +0,13 (N = 128). É o que a leitura de "cobertura" prevê: com poucos locutores, o decodificador só reproduz vozes perto das que ouviu; com 128, quase toda voz tem uma vizinha, e o que sobra de falha é a atração pela voz padrão.
+
+Leitura conjunta com as seções 8.4–8.8: o gargalo não é o codificador descrever a voz nova (o vetor ECAPA, treinado em milhares de vozes, não ajuda; a média de referências não ajuda), e sim o decodificador conseguir **renderizá-la**. Isso é uma hipótese sobre a arquitetura, testável.
+
 ## 9. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.
