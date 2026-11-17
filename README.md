@@ -1,6 +1,6 @@
 # Tacotron2-VAE — síntese de fala em português com estilo copiado de um áudio de referência
 
-**Projeto final de ML2 (IMPA Tech)** · [Página do projeto](https://rick0110.github.io/ml2_final_project) · [Relatório (PDF)](reports/relatorio_final.pdf)
+**Projeto final de ML2 (IMPA Tech)** · [Página do projeto](https://rick0110.github.io/ml2_final_project) · [Relatório (PDF)](reports/relatorio_final.pdf) · [Proposta de pesquisa (PDF)](reports/proposta/proposta.pdf)
 
 Sistema de síntese de fala (*Text-to-Speech*) baseado no **Tacotron 2** com um **VAE** que resume um áudio de referência em um vetor de estilo. O texto diz *o que* falar; o áudio de referência diz *como* (tom, velocidade, voz, emoção).
 
