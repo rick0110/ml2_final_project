@@ -258,6 +258,24 @@ Previsões registradas agora, antes de qualquer treino:
 
 Desenho recomendado para os próximos treinos (simulação de poder): 60–100 vozes fixas × 10 frases, N ∈ {8, 32, 128, 512, 2.048}, 3–5 sementes por N, métrica contínua sem voz padrão como principal, síntese com estilo zerado por voz e ressíntese dupla de cada checkpoint.
 
+**8.11 Teoria da informação: onde os bits da voz se perdem.** Duas teorias propostas por agentes independentes (cobertura como codificação de fonte; cópia como teste de hipótese bayesiano), criticadas em três rodadas cada (relatórios v1–v3 e scripts em `reports/teoria/informacao/A` e `B`). O que sobreviveu, medido sem modelo nos áudios gerados das 38 vozes externas (C = I(voz da saída; referência), cotas pela matriz de confusão de identificação; teto log2 38 = 5,25 bits):
+
+| Elo da cadeia | N = 8 | N = 128 |
+|---|---|---|
+| Fala real (verificador) | 4,2–4,7 | 4,2–4,7 |
+| μ (modelo gaussiano) | 5,1 | 5,2 |
+| z (modelo gaussiano) | 4,4 | 4,8 |
+| Saída, cota de Fano | 0,3 | 0,9–1,1 |
+| Saída, cota de entropia cruzada | 0,75 [0,28; 1,20] | 1,99 [1,35; 2,60] |
+
+- **O gargalo é o decodificador:** perde cerca de 4 bits; codificador e latente não são o problema.
+- **O ganho com N é cobertura, não precisão:** H(Ŷ) sobe 1,44 bit [0,68; 2,32] de N = 8 para 128, H(Ŷ|S) não muda (+0,07 [−1,24; 1,54]). A teoria de cobertura chega ao mesmo por outro caminho: uma "temperatura" do decodificador de cerca de 20, comum aos três treinos (19–27; um valor comum não é rejeitado).
+- **Lei em bits:** 0,31 bit por duplicação de N [0,17; 0,47], com dois pontos. Previsões: C(512) = 2,6 [1,9; 3,5], C(2.048) = 3,2 [2,3; 4,5]; igualar a fala real exigiria cerca de 10^5 locutores (10^3,6–10^8,2). Falseia: C(2.048) < 2,25.
+- **Negativos em uma conta:** ECAPA sozinho transmite 0,00 bit; média de referências muda C entre −0,40 e +0,31 sem direção; estilo a 60% baixa C em 8 de 10 treinos; correlação de postos entre não copiadas e C em 12 treinos: −0,49.
+- **Previsão a priori confirmada:** frases de referência mais longas tornam a cópia mais tudo-ou-nada (+0,035 [0,015; 0,053], p = 0,0002).
+- **Morreram:** Bayes ótimo sem parâmetros (usa 22× mais evidência que o decodificador real); voz treinada como ponto ruidoso; "informação por voz" como preditor; expoente estável; capacidade por voz crescendo com N. A atração pela voz padrão sobrevive com massa efetiva de 2.300–5.000 frases (as 2.000 reais); o efeito de cortá-las pela metade (4–9 pontos) pede cerca de 6 treinos por condição.
+- **Consequência:** o alvo de arquitetura é aumentar H(Ŷ), o conjunto de vozes que o decodificador alcança, com mais vozes na etapa de voz (áudio sem transcrição) ou com condicionamento em todas as camadas do decodificador (hipótese, experimento E5 da proposta). Cada treino novo deve medir C, H(Ŷ) e H(Ŷ|S) em 60–100 vozes e guardar o áudio gerado.
+
 ## 9. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.

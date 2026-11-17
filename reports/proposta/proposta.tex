@@ -39,7 +39,7 @@
 \maketitle
 
 \begin{abstract}
-\noindent Este documento reúne tudo o que o projeto tem até agora, para que alguém de fora entenda o trabalho só por ele. Partimos de um sistema de síntese de fala com estilo copiado de um áudio de referência (Tacotron~2 + VAE) e o usamos como bancada barata para uma pergunta de dados: \emph{quantos locutores, e quantas frases por locutor, um modelo precisa ver no treino para copiar a voz de alguém que nunca ouviu?} Em 33 treinos controlados (grade de $N$ locutores $\times$ $K$ frases, até $N=200$), as vozes treinadas dependem de $K$ e as vozes novas dependem de $N$. Medida em 38 vozes nunca ouvidas, a cópia sobe de 57\% para 70\% e 79\% com 8, 32 e 128 locutores, sem custo de inteligibilidade; com só três pontos e uma semente, a forma dessa curva (o expoente) ainda não é identificável. Cinco tentativas de contornar a falta de locutores falharam (troca de referência, perda contrastiva, vetor de locutor pré-treinado, pseudo-locutores por mudança de velocidade, média de referências), e a análise por voz indica que o gargalo é o \emph{decodificador} conseguir renderizar a voz, não o codificador descrevê-la. Uma revisão crítica mostra que parte da dificuldade medida vem da própria régua (a cópia é medida contra a voz padrão) e propõe um modelo de ``cobertura + atração pela voz padrão''. A partir disso propomos (i) uma lei de escala com regimes paramétrico e não paramétrico e (ii) uma arquitetura em duas etapas em que a voz é aprendida com áudio \emph{sem transcrição}, com previsões falseáveis a testar numa GPU dedicada. A aplicação-alvo é a dublagem para línguas com poucos locutores gravados, como o português.
+\noindent Este documento reúne tudo o que o projeto tem até agora, para que alguém de fora entenda o trabalho só por ele. Partimos de um sistema de síntese de fala com estilo copiado de um áudio de referência (Tacotron~2 + VAE) e o usamos como bancada barata para uma pergunta de dados: \emph{quantos locutores, e quantas frases por locutor, um modelo precisa ver no treino para copiar a voz de alguém que nunca ouviu?} Em 33 treinos controlados (grade de $N$ locutores $\times$ $K$ frases, até $N=200$), as vozes treinadas dependem de $K$ e as vozes novas dependem de $N$. Medida em 38 vozes nunca ouvidas, a cópia sobe de 57\% para 70\% e 79\% com 8, 32 e 128 locutores, sem custo de inteligibilidade; com só três pontos e uma semente, a forma dessa curva (o expoente) ainda não é identificável. Cinco tentativas de contornar a falta de locutores falharam (troca de referência, perda contrastiva, vetor de locutor pré-treinado, pseudo-locutores por mudança de velocidade, média de referências), e a análise por voz indica que o gargalo é o \emph{decodificador} conseguir renderizar a voz, não o codificador descrevê-la. Uma revisão crítica mostra que parte da dificuldade medida vem da própria régua (a cópia é medida contra a voz padrão) e propõe um modelo de ``cobertura + atração pela voz padrão''. Medindo diretamente nos áudios gerados quantos bits sobre a voz atravessam o sistema, a referência e o latente carregam 4 a 5 bits sobre qual de 38 vozes está falando e a saída só 0,3 (8 locutores) a 1 bit (128): o decodificador é o gargalo, e o ganho com mais locutores vem de ele alcançar mais vozes, não de ficar mais preciso em cada uma (cerca de 0,3 bit por duplicação). A partir disso propomos (i) uma descrição em teoria da informação da clonagem zero-shot e (ii) uma arquitetura em duas etapas em que a voz é aprendida com áudio \emph{sem transcrição}, com previsões falseáveis a testar numa GPU dedicada. A aplicação-alvo é a dublagem para línguas com poucos locutores gravados, como o português.
 \end{abstract}
 
 \tableofcontents
@@ -348,6 +348,45 @@ com $M$ o número de frases da voz padrão. Com um espectro de vozes $\lambda_j\
 \end{itemize}
 
 %=====================================================================
+\section{Teoria da informação: onde os bits da voz se perdem}
+\label{sec:info}
+
+Duas teorias foram propostas por agentes independentes (cobertura como codificação de fonte; cópia como teste de hipótese bayesiano) e criticadas em três rodadas. Ficou o que sobreviveu às duas e que pode ser medido sem modelo, a partir dos próprios áudios (relatórios em \texttt{reports/teoria/informacao/}).
+
+\paragraph{A medida.} A informação de voz que atravessa o sistema é $C = I(\hat Y; S)$: quanto a voz do áudio gerado $\hat Y$ diz sobre qual das 38 vozes externas $S$ foi a referência. Estima-se identificando, com um codificador de locutor, de qual referência veio cada saída; a matriz de confusão dá cotas inferiores (Fano e entropia cruzada). O teto é $\log_2 38 = 5{,}25$ bits.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[ybar, width=0.8\textwidth, height=5.6cm, bar width=12pt, ymin=0, ymax=5.6,
+  symbolic x coords={fala real, $\mu$, $z$, saída}, xtick=data, ylabel={bits sobre a voz (Fano)},
+  legend style={font=\small, at={(0.97,0.97)}, anchor=north east}, nodes near coords, nodes near coords style={font=\scriptsize},
+  every node near coord/.append style={/pgf/number format/fixed, /pgf/number format/precision=1}]
+\addplot[fill=azul!35, draw=azul] coordinates {(fala real,4.45) ($\mu$,5.1) ($z$,4.4) (saída,0.3)};
+\addplot[fill=verde!40, draw=verde] coordinates {(fala real,4.45) ($\mu$,5.2) ($z$,4.8) (saída,1.0)};
+\draw[dashed, cinza] (rel axis cs:0,0.9375) -- (rel axis cs:1,0.9375);
+\legend{$N=8$, $N=128$}
+\end{axis}
+\end{tikzpicture}
+\caption{Orçamento de bits ao longo da cadeia, nas mesmas 38 vozes (linha tracejada: teto de 5,25 bits). Fala real: verificador sobre os áudios de referência (4,2--4,7). $\mu$ e $z$: modelo gaussiano no latente. Saída: medida nos áudios gerados. Pela desigualdade de processamento de dados a informação só pode cair ao longo da cadeia; quase tudo se perde no decodificador.}
+\label{fig:budget}
+\end{figure}
+
+\caixa{verde}{\textbf{Resultado 4 (o gargalo é o decodificador).} A referência e o latente carregam de 4 a 5 bits sobre qual das 38 vozes está falando; o áudio gerado carrega 0,3 bit com 8 locutores e cerca de 1 bit com 128 (cota de Fano; pela cota de entropia cruzada, 0,75 e 2,0). O codificador não é o problema.}
+
+\paragraph{De onde vem o ganho com $N$.} Escrevendo $I(\hat Y;S) = H(\hat Y) - H(\hat Y\mid S)$, de $N=8$ para 128 a variedade de vozes alcançáveis $H(\hat Y)$ sobe 1,44 bit (IC $[0{,}68; 2{,}32]$) e o ruído por voz $H(\hat Y\mid S)$ não muda ($+0{,}07$, IC $[-1{,}24; 1{,}54]$). A outra teoria, por um caminho independente (a largura da transição entre copiar e não copiar, voz a voz), chega ao mesmo: uma ``temperatura'' do decodificador de cerca de 20, igual nos três treinos. Mais locutores não tornam o decodificador mais preciso por voz; aumentam o número de regiões de voz que ele alcança. É cobertura, não precisão.
+
+\paragraph{Uma lei em bits.} O ganho é de 0,31 bit por duplicação de $N$ (IC $[0{,}17; 0{,}47]$), medido em dois pontos. Se $C \approx c + 0{,}31\log_2 N$ continuar valendo, o áudio gerado carregaria 2,6 bits com 512 locutores e 3,2 com 2.048, e só alcançaria o que a fala real carrega com cerca de $10^5$ locutores (intervalo de $10^{3{,}6}$ a $10^{8{,}2}$). A lei seria falseada por $C(2.048) < 2{,}25$ bits.
+
+\paragraph{Os resultados negativos em uma conta.} O vetor ECAPA sozinho transmite 0,00 bit (o decodificador o ignora); com \textit{dropout}, 0,6--1,3. A média de 4 ou 16 referências muda $C$ entre $-0{,}40$ e $+0{,}31$ bit, sem direção. O estilo a 60\% baixa $C$ em 8 de 10 treinos. Entre 12 treinos, a fração não copiada e $C$ têm correlação de postos $-0{,}49$. Nada que atue só antes do decodificador muda os bits que saem.
+
+\paragraph{Previsão a priori confirmada.} Se cada voz é decidida por uma razão de verossimilhança, frases de referência mais longas (mais evidência) devem tornar a cópia mais tudo-ou-nada. Confirmado nos três treinos: $+0{,}035$ (IC $[0{,}015; 0{,}053]$), $p=0{,}0002$ por permutação.
+
+\paragraph{O que morreu nas rodadas de crítica.} Um decodificador bayesiano ótimo sem parâmetros (prevê quase toda voz copiada: usa 22 vezes mais evidência do que o real); a voz treinada como ponto ruidoso (erra o efeito de $K$); a ``informação por voz'' como preditor de quais vozes falham; um expoente estável entre 8 e 2.456 locutores; a hipótese de que a capacidade por voz cresce com $N$. A atração pela voz padrão sobrevive com massa efetiva compatível com as 2.000 frases reais (2.300 a 5.000), mas o efeito previsto de cortá-las pela metade (4 a 9 pontos) exige cerca de 6 treinos por condição para ser medido.
+
+\caixa{azul}{\textbf{Consequência para a arquitetura.} O alvo não é um codificador melhor nem referências melhores: é aumentar $H(\hat Y)$, o conjunto de vozes que o decodificador consegue produzir. Há duas alavancas: (i) dar ao decodificador mais vozes, o que a etapa de voz da Fig.~\ref{fig:proposta} faz com áudio sem transcrição; (ii) um condicionamento que deixe o decodificador interpolar entre vozes em vez de cair na região treinada mais próxima (no modelo atual o estilo é somado uma única vez à memória do encoder; condicionamento em todas as camadas é a hipótese a testar). Cada treino novo deve medir $C$, $H(\hat Y)$ e $H(\hat Y\mid S)$ em 60 a 100 vozes, e guardar o áudio gerado de todos os pontos.}
+
+%=====================================================================
 \section{Limites do que temos}
 \label{sec:limites}
 \begin{itemize}
@@ -417,8 +456,9 @@ A separação em etapas não é nova em si: há sistemas que geram primeiro toke
 E0 & Sem treino: espectro dos vetores de locutor do LibriTTS; pequeno teste de escuta nas vozes agudas & Espectro em $1/j$ (cobertura); ouvintes não confirmam a ``dificuldade'' das vozes agudas & Regime; quanto da curva é da régua\\
 E0b & Metade das frases da voz padrão ($M=1.000$) contra o dobro de $K$ & Mesmo efeito nas vozes novas & O modelo de cobertura + atração\\
 E1 & Repetir a varredura de $N$ (8 a 2.456, LibriTTS completo) numa arquitetura atual aberta, em configuração pequena; $N\in\{8,32,128,512,2048\}$, 3--5 sementes, 60--100 vozes de avaliação $\times$ 10 frases, métrica contínua sem voz padrão & Ganho continua até 2.048; não copiadas $\approx$9\% (cobertura) ou $\ge$16\% (piso) & Se a lei é do Tacotron ou da tarefa, e qual\\
-E2 & Arquitetura em duas etapas: $N_{\text{texto}}=8$ fixo, $N_{\text{voz}}$ de 8 a 2.456 & Cópia segue $N_{\text{voz}}$ com o expoente de E1; WER segue $N_{\text{texto}}$ & A hipótese central\\
+E2 & Arquitetura em duas etapas: $N_{\text{texto}}=8$ fixo, $N_{\text{voz}}$ de 8 a 2.456 & $C$ segue $N_{\text{voz}}$ (cerca de 0,3 bit por duplicação); WER segue $N_{\text{texto}}$; vazamento de voz nas unidades abaixo de cerca de 0,2 bit por frase & A hipótese central\\
 E3 & Etapa B em inglês, etapa A em português com poucos locutores & Cópia de vozes novas próxima da de E2; WER do português próximo do sistema atual (10\%) & Dublagem com poucos dados\\
+E5 & Mesmo decodificador com estilo condicionando todas as camadas (normalização adaptativa) contra estilo somado à memória do encoder, $N \in \{8, 128\}$ & $H(\hat Y)$ e $C$ maiores com condicionamento em todas as camadas, ruído por voz igual & Se o gargalo é o mecanismo de condicionamento\\
 E4 & Latente de voz menor (32 $\rightarrow$ 16, 8, 4, 2) e KL maior & Cópia inalterada com 8 dimensões e taxa de 25--30 bits; cai com 2 & O ``modelo mínimo''\\
 \bottomrule
 \end{tabular}

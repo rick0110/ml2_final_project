@@ -1,0 +1,39 @@
+"""b16: modelo minimo de 3 parametros (estado gaussiano por voz, ordenado pela estatistica geometrica sem parametro):
+ L_v ~ N(mu_N, 1) entre vozes; copia por frase ~ Phi(L_v / t);  mu_N = mu_128 + gamma ln(N/128).
+ t e mu_128: verossimilhanca marginal das contagens por voz SO em N=128; gamma: SO q(N=8). Previstos: N=32 inteiro, histogramas N=8, ICC.
+ A ordem das vozes e prevista pela estatistica Lambda geometrica (b7/b15), sem parametro.
+Uso: python3 -I b16_min3.py out/b0.npz"""
+import sys, os, json; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import numpy as np
+from scipy.stats import norm, binom
+from scipy.optimize import minimize, brentq
+from bt_lib import load
+S = load(sys.argv[1]); rng = np.random.default_rng(6)
+WIDE = {8: "n8_k32_s1-wide", 32: "n32_k32_s1-wide", 128: "n128_k32_s1-wide"}
+K = {N: np.array([x["r1"]["k"] for x in S[r]["refs"] if x["grp"] == "external"]) for N, r in WIDE.items()}
+gh_x, gh_w = np.polynomial.hermite_e.hermegauss(60); gh_w = gh_w / gh_w.sum()
+def pv_grid(mu, t): return np.clip(norm.cdf((mu + gh_x) / t), 1e-9, 1 - 1e-9)
+def nll(mu, t, k):
+    P = pv_grid(mu, t); from scipy.special import gammaln; lc = gammaln(26) - gammaln(k + 1) - gammaln(26 - k); L = np.exp(lc[:, None] + k[:, None] * np.log(P[None, :]) + (25 - k[:, None]) * np.log(1 - P[None, :])) @ gh_w; return -np.log(np.clip(L, 1e-300, None)).sum()
+o = minimize(lambda th: nll(th[0], np.exp(th[1]), K[128]), [1, -1], method="Nelder-Mead"); mu128, t = o.x[0], np.exp(o.x[1])
+qN = lambda mu: 1 - (pv_grid(mu, t) @ gh_w)
+gam = brentq(lambda g: qN(mu128 + g * np.log(8 / 128)) - (1 - K[8].sum() / (25 * len(K[8]))), -5, 5)
+icc = 1 / (1 + t ** 2)
+print(f"parametros: mu_128 = {mu128:.3f}, t = {t:.3f} (ICC latente = {icc:.3f}), gamma = {gam:.3f} por ln N")
+def hist(p):
+    b = np.array([.1, .3, .5, .7, .9]); h = np.zeros(6)
+    for v in p: h[0 if v <= .1 else 5 if v >= .9 else 1 + np.searchsorted(b[1:-1], v, side="right")] += 1
+    return h
+res = dict(mu128=mu128, t=t, gamma=gam, icc=icc, rows={})
+for N in [8, 32, 128]:
+    mu = mu128 + gam * np.log(N / 128); k = K[N]; p = k / 25
+    sims = np.array([hist(rng.binomial(25, norm.cdf((mu + rng.standard_normal(len(k))) / t)) / 25) for _ in range(2000)])
+    H = sims.mean(0); Ho = hist(p); chi = np.sum((Ho - H) ** 2 / np.maximum(H, .5))
+    pchi = np.mean([np.sum((s - H) ** 2 / np.maximum(H, .5)) >= chi for s in sims])
+    midp = (H[1:5].sum()) / len(k); mido = Ho[1:5].sum() / len(k)
+    tag = {8: "q ajustado (gamma); histograma previsto", 32: "TUDO previsto", 128: "ajustado (mu, t)"}[N]
+    print(f"  N={N:3d} [{tag}]: q obs {1-p.mean():.3f} prev {qN(mu):.3f} | vozes 10-90% obs {mido:.2f} prev {midp:.2f} | hist obs {Ho.astype(int).tolist()} prev {np.round(H,1).tolist()} chi2 {chi:.1f} (p sim {pchi:.2f})")
+    res["rows"][N] = dict(q_obs=float(1 - p.mean()), q_pred=float(qN(mu)), mid_obs=float(mido), mid_pred=float(midp), chi2=float(chi), p=float(pchi))
+for N in [512, 2048]:
+    print(f"  extrapolacao N={N}: q = {qN(mu128 + gam*np.log(N/128)):.3f}")
+json.dump(res, open("out/b16.json", "w"), indent=1, default=float)

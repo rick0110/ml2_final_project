@@ -1,0 +1,50 @@
+{
+ "T": 21.571001468015254,
+ "lam_a": 2.767081204569815,
+ "lam_b": 0.5554944009049938,
+ "gamma_mass": 0.4445055990950062,
+ "res": {
+  "8": {
+   "lam": 3.922199337982212,
+   "q_gauss": 0.40320310239296203,
+   "q_emp": 0.42227027140009005,
+   "q_gauss_Tc_nominal_lam": null
+  },
+  "32": {
+   "lam": 4.692278093590477,
+   "q_gauss": 0.30566691918356365,
+   "q_emp": 0.3020822554229167,
+   "q_gauss_Tc_nominal_lam": null
+  },
+  "128": {
+   "lam": 5.462356849198741,
+   "q_gauss": 0.2107456384521354,
+   "q_emp": null,
+   "q_gauss_Tc_nominal_lam": null
+  },
+  "512": {
+   "lam": 6.232435604807007,
+   "q_gauss": 0.1434121039045172,
+   "q_emp": null,
+   "q_gauss_Tc_nominal_lam": null
+  },
+  "2048": {
+   "lam": 7.002514360415271,
+   "q_gauss": 0.09564114179947686,
+   "q_emp": null,
+   "q_gauss_Tc_nominal_lam": null
+  },
+  "2456": {
+   "lam": 7.1034311966022745,
+   "q_gauss": 0.0900279292847727,
+   "q_emp": null,
+   "q_gauss_Tc_nominal_lam": null
+  },
+  "10000": {
+   "lam": 7.883373711631803,
+   "q_gauss": 0.05716077889709767,
+   "q_emp": null,
+   "q_gauss_Tc_nominal_lam": null
+  }
+ }
+}

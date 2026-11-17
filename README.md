@@ -244,6 +244,8 @@ Limites: duas configurações têm uma semente só; cada treino usa 4 vozes nova
 
 Reprodução: `scripts/coverage/colab_job.sh` (treino e avaliação), `scripts/coverage/summarize.py` (tabela e figura). Resultados por amostra em `reports/coverage/results/`.
 
+**Teoria da informação: o gargalo é o decodificador.** Medindo nos áudios gerados quanta informação sobre a voz da referência atravessa o sistema (identificação entre as 38 vozes externas; teto de 5,25 bits), a referência e o latente carregam 4 a 5 bits, mas a saída só 0,3 bit com 8 locutores e cerca de 1 bit com 128 (cota de Fano). O ganho com mais locutores vem de o decodificador alcançar mais vozes diferentes, com o mesmo ruído por voz, à razão de cerca de 0,3 bit por duplicação. Detalhes na seção 8.11 da [nota teórica](reports/teoria_cobertura.md) e na seção 8 da [proposta](reports/proposta/proposta.pdf).
+
 ## 10. Próximo passo: dublagem
 
 O objetivo seguinte é dublar filmes: texto traduzido + áudio do ator original como referência de estilo. O que este projeto já entrega para isso é a síntese em português com tom e velocidade vindos de uma referência. O que falta: controlar a duração de cada fala para caber na cena, usar o vídeo (movimento da boca) como entrada, e sincronia labial.
