@@ -81,23 +81,31 @@ for RUN in $RUNS; do
   # utterance also in a second, speed-changed voice (scripts/coverage/augment_voices.py);
   # -vcaug: every default-voice utterance also converted to one of 200 other real voices
   # (scripts/coverage/vc_voices.py); -notrain: no training, the English model is evaluated as is;
-  # -wide: a normal run under another name, for evaluations with more reference speakers
-  BASE=${RUN%%-*}; SWAP=""
+  # -wide: a normal run under another name, for evaluations with more reference speakers;
+  # -film: the style vector also modulates every decoder step (FiLM, --style-film);
+  # -z8 / -z2: style latent of 8 or 2 dimensions (VAE heads re-initialized);
+  # -lj1000: half of the default-voice utterances (1000 instead of 2000), same test sentences
+  BASE=${RUN%%-*}; SWAP=""; LJ_SIZE=2000
   case "$RUN" in
     *-swap) SWAP="--swap-reference" ;;
     *-contrast) SWAP="--contrastive-weight 0.5" ;;
     *-spk) SWAP="--speaker-embeddings" ;;
     *-spkswap) SWAP="--speaker-embeddings --swap-reference" ;;
     *-spkdrop) SWAP="--speaker-embeddings --style-dropout 0.5" ;;
+    *-film) SWAP="--style-film" ;;
+    *-z8) SWAP="--z-latent-dim 8" ;;
+    *-z2) SWAP="--z-latent-dim 2" ;;
+    *-lj1000) LJ_SIZE=1000 ;;
   esac
   N=${BASE#n}; N=${N%%_*}; K=${BASE#*_k}; K=${K%%_*}; SEED=${BASE##*_s}
   DATA=data/processed/cov_n${N}_k${K}
+  [ "$LJ_SIZE" = 2000 ] || DATA=${DATA}_lj${LJ_SIZE}
   EXP_DIR=experiments/tacotron2-vae/cov_$RUN
   RUN_STEPS=$STEPS; RUN_STRENGTHS=$STRENGTHS; RUN_VC=$VC_REFS
   case "$RUN" in *-notrain) RUN_STEPS=0; RUN_STRENGTHS="0.0 1.0"; RUN_VC="1 4 16 64" ;; esac
   flock 9  # runs that share a data folder prepare it one at a time
   [ -f "$DATA/test_sentences.txt" ] || python scripts/coverage/coverage_manifest.py --lj data/processed/LJSpeech \
-    --libritts data/processed/LibriTTS --external data/processed/LibriTTS_test --external-n "$EXTERNAL_REFS" --n "$N" --k "$K" --out "$DATA"
+    --libritts data/processed/LibriTTS --external data/processed/LibriTTS_test --external-n "$EXTERNAL_REFS" --lj-size "$LJ_SIZE" --n "$N" --k "$K" --out "$DATA"
   case "$RUN" in *-vcaug)
     [ -f "${DATA}_vc/test_sentences.txt" ] || python scripts/coverage/vc_voices.py --data-dir "$DATA" \
       --libritts data/processed/LibriTTS --audio-dir data/processed/vc_voices --out "${DATA}_vc"
@@ -141,12 +149,14 @@ for RUN in $RUNS; do
         --data-dir "$DATA/refs" --all-references --sentences-file "$DATA/test_sentences.txt" \
         --text-cleaner english_cleaners --language en --style-strength "$S" --out-dir "$OUT/strength_$S"
       python scripts/coverage/speaker_similarity.py --eval-dir "$OUT/strength_$S" --refs "$DATA/refs" --train "$DATA" $POOL
+      python scripts/coverage/voice_bits.py --eval-dir "$OUT/strength_$S"  # bits of voice that reach the output
       for R in $RUN_VC; do
         V=$OUT/strength_${S}_vc$R
         head -n 1 "$V/results.csv" 2>/dev/null | grep -q sim_ref && continue
         python scripts/coverage/vc_cascade.py --eval-dir "$OUT/strength_$S" --out-dir "$V" --refs "$DATA/refs" \
           $POOL --n-refs "$R"
         python scripts/coverage/speaker_similarity.py --eval-dir "$V" --refs "$DATA/refs" --train "$DATA" $POOL
+        python scripts/coverage/voice_bits.py --eval-dir "$V"  # bits of voice that reach the output
         find "$V" -name '*.wav' ! -name '*__s0.wav' ! -name '*__s1.wav' ! -name '*__s2.wav' -delete
       done
       # Keep the audio of the first three sentences only (for listening); the numbers are in results.csv
@@ -159,6 +169,7 @@ for RUN in $RUNS; do
         --data-dir "$DATA/refs" --all-references --sentences-file "$DATA/test_sentences.txt" \
         --text-cleaner english_cleaners --language en --style-strength 1.0 --n-refs "$R" $POOL --out-dir "$V"
       python scripts/coverage/speaker_similarity.py --eval-dir "$V" --refs "$DATA/refs" --train "$DATA" $POOL
+      python scripts/coverage/voice_bits.py --eval-dir "$V"  # bits of voice that reach the output
       find "$V" -name '*.wav' ! -name '*__s0.wav' ! -name '*__s1.wav' ! -name '*__s2.wav' -delete
     done
     python scripts/eval/latent_dump.py --checkpoint "$CKPT" --manifest "$DATA" --manifest "$DATA/refs" \

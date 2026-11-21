@@ -84,7 +84,8 @@ def main() -> None:
     rng = random.Random(0)
     lj = sorted(read(a.lj), key=lambda r: r["utt_id"])
     rng.shuffle(lj)
-    lj, lj_rest = lj[: a.lj_size], lj[a.lj_size:]
+    # Test sentences always come from the same pool (after the first 2000), whatever --lj-size is
+    lj, lj_rest = lj[: a.lj_size], lj[max(a.lj_size, 2000):]
     # Plain sentences only: digits and abbreviations make the word error rate depend on the
     # recognizer's spelling, not on what was said
     test = [r["text"].strip() for r in lj_rest

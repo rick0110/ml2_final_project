@@ -276,6 +276,13 @@ Desenho recomendado para os próximos treinos (simulação de poder): 60–100 v
 - **Morreram:** Bayes ótimo sem parâmetros (usa 22× mais evidência que o decodificador real); voz treinada como ponto ruidoso; "informação por voz" como preditor; expoente estável; capacidade por voz crescendo com N. A atração pela voz padrão sobrevive com massa efetiva de 2.300–5.000 frases (as 2.000 reais); o efeito de cortá-las pela metade (4–9 pontos) pede cerca de 6 treinos por condição.
 - **Consequência:** o alvo de arquitetura é aumentar H(Ŷ), o conjunto de vozes que o decodificador alcança, com mais vozes na etapa de voz (áudio sem transcrição) ou com condicionamento em todas as camadas do decodificador (hipótese, experimento E5 da proposta). Cada treino novo deve medir C, H(Ŷ) e H(Ŷ|S) em 60–100 vozes e guardar o áudio gerado.
 
+**8.12 Experimentos prontos no código, com previsões registradas antes de rodar.** Sem GPU, foram implementados e testados em CPU (modelo pequeno: passo de treino, inferência e carga de checkpoint):
+
+- `-film` (`--style-film`): o vetor de estilo também modula, por FiLM, os estados das duas LSTMs do decodificador a cada passo. Inicializado em zero, então o modelo pré-treinado começa idêntico (conferido). **Previsão:** se o mecanismo de condicionamento é o gargalo, C (cota de entropia cruzada, 38 vozes externas) sobe pelo menos 0,5 bit em N = 8 e em N = 128, com H(Y|S) igual ou menor; se C ficar dentro do intervalo do treino normal, o gargalo não é o ponto de entrada do estilo.
+- `-z8` / `-z2` (`--z-latent-dim`): latente de 8 ou 2 dimensões, com as cabeças do VAE reinicializadas ao carregar o checkpoint de 32. **Previsão** (seção 8.10): cópia e C inalterados com 8; caem com 2.
+- `-lj1000`: metade das frases da voz padrão, com as mesmas frases de teste. **Previsão** (seção 8.11): de 4 a 9 pontos a menos de vozes não copiadas em N = 128; separar as teorias exige cerca de 6 treinos por condição.
+- Toda avaliação agora salva os vetores de locutor de todas as amostras (`embeddings.npz`) e calcula os bits de voz por grupo de referências (`scripts/coverage/voice_bits.py`: C pelas cotas de entropia cruzada e de Fano, H(Y), H(Y|S), intervalos por reamostragem das vozes). Conferido em dados sintéticos: cópia perfeita dá 5,25 de 5,25 bits; nenhuma cópia dá 0,00.
+
 ## 9. Limites desta tratativa
 
 - A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.

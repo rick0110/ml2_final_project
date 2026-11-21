@@ -195,6 +195,7 @@ def load_checkpoint(
     model: nn.Module,
     warm_start: bool = False,
     allow_new: Tuple[str, ...] = (),
+    reinit: Tuple[str, ...] = (),
 ) -> Tuple[nn.Module, Optional[Dict[str, Any]], float, int]:
     """
     Load model and training state.
@@ -204,6 +205,9 @@ def load_checkpoint(
         model (nn.Module): Model to load into.
         allow_new (Tuple[str, ...]): Prefixes of parameters the checkpoint may lack (they
             keep their initialization).
+        reinit (Tuple[str, ...]): Prefixes of parameters whose checkpoint values are dropped
+            when their shape differs from the model's (e.g. the VAE heads when the latent
+            size changes); they keep their initialization.
 
     Returns:
         Tuple: model, optimizer_state, learning_rate, iteration.
@@ -224,8 +228,17 @@ def load_checkpoint(
         iteration = 0
         optimizer = None
     else:
-        missing, unexpected = model.load_state_dict(checkpoint["state_dict"], strict=False)
-        missing = [k for k in missing if not k.startswith(allow_new)] if allow_new else list(missing)
+        state = checkpoint["state_dict"]
+        dropped: Tuple[str, ...] = ()
+        if reinit:
+            model_state = model.state_dict()
+            dropped = tuple(k for k, v in state.items()
+                            if k.startswith(reinit) and k in model_state and v.size() != model_state[k].size())
+            state = {k: v for k, v in state.items() if k not in dropped}
+            if dropped:
+                print(f"Re-initialized (shape changed): {', '.join(dropped)}")
+        missing, unexpected = model.load_state_dict(state, strict=False)
+        missing = [k for k in missing if not k.startswith(allow_new) and k not in dropped]
         if missing or unexpected:
             raise RuntimeError(f"checkpoint does not match the model: missing {missing}, unexpected {list(unexpected)}")
         learning_rate: float = checkpoint.get("learning_rate", 1e-3)

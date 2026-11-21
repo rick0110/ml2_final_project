@@ -9,7 +9,8 @@ Reads the results.csv written by scripts/eval/synth_check.py and adds two column
 With --pool it also adds sim_spk, the similarity to the mean embedding of up to 20 utterances
 of the reference speaker (the reference included), comparable to sim_default.
 The voice was copied when sim_ref is high and above sim_default. Embeddings come from
-Resemblyzer (a speaker-verification encoder trained on other data).
+Resemblyzer (a speaker-verification encoder trained on other data). All embeddings are also
+saved to embeddings.npz in the eval folder, for scripts/coverage/voice_bits.py.
 
 Example:
     python scripts/coverage/speaker_similarity.py --eval-dir exports/coverage/run/strength_1.0 \
@@ -75,13 +76,26 @@ def main() -> None:
     path = a.eval_dir / "results.csv"
     with open(path, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
+    out_emb = []
     for r in rows:
         audio, _ = librosa.load(a.eval_dir / f"{r['sample']}.wav", sr=22050)
         e = embed(enc, audio)
+        out_emb.append(e)
         r["sim_ref"] = round(float(e @ ref_emb[r["reference"]]), 3)
         r["sim_default"] = round(float(e @ default_emb), 3)
         if spk_emb:
             r["sim_spk"] = round(float(e @ spk_emb[r["reference"]]), 3)
+    group = {r["utt_id"]: r.get("emotion", "") for r in refs}
+    ref_ids = sorted(ref_emb)
+    np.savez_compressed(
+        a.eval_dir / "embeddings.npz",
+        sample=np.array([r["sample"] for r in rows]), reference=np.array([r["reference"] for r in rows]),
+        output=np.array(out_emb, dtype=np.float32),
+        ref_id=np.array(ref_ids), ref_group=np.array([group[i] for i in ref_ids]),
+        ref_utt=np.array([ref_emb[i] for i in ref_ids], dtype=np.float32),
+        ref_spk=np.array([spk_emb.get(i, ref_emb[i]) for i in ref_ids], dtype=np.float32),
+        default=default_emb.astype(np.float32),
+    )
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()

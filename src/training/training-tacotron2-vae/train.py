@@ -95,6 +95,8 @@ def parse_arguments() -> argparse.Namespace:
                         help="Weight of the speaker-contrastive loss on the style latent (implies --swap-reference)")
     parser.add_argument("--style-dropout", type=float, default=0.0,
                         help="Share of training items decoded without the VAE style vector")
+    parser.add_argument("--style-film", action="store_true",
+                        help="Also condition every decoder step on the style vector (FiLM on both LSTM states)")
     parser.add_argument("--speaker-embeddings", action="store_true",
                         help="Also condition on the pretrained speaker embeddings in <artifacts-dir>/speaker_embeddings.pt")
     parser.add_argument("--val-split", type=float, default=0.1)
@@ -192,6 +194,7 @@ def main() -> None:
         "gate_positive_weight": args.gate_positive_weight,
         "contrastive_weight": args.contrastive_weight,
         "style_dropout": args.style_dropout,
+        "style_film": args.style_film,
         "speaker_embedding_dim": speaker_embedding_dim,
         "warmup_steps": args.warmup_steps,
         "n_symbols": text_processor.n_symbols,
@@ -303,7 +306,10 @@ def main() -> None:
 
     # Fine-tune from a specific checkpoint (resets optimizer and iteration for fresh start)
     elif args.checkpoint_path:
-        model, _, _, _ = load_checkpoint(Path(args.checkpoint_path), model, allow_new=("speaker_projection.",))
+        model, _, _, _ = load_checkpoint(
+            Path(args.checkpoint_path), model, allow_new=("speaker_projection.", "decoder.style_film."),
+            reinit=("vae_gst.fc1.", "vae_gst.fc2.", "vae_gst.fc3."),
+        )
         print(f"Fine-tuning from checkpoint: {args.checkpoint_path}")
 
     torch.backends.cudnn.enabled = hparams.cudnn_enabled

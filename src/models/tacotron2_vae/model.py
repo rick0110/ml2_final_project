@@ -471,6 +471,15 @@ class Decoder(nn.Module):
             bias=True,
             w_init_gain="sigmoid",
         )
+        # Optional FiLM conditioning: the style vector scales and shifts the attention-RNN and
+        # decoder-RNN states at every step, instead of only being added to the encoder memory.
+        # Zero-initialized, so a pretrained decoder behaves exactly as before at the first step.
+        self.style_film: Optional[nn.Linear] = None
+        if getattr(hparams, "style_film", False):
+            self.style_film = nn.Linear(hparams.E, 2 * (hparams.attention_rnn_dim + hparams.decoder_rnn_dim))
+            nn.init.zeros_(self.style_film.weight)
+            nn.init.zeros_(self.style_film.bias)
+        self.film: Optional[Tuple[Tensor, Tensor, Tensor, Tensor]] = None
 
         # Decoder states
         self.attention_hidden: Tensor
@@ -555,6 +564,19 @@ class Decoder(nn.Module):
         
         return mel_outputs_t, gate_outputs_t.squeeze(-1), alignments_t
 
+    def set_style(self, style: Optional[Tensor]) -> None:
+        """
+        Args:
+            style (Tensor, optional): (B, E) style vector for FiLM; ignored without style_film.
+        """
+        self.film = None
+        if self.style_film is not None and style is not None:
+            g_a, b_a, g_d, b_d = torch.split(
+                self.style_film(style),
+                [self.attention_rnn_dim, self.attention_rnn_dim, self.decoder_rnn_dim, self.decoder_rnn_dim], dim=-1,
+            )
+            self.film = (g_a, b_a, g_d, b_d)
+
     def decode(self, decoder_input: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Args:
@@ -567,7 +589,9 @@ class Decoder(nn.Module):
         self.attention_hidden, self.attention_cell = self.attention_rnn(
             cell_input, (self.attention_hidden, self.attention_cell)
         ) # (B, attention_rnn_dim)
-        
+        if self.film is not None:
+            self.attention_hidden = self.attention_hidden * (1 + self.film[0]) + self.film[1]
+
         self.attention_hidden = F.dropout(
             self.attention_hidden, self.p_attention_dropout, self.training
         )
@@ -594,7 +618,9 @@ class Decoder(nn.Module):
         self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
             decoder_rnn_input, (self.decoder_hidden, self.decoder_cell)
         ) # (B, decoder_rnn_dim)
-        
+        if self.film is not None:
+            self.decoder_hidden = self.decoder_hidden * (1 + self.film[2]) + self.film[3]
+
         self.decoder_hidden = F.dropout(
             self.decoder_hidden, self.p_decoder_dropout, self.training
         )
@@ -611,12 +637,15 @@ class Decoder(nn.Module):
         
         return decoder_output, gate_prediction, self.attention_weights
 
-    def forward(self, memory: Tensor, decoder_inputs: Tensor, memory_lengths: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(
+        self, memory: Tensor, decoder_inputs: Tensor, memory_lengths: Tensor, style: Optional[Tensor] = None
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Args:
             memory (Tensor): (B, T_text, encoder_dim)
             decoder_inputs (Tensor): (B, n_mels, T_mel)
             memory_lengths (Tensor): (B,)
+            style (Tensor, optional): (B, E) style vector for FiLM conditioning
         
         Returns:
             Tuple[Tensor, Tensor, Tensor]: mel_outputs, gate_outputs, alignments.
@@ -636,6 +665,7 @@ class Decoder(nn.Module):
             decoder_inputs_parsed = decoder_inputs_parsed * frame_mask
 
         self.initialize_decoder_states(memory, mask=~get_mask_from_lengths(memory_lengths))
+        self.set_style(style)
 
         mel_outputs: List[Tensor] = []
         gate_outputs: List[Tensor] = []
@@ -650,16 +680,18 @@ class Decoder(nn.Module):
 
         return self.parse_decoder_outputs(mel_outputs, gate_outputs, alignments)
 
-    def inference(self, memory: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def inference(self, memory: Tensor, style: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Args:
             memory (Tensor): (B, T_text, encoder_dim)
+            style (Tensor, optional): (B, E) style vector for FiLM conditioning
         
         Returns:
             Tuple[Tensor, Tensor, Tensor]: mel_outputs, gate_outputs, alignments.
         """
         decoder_input: Tensor = self.get_go_frame(memory) # (B, n_mels * n_frames)
         self.initialize_decoder_states(memory, mask=None)
+        self.set_style(style)
 
         mel_outputs: List[Tensor] = []
         gate_outputs: List[Tensor] = []
@@ -824,7 +856,8 @@ class Tacotron2(nn.Module):
             keep: Tensor = (torch.rand(prosody_outputs.size(0), 1, device=prosody_outputs.device) >= self.style_dropout)
             prosody_outputs = prosody_outputs * keep.to(prosody_outputs.dtype)
 
-        # Inject prosody into encoder outputs
+        # Inject prosody into encoder outputs (and, with style_film, into every decoder step)
+        style_vector: Tensor = prosody_outputs # (B, E)
         prosody_outputs = prosody_outputs.unsqueeze(1).expand_as(transcript_outputs) # (B, T_text, encoder_dim)
         encoder_outputs: Tensor = transcript_outputs + prosody_outputs # (B, T_text, encoder_dim)
         if self.speaker_projection is not None and "speaker_embedding" in extra:
@@ -835,7 +868,7 @@ class Tacotron2(nn.Module):
         gate_outputs: Tensor
         alignments: Tensor
         mel_outputs, gate_outputs, alignments = self.decoder(
-            encoder_outputs, targets, memory_lengths=input_lengths
+            encoder_outputs, targets, memory_lengths=input_lengths, style=style_vector
         ) # (B, n_mels, T_mel), (B, T_mel), (B, T_mel, T_text)
 
         # Postnet refinement
@@ -870,11 +903,12 @@ class Tacotron2(nn.Module):
         latent_vector, _, _, _ = self.vae_gst(audio)
         
         # Inject prosody
+        style_vector = latent_vector
         latent_vector = latent_vector.unsqueeze(1).expand_as(transcript_outputs)
         encoder_outputs = transcript_outputs + latent_vector
         
         # Decode to mel-spectrogram
-        mel_outputs, _, _ = self.decoder.inference(encoder_outputs)
+        mel_outputs, _, _ = self.decoder.inference(encoder_outputs, style=style_vector)
         
         # Refine mel-spectrogram via postnet
         mel_outputs_postnet = self.postnet(mel_outputs)
@@ -925,7 +959,7 @@ class Tacotron2(nn.Module):
         if self.speaker_projection is not None and speaker_embedding is not None:
             encoder_outputs = encoder_outputs + self.speaker_projection(speaker_embedding).unsqueeze(1)
 
-        mel_outputs, _, alignments = self.decoder.inference(encoder_outputs)
+        mel_outputs, _, alignments = self.decoder.inference(encoder_outputs, style=style)
         mel_outputs_postnet = mel_outputs + self.postnet(mel_outputs)
         return mel_outputs, mel_outputs_postnet, alignments
 

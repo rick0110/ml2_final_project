@@ -133,6 +133,7 @@ class Tacotron2VAEHparams:
     # Gate (stop token) loss
     speaker_embedding_dim: int = 0  # >0: also condition on a pretrained speaker embedding of this size
     style_dropout: float = 0.0  # Share of training items decoded without the VAE style vector
+    style_film: bool = False  # Also modulate both decoder LSTM states with the style vector at every step (FiLM)
     contrastive_weight: float = 0.0  # Weight of the speaker-contrastive loss on the style latent (needs --swap-reference)
     contrastive_temperature: float = 0.1
     contrastive_memory: int = 512  # Latents of recent batches kept as extra negatives
