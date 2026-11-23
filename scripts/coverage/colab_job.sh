@@ -1,11 +1,11 @@
 #!/bin/bash
-# Coverage experiment on a Colab GPU (the repository is expected at /content/repo and the
-# English checkpoint at /content/repo/ckpt/en_final).
+# Coverage experiment on a Colab GPU (the repository is expected at $REPO and the
+# English checkpoint at $REPO/ckpt/en_final).
 #
 # For each run (N LibriTTS speakers x K sentences each, one seed) it trains from the English
 # model and, at each step count of STEPS, synthesizes the test sentences with seen and unseen
 # reference voices, measures word error rate and voice similarity, and saves the latent codes.
-# Results go to /content/out/<run>/step_<n>; a finished evaluation is never repeated, so the
+# Results go to $WORK/out/<run>/step_<n>; a finished evaluation is never repeated, so the
 # job can be started again after an interruption.
 #
 # One training step costs the same on any GPU (the decoder runs frame by frame), so the way
@@ -23,10 +23,12 @@ BATCH=${BATCH:-48}
 WORKERS=${WORKERS:-6}   # data-loading processes per training run (lower it when several runs share the machine)
 CPUS=$(nproc)
 POOL="--pool data/processed/LibriTTS --pool data/processed/LibriTTS_test"  # more utterances of the reference speakers
-cd /content/repo
+WORK=${WORK:-/content}   # scratch and results root (/content on Colab; any folder elsewhere)
+REPO=${REPO:-$WORK/repo}
+cd "$REPO"
 
 # Several copies of this job may start together: only one installs and prepares the data, the others wait
-exec 9>/content/setup.lock
+exec 9>$WORK/setup.lock
 flock 9
 python -m pip install -q gruut num2words inflect faster-whisper webrtcvad-wheels speechbrain
 python -m pip install -q --no-deps resemblyzer
@@ -39,7 +41,7 @@ print(":".join(glob.glob(os.path.join(site.getsitepackages()[0], "nvidia", "*", 
 PY
 ):${LD_LIBRARY_PATH:-}"
 
-mkdir -p data/raw data/processed ckpt /content/out
+mkdir -p data/raw data/processed ckpt $WORK/out
 if [ ! -f data/processed/LJSpeech/mels_metadata.csv ]; then
   [ -d data/raw/LJSpeech-1.1 ] || curl -sL https://data.keithito.com/data/speech/LJSpeech-1.1.tar.bz2 | tar xj -C data/raw
   python scripts/preprocess/make_manifest.py --corpus ljspeech --input-dir data/raw/LJSpeech-1.1 \
@@ -48,9 +50,9 @@ fi
 if [ ! -f data/processed/LibriTTS/mels_metadata.csv ]; then
   if [ ! -d data/raw/LibriTTS/train-clean-100 ]; then
     # A copy of the OpenSLR archive (openslr.org can be very slow); checked against the published MD5
-    curl -sL -o /content/train-clean-100.tar.gz "${LIBRITTS_URL:-https://huggingface.co/datasets/Respair/libri_zipped/resolve/main/train-clean-100.tar.gz}"
-    echo "4a8c202b78fe1bc0c47916a98f3a2ea8  /content/train-clean-100.tar.gz" | md5sum -c -
-    tar xzf /content/train-clean-100.tar.gz -C data/raw && rm /content/train-clean-100.tar.gz
+    curl -sL -o $WORK/train-clean-100.tar.gz "${LIBRITTS_URL:-https://huggingface.co/datasets/Respair/libri_zipped/resolve/main/train-clean-100.tar.gz}"
+    echo "4a8c202b78fe1bc0c47916a98f3a2ea8  $WORK/train-clean-100.tar.gz" | md5sum -c -
+    tar xzf $WORK/train-clean-100.tar.gz -C data/raw && rm $WORK/train-clean-100.tar.gz
   fi
   python scripts/preprocess/make_manifest.py --corpus libritts --input-dir data/raw/LibriTTS/train-clean-100 \
     --out-dir data/processed/LibriTTS --min-duration 1.5 --max-duration 10 --num-workers "$CPUS"
@@ -60,11 +62,11 @@ if [ ! -f data/processed/LibriTTS_test/mels_metadata.csv ]; then
   # Optional: without it (slow server) the runs go on with no "external" references
   if [ ! -d data/raw/LibriTTS/test-clean ]; then
     for U in https://openslr.elda.org/resources/60/test-clean.tar.gz https://www.openslr.org/resources/60/test-clean.tar.gz; do
-      curl -sL --max-time 1200 -o /content/test-clean.tar.gz "$U"
-      [ "$(stat -c %s /content/test-clean.tar.gz)" = 1230670113 ] && break
+      curl -sL --max-time 1200 -o $WORK/test-clean.tar.gz "$U"
+      [ "$(stat -c %s $WORK/test-clean.tar.gz)" = 1230670113 ] && break
     done
-    tar xzf /content/test-clean.tar.gz -C data/raw || echo "no test-clean"
-    rm -f /content/test-clean.tar.gz
+    tar xzf $WORK/test-clean.tar.gz -C data/raw || echo "no test-clean"
+    rm -f $WORK/test-clean.tar.gz
   fi
   [ -d data/raw/LibriTTS/test-clean ] && python scripts/preprocess/make_manifest.py --corpus libritts --input-dir data/raw/LibriTTS/test-clean \
     --out-dir data/processed/LibriTTS_test --min-duration 1.5 --max-duration 10 --num-workers "$CPUS"
@@ -72,6 +74,7 @@ fi
 [ -f ckpt/hifigan_universal_v1.pt ] || curl -sL -o ckpt/hifigan_universal_v1.pt \
   https://huggingface.co/csdc-atl/hifigan-universal_v1/resolve/main/g_02500000
 flock -u 9
+[ -n "${SETUP_ONLY:-}" ] && exit 0
 
 for RUN in $RUNS; do
   # Variants, by suffix. n8_k8_s1-swap: style reference from another utterance; -contrast: that
@@ -119,9 +122,9 @@ for RUN in $RUNS; do
   case "$SWAP" in *speaker-embeddings*) python scripts/preprocess/cache_speaker_embeddings.py --data-dir "$DATA" ;; esac
   flock -u 9
   for STEP in $RUN_STEPS; do
-    OUT=/content/out/$RUN/step_$STEP
+    OUT=$WORK/out/$RUN/step_$STEP
     [ -f "$OUT/done" ] && continue
-    echo "$(date -u +%H:%M:%S) training $RUN to step $STEP" >> /content/out/progress.txt
+    echo "$(date -u +%H:%M:%S) training $RUN to step $STEP" >> $WORK/out/progress.txt
     COMMON="--artifacts-dir $DATA --text-cleaner english_cleaners --num-workers $WORKERS --learning-rate 1e-4 --warmup-steps 500
       --iters-per-checkpoint 500 --keep-last-checkpoints 1 --max-steps $STEP --lr-scheduler-patience 100000
       --batch-size $BATCH --val-split 0.03 --guided-attention-weight 2.0 --guided-attention-sigma 0.4 --seed $SEED $SWAP"
@@ -133,7 +136,7 @@ for RUN in $RUNS; do
     else
       python src/training/training-tacotron2-vae/train.py $COMMON --checkpoint-path ckpt/en_final --experiment-name "cov_$RUN"
     fi
-    echo "$(date -u +%H:%M:%S) evaluating $RUN at step $STEP" >> /content/out/progress.txt
+    echo "$(date -u +%H:%M:%S) evaluating $RUN at step $STEP" >> $WORK/out/progress.txt
     # With a speaker embedding, strength 0 shows what the embedding alone does
     case "$SWAP" in *speaker-embeddings*) RUN_STRENGTHS="$STRENGTHS 0.0" ;; esac
     for S in $RUN_STRENGTHS; do
@@ -177,7 +180,7 @@ for RUN in $RUNS; do
     [ "$STEP" = 0 ] || cp "$EXP_DIR/metrics.jsonl" "$OUT/metrics.jsonl"
     cp "$DATA/mels_metadata.csv" "$OUT/train_manifest.csv"
     touch "$OUT/done"
-    echo "$(date -u +%H:%M:%S) finished $RUN at step $STEP" >> /content/out/progress.txt
+    echo "$(date -u +%H:%M:%S) finished $RUN at step $STEP" >> $WORK/out/progress.txt
   done
 done
-echo "$(date -u +%H:%M:%S) ALL DONE" >> /content/out/progress.txt
+echo "$(date -u +%H:%M:%S) ALL DONE" >> $WORK/out/progress.txt
