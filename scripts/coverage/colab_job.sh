@@ -90,6 +90,7 @@ for RUN in $RUNS; do
   # -lj1000: half of the default-voice utterances (1000 instead of 2000), same test sentences;
   # -zr32: latent of 32 with the VAE heads re-initialized (control for -z8 / -z2);
   # -nokl: the KL weight never ramps up (control for longer trainings)
+  # -filmnokl: FiLM and no KL ramp together
   BASE=${RUN%%-*}; SWAP=""; LJ_SIZE=2000
   case "$RUN" in
     *-swap) SWAP="--swap-reference" ;;
@@ -102,6 +103,7 @@ for RUN in $RUNS; do
     *-z2) SWAP="--z-latent-dim 2" ;;
     *-zr32) SWAP="--reinit-vae-heads" ;;
     *-nokl) SWAP="--anneal-lag 1000000" ;;
+    *-filmnokl) SWAP="--style-film --anneal-lag 1000000" ;;
     *-lj1000) LJ_SIZE=1000 ;;
   esac
   N=${BASE#n}; N=${N%%_*}; K=${BASE#*_k}; K=${K%%_*}; SEED=${BASE##*_s}
