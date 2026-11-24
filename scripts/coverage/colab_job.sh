@@ -132,7 +132,7 @@ for RUN in $RUNS; do
     [ -f "$OUT/done" ] && continue
     echo "$(date -u +%H:%M:%S) training $RUN to step $STEP" >> $WORK/out/progress.txt
     COMMON="--artifacts-dir $DATA --text-cleaner english_cleaners --num-workers $WORKERS --learning-rate 1e-4 --warmup-steps 500
-      --iters-per-checkpoint 500 --keep-last-checkpoints 1 --max-steps $STEP --lr-scheduler-patience 100000
+      --iters-per-checkpoint 500 --keep-last-checkpoints 0 --max-steps $STEP --lr-scheduler-patience 100000
       --batch-size $BATCH --val-split 0.03 --guided-attention-weight 2.0 --guided-attention-sigma 0.4 --seed $SEED $SWAP"
     CKPT=$EXP_DIR/checkpoints/epoch_$STEP
     if [ "$STEP" = 0 ]; then
