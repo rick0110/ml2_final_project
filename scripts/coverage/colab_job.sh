@@ -87,7 +87,9 @@ for RUN in $RUNS; do
   # -wide: a normal run under another name, for evaluations with more reference speakers;
   # -film: the style vector also modulates every decoder step (FiLM, --style-film);
   # -z8 / -z2: style latent of 8 or 2 dimensions (VAE heads re-initialized);
-  # -lj1000: half of the default-voice utterances (1000 instead of 2000), same test sentences
+  # -lj1000: half of the default-voice utterances (1000 instead of 2000), same test sentences;
+  # -zr32: latent of 32 with the VAE heads re-initialized (control for -z8 / -z2);
+  # -nokl: the KL weight never ramps up (control for longer trainings)
   BASE=${RUN%%-*}; SWAP=""; LJ_SIZE=2000
   case "$RUN" in
     *-swap) SWAP="--swap-reference" ;;
@@ -98,6 +100,8 @@ for RUN in $RUNS; do
     *-film) SWAP="--style-film" ;;
     *-z8) SWAP="--z-latent-dim 8" ;;
     *-z2) SWAP="--z-latent-dim 2" ;;
+    *-zr32) SWAP="--reinit-vae-heads" ;;
+    *-nokl) SWAP="--anneal-lag 1000000" ;;
     *-lj1000) LJ_SIZE=1000 ;;
   esac
   N=${BASE#n}; N=${N%%_*}; K=${BASE#*_k}; K=${K%%_*}; SEED=${BASE##*_s}

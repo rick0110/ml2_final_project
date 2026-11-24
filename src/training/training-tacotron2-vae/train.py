@@ -130,6 +130,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--encoder-embedding-dim", type=int, default=None)
     parser.add_argument("--style-dim", type=int, default=None, help="VAE-GST style embedding dim (hparams.E)")
     parser.add_argument("--z-latent-dim", type=int, default=None)
+    parser.add_argument("--reinit-vae-heads", action="store_true",
+                        help="Re-initialize the VAE output layers (fc1, fc2, fc3) after loading the checkpoint, "
+                             "as a smaller latent does; the control for the -z8 / -z2 runs")
     parser.add_argument("--decoder-rnn-dim", type=int, default=None)
     parser.add_argument("--attention-rnn-dim", type=int, default=None)
     parser.add_argument("--prenet-dim", type=int, default=None)
@@ -311,6 +314,10 @@ def main() -> None:
             reinit=("vae_gst.fc1.", "vae_gst.fc2.", "vae_gst.fc3."),
         )
         print(f"Fine-tuning from checkpoint: {args.checkpoint_path}")
+        if args.reinit_vae_heads:
+            for layer in (model.vae_gst.fc1, model.vae_gst.fc2, model.vae_gst.fc3):
+                layer.reset_parameters()
+            print("Re-initialized the VAE heads (fc1, fc2, fc3)")
 
     torch.backends.cudnn.enabled = hparams.cudnn_enabled
     torch.backends.cudnn.benchmark = hparams.cudnn_benchmark
