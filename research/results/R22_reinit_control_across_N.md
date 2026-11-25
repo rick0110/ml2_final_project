@@ -10,7 +10,7 @@ Is the cost of re-initializing the VAE heads ([R13](R13_smaller_latent_and_contr
 
 ## Setup
 
-`-zr32` (32-dimensional latent, heads re-initialized), original recipe, K = 32, 2,500 steps, N ∈ {32, 128, 241}. Predictions registered in [`paths/05_voice_representation/in_progress/reinit_control.md`](../paths/05_voice_representation/in_progress/reinit_control.md).
+`-zr32` (32-dimensional latent, heads re-initialized), original recipe, K = 32, 2,500 steps, N ∈ {32, 128, 241}. Predictions registered in [`paths/05_voice_representation/done/reinit_control.md`](../paths/05_voice_representation/done/reinit_control.md).
 
 ## Result
 
