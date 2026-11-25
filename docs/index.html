@@ -214,13 +214,13 @@
   </div>
   <p>We checked the audio from the previous version with speech recognition (Whisper). The result explains why it sounded bad:</p>
   <div class="players">
-    <figure class="player m-base"><figcaption>Before · English<span class="sub">Requested: “Hello, this is a test of the voice synthesis system.” · Heard: “That is the system, that is the system…”</span></figcaption><audio controls preload="none" src="assets/audio/antes_en.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>Before · Portuguese<span class="sub">Requested: “Por favor, aguarde enquanto o sistema carrega.” (“Please wait while the system loads.”) · Heard: nothing intelligible</span></figcaption><audio controls preload="none" src="assets/audio/antes_pt.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>Before · English<span class="sub">Requested: “Hello, this is a test of the voice synthesis system.” · Heard: “That is the system, that is the system…”</span></figcaption><audio controls preload="none" src="assets/audio/before_en.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>Before · Portuguese<span class="sub">Requested: “Por favor, aguarde enquanto o sistema carrega.” (“Please wait while the system loads.”) · Heard: nothing intelligible</span></figcaption><audio controls preload="none" src="assets/audio/before_pt.mp3"></audio></figure>
     <figure class="player m-attn"><figcaption>After · English<span class="sub">Requested and heard: “The system returned an unexpected error.”</span></figcaption><audio controls preload="none" src="assets/audio/en_4.mp3"></audio></figure>
     <figure class="player m-attn"><figcaption>After · Portuguese<span class="sub">Requested and heard: “Amanhã vamos viajar para o Rio de Janeiro.” (“Tomorrow we are travelling to Rio de Janeiro.”)</span></figcaption><audio controls preload="none" src="assets/audio/pt_rio.mp3"></audio></figure>
   </div>
   <figure class="figure">
-    <img src="assets/img/fig_retreino_wer.png" alt="Percentage of wrong words before and after retraining" loading="lazy">
+    <img src="assets/img/fig_retraining_wer.png" alt="Percentage of wrong words before and after retraining" loading="lazy">
     <figcaption>Wrong words in the automatic transcription of each generated audio clip (lower is better). Gray: previous models. Blue: retrained models.</figcaption>
   </figure>
   <div class="scroll"><table>
@@ -275,7 +275,7 @@
     resumes from the last saved checkpoint). Learning rate 10<sup>−4</sup>, with a 500-step warmup.
   </p>
   <figure class="figure">
-    <img src="assets/img/fig_retreino_curvas.png" alt="Training curves of the three stages" loading="lazy">
+    <img src="assets/img/fig_retraining_curves.png" alt="Training curves of the three stages" loading="lazy">
     <figcaption>
       Top: mel reconstruction error in training (gray) and in validation (blue). Training sits higher because half
       of the decoder input frames are deliberately dropped during training. Bottom: alignment sharpness
@@ -296,7 +296,7 @@
     <figure class="player m-attn"><figcaption>“Where did you put the keys to the car?”</figcaption><audio controls preload="none" src="assets/audio/en_3.mp3"></audio></figure>
   </div>
   <figure class="figure">
-    <img src="assets/img/alinhamento_en.png" alt="Generated mel and text-audio alignment of an English sentence" loading="lazy">
+    <img src="assets/img/alignment_en.png" alt="Generated mel and text-audio alignment of an English sentence" loading="lazy">
     <figcaption>Generated mel and alignment. The sharp diagonal shows that the model goes through the text in order, without skipping or repeating.</figcaption>
   </figure>
   <div class="callout warn">
@@ -315,9 +315,9 @@
   <h3>The same sentence with three references</h3>
   <p>“O filme começa às oito horas da noite.” (“The film starts at eight in the evening.”) The reference changes only the speaking speed.</p>
   <div class="players">
-    <figure class="player m-verbo"><figcaption>Slow reference<span class="sub">reference 9.1 characters/s · generated 8.8</span></figcaption><audio controls preload="none" src="assets/audio/pt_lenta.mp3"></audio></figure>
-    <figure class="player m-verbo"><figcaption>Medium reference<span class="sub">reference 12.6 characters/s · generated 11.9</span></figcaption><audio controls preload="none" src="assets/audio/pt_media.mp3"></audio></figure>
-    <figure class="player m-verbo"><figcaption>Fast reference<span class="sub">reference 16.3 characters/s · generated 12.7</span></figcaption><audio controls preload="none" src="assets/audio/pt_rapida.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>Slow reference<span class="sub">reference 9.1 characters/s · generated 8.8</span></figcaption><audio controls preload="none" src="assets/audio/pt_slow.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>Medium reference<span class="sub">reference 12.6 characters/s · generated 11.9</span></figcaption><audio controls preload="none" src="assets/audio/pt_medium.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>Fast reference<span class="sub">reference 16.3 characters/s · generated 12.7</span></figcaption><audio controls preload="none" src="assets/audio/pt_fast.mp3"></audio></figure>
   </div>
   <h3>Other sentences</h3>
   <div class="players">
@@ -326,7 +326,7 @@
     <figure class="player m-verbo"><figcaption>“Amanhã vamos viajar para o Rio de Janeiro.” (“Tomorrow we are travelling to Rio de Janeiro.”)</figcaption><audio controls preload="none" src="assets/audio/pt_rio.mp3"></audio></figure>
   </div>
   <figure class="figure">
-    <img src="assets/img/alinhamento_pt.png" alt="Generated mel and text-audio alignment of a Portuguese sentence" loading="lazy">
+    <img src="assets/img/alignment_pt.png" alt="Generated mel and text-audio alignment of a Portuguese sentence" loading="lazy">
     <figcaption>Generated mel and alignment of “Por favor, aguarde enquanto o sistema carrega.” (“Please wait while the system loads.”)</figcaption>
   </figure>
 </section>
@@ -352,53 +352,53 @@
     synthesizing. At 60%, almost all words are understood again.
   </p>
   <figure class="figure">
-    <img src="assets/img/fig_retreino_intensidade.png" alt="Wrong words and pitch range as a function of style strength" loading="lazy">
+    <img src="assets/img/fig_retraining_strength.png" alt="Wrong words and pitch range as a function of style strength" loading="lazy">
     <figcaption>Effect of style strength on the Portuguese + VERBO model (7 emotions from female speaker f1). Left: wrong words. Right: the lowest and highest mean pitch across the emotions: the wider the range, the more the emotion changes the pitch.</figcaption>
   </figure>
   <figure class="figure">
-    <img src="assets/img/fig_retreino_estilo_ptverbo_vae_v1.png" alt="Pitch and speed of the generated speech against those of the reference" loading="lazy">
+    <img src="assets/img/fig_retraining_style_ptverbo_vae_v1.png" alt="Pitch and speed of the generated speech against those of the reference" loading="lazy">
     <figcaption>Style at 100%: each point is a reference (circles: female speaker f1; squares: male speaker m1). On the diagonal, the generated speech would have the same pitch or speed as the reference.</figcaption>
   </figure>
 
   <h3>References (real VERBO audio)</h3>
   <p>All of them say “Agora vou pôr a camiseta e sair para uma caminhada.” (“Now I am going to put on my T-shirt and go for a walk.”)</p>
   <div class="players">
-    <figure class="player gt"><figcaption>neutral <span class="sub">neu-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_neu.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>joy <span class="sub">ale-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_ale.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>sadness <span class="sub">tri-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_tri.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>anger <span class="sub">rai-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_rai.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>surprise <span class="sub">sur-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_sur.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>fear <span class="sub">med-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_med.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>disgust <span class="sub">des-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_des.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>neutral <span class="sub">neu-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_neutral.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>joy <span class="sub">ale-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_happy.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>sadness <span class="sub">tri-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_sad.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>anger <span class="sub">rai-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_anger.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>surprise <span class="sub">sur-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_surprise.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>fear <span class="sub">med-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_fear.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>disgust <span class="sub">des-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_disgust.mp3"></audio></figure>
   </div>
   <h3>New sentence with the full style (100%)</h3>
   <p>“Eu nunca pensei que veria você aqui de novo.” (“I never thought I would see you here again.”) The voice and pitch follow the reference, but several come out truncated or wrong (surprise and fear are the worst).</p>
   <div class="players">
-    <figure class="player m-base"><figcaption>→ neutral <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_neu.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ joy <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_ale.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ sadness <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_tri.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ anger <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_rai.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ surprise <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_sur.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ fear <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_med.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ disgust <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_des.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ neutral <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_neutral.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ joy <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_happy.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ sadness <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_sad.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ anger <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_anger.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ surprise <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_surprise.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ fear <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_fear.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ disgust <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_disgust.mp3"></audio></figure>
   </div>
   <h3>The same sentence with the style at 60%</h3>
   <p>All of them are understood. The voice goes back to being that of the Portuguese corpus; what remains of the emotion is mainly the rhythm.</p>
   <div class="players">
-    <figure class="player m-attn"><figcaption>→ neutral <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_neu.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ joy <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_ale.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ sadness <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_tri.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ anger <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_rai.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ surprise <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_sur.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ fear <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_med.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ disgust <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_des.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ neutral <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_neutral.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ joy <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_happy.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ sadness <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_sad.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ anger <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_anger.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ surprise <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_surprise.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ fear <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_fear.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ disgust <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_disgust.mp3"></audio></figure>
   </div>
   <h3>Switching speakers</h3>
   <div class="players">
-    <figure class="player gt"><figcaption>Speaker m1, neutral <span class="sub">real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_m1_neu.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ m1's voice, neutral <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_m1_neu.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>Speaker m1, joy <span class="sub">real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_m1_ale.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ m1's voice, joy <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_m1_ale.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>Speaker m1, neutral <span class="sub">real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_m1_neutral.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ m1's voice, neutral <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_m1_neutral.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>Speaker m1, joy <span class="sub">real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_m1_happy.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ m1's voice, joy <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_m1_happy.mp3"></audio></figure>
   </div>
   <div class="callout warn">
     <p><b>Conclusion of this part.</b> Copying voice and emotion works, but with the data we have it is not possible to have strong emotion
@@ -416,7 +416,7 @@
     to the reference than to the default voice, according to an external speaker encoder.
   </p>
   <figure class="figure">
-    <img src="assets/img/fig_cobertura.png" alt="Voice copied as a function of sentences per speaker, for 2, 8 and 32 speakers, on trained and never-seen voices" loading="lazy">
+    <img src="assets/img/fig_coverage.png" alt="Voice copied as a function of sentences per speaker, for 2, 8 and 32 speakers, on trained and never-seen voices" loading="lazy">
     <figcaption>Share of samples with the voice copied. Points: seeds; lines: means.</figcaption>
   </figure>
   <div class="scroll"><table>
