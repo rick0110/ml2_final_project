@@ -11,7 +11,7 @@ references of trained ("seen") and never-trained ("unseen") voices:
 
 Example:
     python scripts/coverage/summarize.py --results reports/coverage/results \
-        --figure reports/figures/fig_cobertura.png
+        --figure reports/figures/fig_coverage.png
 """
 from __future__ import annotations
 
@@ -73,10 +73,10 @@ def main() -> None:
         return
     ks = sorted({key[1] for key in data})
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.8), sharey=True, facecolor=SURFACE)
-    for ax, kind, title in zip(axes, ("seen", "unseen"), ("Vozes treinadas", "Vozes nunca vistas")):
+    for ax, kind, title in zip(axes, ("seen", "unseen"), ("Trained voices", "Never-seen voices")):
         ax.set_facecolor(SURFACE)
         labels: List[list] = []
-        for n in sorted({key[0] for key in data}):
+        for n in sorted({key[0] for key in data} & COLORS.keys()):  # the original N x K grid
             xs, means = [], []
             for k in ks:
                 seeds = data.get((n, k, "", kind), {}).get("copied", [])
@@ -87,7 +87,7 @@ def main() -> None:
                 ax.scatter([ks.index(k)] * len(seeds), [100 * s for s in seeds], s=22, color=COLORS[n],
                            edgecolor=SURFACE, linewidth=1.2, zorder=3)
             ax.plot(xs, means, color=COLORS[n], linewidth=2, zorder=2)
-            labels.append([means[-1], xs[-1], f"{n} locutores"])
+            labels.append([means[-1], xs[-1], f"{n} speakers"])
         labels.sort()
         for lower, upper in zip(labels, labels[1:]):  # keep the line labels apart
             upper[0] = max(upper[0], lower[0] + 7)
@@ -97,12 +97,12 @@ def main() -> None:
         ax.set_xticks(range(len(ks)), [str(k) for k in ks])
         ax.set_xlim(-0.3, len(ks) - 1 + 0.95)
         ax.set_ylim(0, 100)
-        ax.set_xlabel("frases por locutor no treino", fontsize=9, color=MUTED)
+        ax.set_xlabel("training sentences per speaker", fontsize=9, color=MUTED)
         ax.grid(axis="y", color=GRID, linewidth=0.8)
         ax.tick_params(colors=MUTED, labelsize=9, length=0)
         for side in ax.spines.values():
             side.set_visible(False)
-    axes[0].set_ylabel("voz copiada (% das amostras)", fontsize=9, color=MUTED)
+    axes[0].set_ylabel("voice copied (% of samples)", fontsize=9, color=MUTED)
     fig.tight_layout()
     a.figure.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(a.figure, dpi=200, facecolor=SURFACE)

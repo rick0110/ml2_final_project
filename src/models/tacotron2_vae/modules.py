@@ -154,16 +154,16 @@ class ReferenceEncoder(nn.Module):
 
     def encode_with_attention(self, inputs: Tensor, lengths: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
         """
-        Forward pass retornando o encoding e os pesos de atenção temporal.
+        Forward pass returning the encoding and the temporal attention weights.
 
         Args:
             inputs (Tensor): Mel-spectrogram. Shape: (B, n_mels, T)
-            lengths (Optional[Tensor]): Frames válidos por item. Shape: (B,)
+            lengths (Optional[Tensor]): Valid frames per item. Shape: (B,)
 
         Returns:
             Tuple[Tensor, Tensor]:
                 encoded: Shape (B, E // 2)
-                weights: Pesos de atenção por bloco de tempo da GRU. Shape (B, T')
+                weights: Attention weights per GRU time block. Shape (B, T')
         """
         return self._encode(self._cnn_forward(inputs), lengths)
 
@@ -272,7 +272,7 @@ class VAE_GST(nn.Module):
         self, inputs: Tensor, lengths: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         """
-        Forward pass retornando as saídas do VAE e os pesos de atenção temporal.
+        Forward pass returning the VAE outputs and the temporal attention weights.
 
         Args:
             inputs (Tensor): Mel-spectrogram input.
@@ -284,7 +284,7 @@ class VAE_GST(nn.Module):
                 mu: Shape (B, L)
                 logvar: Shape (B, L)
                 z: Shape (B, L)
-                temporal_weights: Pesos de atenção por frame da GRU. Shape (B, T')
+                temporal_weights: Attention weights per GRU frame. Shape (B, T')
         """
         enc_out, temporal_weights = self.ref_encoder.encode_with_attention(inputs, lengths)
         style_embed, mu, logvar, z = self._vae_from_enc(enc_out)

@@ -1,7 +1,7 @@
 \documentclass[a4paper,11pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[brazilian]{babel}
+\usepackage[english]{babel}
 \usepackage{lmodern}
 \usepackage[margin=2.3cm]{geometry}
 \usepackage{amsmath,amssymb}
@@ -23,147 +23,147 @@
 \titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{0.6em}{}
 \usepackage[colorlinks=true,linkcolor=blue!40!black,citecolor=blue!40!black,urlcolor=blue!50!black]{hyperref}
 
-\definecolor{azul}{RGB}{37,99,235}
-\definecolor{laranja}{RGB}{217,119,6}
-\definecolor{verde}{RGB}{22,128,61}
-\definecolor{cinza}{RGB}{110,110,110}
+\definecolor{accentblue}{RGB}{37,99,235}
+\definecolor{accentorange}{RGB}{217,119,6}
+\definecolor{accentgreen}{RGB}{22,128,61}
+\definecolor{accentgray}{RGB}{110,110,110}
 
-\newcommand{\caixa}[2]{\begin{center}\fcolorbox{#1}{#1!6}{\begin{minipage}{0.94\textwidth}\small #2\end{minipage}}\end{center}}
+\newcommand{\callout}[2]{\begin{center}\fcolorbox{#1}{#1!6}{\begin{minipage}{0.94\textwidth}\small #2\end{minipage}}\end{center}}
 
 \title{\vspace{-1.2cm}\textbf{How Many Voices Does It Take to Clone One?}\\[4pt]
-\large Dados, resultados e proposta de pesquisa: lei de escala da clonagem de voz\\ \textit{zero-shot} e uma arquitetura que separa conteúdo e voz}
-\author{Richard Viana\\[2pt]\small Projeto derivado do trabalho final de Machine Learning II --- IMPA Tech}
-\date{\small Documento de trabalho --- novembro de 2026}
+\large Data, results and research proposal: a scaling law for \textit{zero-shot}\\ voice cloning and an architecture that separates content and voice}
+\author{Richard Viana\\[2pt]\small Project derived from the Machine Learning II final project --- IMPA Tech}
+\date{\small Working document --- November 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-\noindent Este documento reúne tudo o que o projeto tem até agora, para que alguém de fora entenda o trabalho só por ele. Partimos de um sistema de síntese de fala com estilo copiado de um áudio de referência (Tacotron~2 + VAE) e o usamos como bancada barata para uma pergunta de dados: \emph{quantos locutores, e quantas frases por locutor, um modelo precisa ver no treino para copiar a voz de alguém que nunca ouviu?} Em 33 treinos controlados (grade de $N$ locutores $\times$ $K$ frases, até $N=200$), as vozes treinadas dependem de $K$ e as vozes novas dependem de $N$. Medida em 38 vozes nunca ouvidas, a cópia sobe de 57\% para 70\% e 79\% com 8, 32 e 128 locutores, sem custo de inteligibilidade; com só três pontos e uma semente, a forma dessa curva (o expoente) ainda não é identificável. Cinco tentativas de contornar a falta de locutores falharam (troca de referência, perda contrastiva, vetor de locutor pré-treinado, pseudo-locutores por mudança de velocidade, média de referências), e a análise por voz indica que o gargalo é o \emph{decodificador} conseguir renderizar a voz, não o codificador descrevê-la. Uma revisão crítica mostra que parte da dificuldade medida vem da própria régua (a cópia é medida contra a voz padrão) e propõe um modelo de ``cobertura + atração pela voz padrão''. Medindo diretamente nos áudios gerados quantos bits sobre a voz atravessam o sistema, a referência e o latente carregam 4 a 5 bits sobre qual de 38 vozes está falando e a saída só 0,3 (8 locutores) a 1 bit (128): o decodificador é o gargalo, e o ganho com mais locutores vem de ele alcançar mais vozes, não de ficar mais preciso em cada uma (cerca de 0,3 bit por duplicação). A partir disso propomos (i) uma descrição em teoria da informação da clonagem zero-shot e (ii) uma arquitetura em duas etapas em que a voz é aprendida com áudio \emph{sem transcrição}, com previsões falseáveis a testar numa GPU dedicada. A aplicação-alvo é a dublagem para línguas com poucos locutores gravados, como o português.
+\noindent This document gathers everything the project has so far, so that an outsider can understand the work from it alone. We start from a speech synthesis system whose style is copied from a reference recording (Tacotron~2 + VAE) and use it as a cheap test bench for a data question: \emph{how many speakers, and how many sentences per speaker, does a model need to see in training to copy the voice of someone it has never heard?} In 33 controlled training runs (a grid of $N$ speakers $\times$ $K$ sentences, up to $N=200$), trained voices depend on $K$ and new voices depend on $N$. Measured on 38 never-heard voices, copying rises from 57\% to 70\% and 79\% with 8, 32 and 128 speakers, at no cost in intelligibility; with only three points and one seed, the shape of this curve (the exponent) is not yet identifiable. Five attempts to work around the shortage of speakers failed (reference swapping, a contrastive loss, a pretrained speaker vector, pseudo-speakers via speed change, averaging references), and the per-voice analysis indicates that the bottleneck is the \emph{decoder} being able to render the voice, not the encoder describing it. A critical review shows that part of the measured difficulty comes from the yardstick itself (copying is measured against the default voice) and proposes a ``coverage + attraction to the default voice'' model. Measuring directly on the generated audio how many bits about the voice pass through the system, the reference and the latent carry 4 to 5 bits about which of 38 voices is speaking, and the output only 0.3 (8 speakers) to 1 bit (128): the decoder is the bottleneck, and the gain from more speakers comes from it reaching more voices, not from becoming more precise on each one (about 0.3 bit per doubling). From this we propose (i) an information-theoretic description of zero-shot cloning and (ii) a two-stage architecture in which the voice is learned from \emph{untranscribed} audio, with falsifiable predictions to be tested on a dedicated GPU. The target application is dubbing into languages with few recorded speakers, such as Portuguese.
 \end{abstract}
 
 \tableofcontents
 \newpage
 
 %=====================================================================
-\section{Motivação e pergunta}
+\section{Motivation and question}
 
-A meta de longo prazo é \textbf{dublar filmes}: dado o texto traduzido e o áudio do ator original, gerar a fala na língua de destino com a voz e o estilo do ator. Isso exige clonagem de voz \emph{zero-shot}: o modelo recebe um trecho curto de uma voz que nunca ouviu e fala um texto novo com ela.
+The long-term goal is \textbf{dubbing films}: given the translated text and the original actor's audio, generate speech in the target language with the actor's voice and style. This requires \emph{zero-shot} voice cloning: the model receives a short clip of a voice it has never heard and speaks new text with it.
 
-Os sistemas atuais de clonagem treinam com dezenas de milhares de horas e milhares de locutores. Línguas como o português têm corpora transcritos com poucas dezenas de locutores. A pergunta que guia o projeto é, portanto, de dados:
+Current cloning systems train on tens of thousands of hours and thousands of speakers. Languages such as Portuguese have transcribed corpora with a few dozen speakers. The question guiding the project is therefore one of data:
 
-\caixa{azul}{\textbf{Pergunta central.} Quantos locutores ($N$) e quantas frases por locutor ($K$) o treino precisa para que o modelo copie vozes novas sem perder inteligibilidade? Qual é a forma funcional dessa dependência, e o que limita a cópia: o codificador descrever a voz nova ou o decodificador conseguir reproduzi-la?}
+\callout{accentblue}{\textbf{Central question.} How many speakers ($N$) and how many sentences per speaker ($K$) does training need for the model to copy new voices without losing intelligibility? What is the functional form of this dependence, and what limits copying: the encoder describing the new voice, or the decoder being able to reproduce it?}
 
-O modelo usado (Tacotron~2 + VAE) é antigo e não é o que se usaria num produto hoje (Seção~\ref{sec:limites}). Ele foi escolhido como \emph{bancada}: permite dezenas de treinos controlados com orçamento de estudante. O que se pretende levar adiante é a pergunta, o protocolo e a teoria, a serem confirmados numa arquitetura atual.
+The model used (Tacotron~2 + VAE) is old and is not what one would use in a product today (Section~\ref{sec:limites}). It was chosen as a \emph{test bench}: it allows dozens of controlled training runs on a student budget. What we intend to carry forward is the question, the protocol and the theory, to be confirmed on a current architecture.
 
 %=====================================================================
-\section{O que o projeto já tem}
+\section{What the project already has}
 
 \begin{enumerate}
-\item \textbf{Um sistema de síntese em português com estilo copiado}, treinado em etapas (inglês $\rightarrow$ português $\rightarrow$ emoção) a partir do Tacotron~2 pré-treinado da NVIDIA. Palavras erradas (WER, via Whisper): 2,2\% em inglês, 10,5\% em português; o tom da fala gerada acompanha o da referência (correlação 0,97 em 10 referências de emoção).
-\item \textbf{Uma correção documentada}: a versão anterior do trabalho tinha um resultado central (``atenção espectral interpretável'') que vinha de um erro de código (um \texttt{view} sem transpor tempo e frequência). O erro foi corrigido e o resultado retirado.
-\item \textbf{O experimento de cobertura} ($N \times K$): 33 treinos, avaliação automática de inteligibilidade e de cópia de voz, incluindo uma avaliação em 38 vozes nunca ouvidas.
-\item \textbf{Uma nota teórica} com uma lei de escala em dois níveis, previsões registradas \emph{antes} de cada experimento e o resultado de cada uma (acertos e erros).
-\item \textbf{Código reprodutível} (treino, avaliação, ajuste das leis, análise por voz), resultados por amostra versionados no repositório e cópia no \textit{bucket} do projeto.
+\item \textbf{A Portuguese speech synthesis system with copied style}, trained in stages (English $\rightarrow$ Portuguese $\rightarrow$ emotion) from NVIDIA's pretrained Tacotron~2. Word errors (WER, via Whisper): 2.2\% in English, 10.5\% in Portuguese; the pitch of the generated speech follows that of the reference (correlation 0.97 over 10 emotion references).
+\item \textbf{A documented correction}: the previous version of the work had a central result (``interpretable spectral attention'') that came from a code bug (a \texttt{view} without transposing time and frequency). The bug was fixed and the result withdrawn.
+\item \textbf{The coverage experiment} ($N \times K$): 33 training runs, automatic evaluation of intelligibility and voice copying, including an evaluation on 38 never-heard voices.
+\item \textbf{A theory note} with a two-level scaling law, predictions registered \emph{before} each experiment, and the outcome of each one (hits and misses).
+\item \textbf{Reproducible code} (training, evaluation, law fitting, per-voice analysis), per-sample results versioned in the repository, and a copy in the project's \textit{bucket}.
 \end{enumerate}
 
 %=====================================================================
-\section{Arquitetura atual}
+\section{Current architecture}
 
 \begin{figure}[H]
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
   box/.style={rectangle, draw=black!30, rounded corners=5pt, fill=black!3, minimum height=1.15cm, align=center, font=\small, inner xsep=5pt},
-  hl/.style={box, draw=azul, line width=1pt, fill=azul!5},
-  op/.style={box, draw=laranja, line width=1pt, fill=laranja!6, dashed},
+  hl/.style={box, draw=accentblue, line width=1pt, fill=accentblue!5},
+  op/.style={box, draw=accentorange, line width=1pt, fill=accentorange!6, dashed},
   frozen/.style={box, fill=black!8},
   arr/.style={-{Stealth[length=2.2mm]}, semithick, draw=black!55}
 ]
-\node[box] (txt) at (0,0) {Texto\\{\scriptsize caracteres / fonemas}};
-\node[box] (enc) at (3.2,0) {Encoder de texto\\{\scriptsize Conv1d + BiLSTM}};
-\node[circle, draw=azul, thick, fill=white, inner sep=1.5pt] (soma) at (5.5,0) {$+$};
-\node[box] (att) at (7.6,0) {Atenção\\{\scriptsize por localização}};
-\node[box] (dec) at (10.4,0) {Decoder\\{\scriptsize autorregressivo}};
-\node[frozen] (voc) at (13.3,0) {HiFi-GAN\\{\scriptsize congelado}};
-\node[box] (wav) at (15.6,0) {Áudio};
-\node[box] (ref) at (0.4,2.3) {Mel de referência\\{\scriptsize $80\times T$}};
+\node[box] (txt) at (0,0) {Text\\{\scriptsize characters / phonemes}};
+\node[box] (enc) at (3.2,0) {Text encoder\\{\scriptsize Conv1d + BiLSTM}};
+\node[circle, draw=accentblue, thick, fill=white, inner sep=1.5pt] (soma) at (5.5,0) {$+$};
+\node[box] (att) at (7.6,0) {Attention\\{\scriptsize location-sensitive}};
+\node[box] (dec) at (10.4,0) {Decoder\\{\scriptsize autoregressive}};
+\node[frozen] (voc) at (13.3,0) {HiFi-GAN\\{\scriptsize frozen}};
+\node[box] (wav) at (15.6,0) {Audio};
+\node[box] (ref) at (0.4,2.3) {Reference mel\\{\scriptsize $80\times T$}};
 \node[hl] (vae) at (5.5,2.3) {Reference encoder + VAE\\{\scriptsize 6 Conv2d + GRU $\rightarrow (\mu,\sigma)$, $z\in\mathbb{R}^{32}$}};
-\node[op] (spk) at (11.0,2.3) {Vetor de locutor ECAPA\\{\scriptsize congelado (só variantes \texttt{-spk})}};
+\node[op] (spk) at (11.0,2.3) {ECAPA speaker vector\\{\scriptsize frozen (\texttt{-spk} variants only)}};
 \draw[arr] (txt) -- (enc); \draw[arr] (enc) -- (soma); \draw[arr] (soma) -- (att);
 \draw[arr] (att) -- (dec); \draw[arr] (dec) -- (voc); \draw[arr] (voc) -- (wav);
 \draw[arr] (ref) -- (vae);
-\draw[arr] (vae.south) -- node[left, font=\scriptsize] {estilo $e$ $\times$ força} (soma.north);
-\draw[arr, dashed, draw=laranja] (spk.south) |- (6.3,1.05) -- (soma.north east);
+\draw[arr] (vae.south) -- node[left, font=\scriptsize] {style $e$ $\times$ strength} (soma.north);
+\draw[arr, dashed, draw=accentorange] (spk.south) |- (6.3,1.05) -- (soma.north east);
 \end{tikzpicture}}
-\caption{Tacotron~2 + VAE. O vetor de estilo $e$ (projeção de $z$), multiplicado por um fator de força (1,0 = estilo inteiro), é somado a cada posição da memória do encoder. A entrada tracejada (vetor de locutor ECAPA pré-treinado) só existe nas variantes \texttt{-spk}/\texttt{-spkdrop}. 28,9\,M de parâmetros.}
+\caption{Tacotron~2 + VAE. The style vector $e$ (a projection of $z$), multiplied by a strength factor (1.0 = full style), is added to every position of the encoder memory. The dashed input (pretrained ECAPA speaker vector) exists only in the \texttt{-spk}/\texttt{-spkdrop} variants. 28.9\,M parameters.}
 \label{fig:arq}
 \end{figure}
 
-\paragraph{Perda.} $\mathcal{L} = \mathcal{L}_{\text{mel}} + \mathcal{L}_{\text{gate}} + \beta\,\mathcal{L}_{\text{KL}} + \lambda\,\mathcal{L}_{\text{GA}}$: erro quadrático do mel, entropia cruzada do sinal de parada, divergência KL do VAE com peso crescente (cerca de 0,024 ao fim do treino de cobertura) e atenção guiada ($\lambda = 2$, $\sigma=0{,}4$).
+\paragraph{Loss.} $\mathcal{L} = \mathcal{L}_{\text{mel}} + \mathcal{L}_{\text{gate}} + \beta\,\mathcal{L}_{\text{KL}} + \lambda\,\mathcal{L}_{\text{GA}}$: mel squared error, cross-entropy of the stop signal, VAE KL divergence with an increasing weight (about 0.024 at the end of coverage training) and guided attention ($\lambda = 2$, $\sigma=0.4$).
 
 %=====================================================================
-\section{Dados e ferramentas}
+\section{Data and tools}
 
 \begin{table}[H]
 \centering\small
 \begin{tabular}{@{}p{3.6cm}p{4.4cm}p{7.6cm}@{}}
 \toprule
-Conjunto & Conteúdo & Uso no projeto\\
+Dataset & Content & Use in the project\\
 \midrule
-LJSpeech & 1 locutora, inglês, 23,7\,h & Voz padrão: 2.000 frases em todo treino de cobertura\\
-LibriTTS \textit{train-clean-100} & 247 locutores, inglês, $\approx$54\,h & Os $N$ locutores do treino (até 200 usados)\\
-LibriTTS \textit{test-clean} & 39 locutores, inglês & 38 vozes externas da avaliação larga\\
-TTS-Portuguese Corpus & 1 locutor, português, 3,8\,h & Sistema em português\\
-VERBO & 12 locutores, 7 emoções, 1.167 falas & Etapa de emoção\\
+LJSpeech & 1 female speaker, English, 23.7\,h & Default voice: 2,000 sentences in every coverage run\\
+LibriTTS \textit{train-clean-100} & 247 speakers, English, $\approx$54\,h & The $N$ training speakers (up to 200 used)\\
+LibriTTS \textit{test-clean} & 39 speakers, English & 38 external voices of the wide evaluation\\
+TTS-Portuguese Corpus & 1 speaker, Portuguese, 3.8\,h & Portuguese system\\
+VERBO & 12 speakers, 7 emotions, 1,167 utterances & Emotion stage\\
 \midrule
-HiFi-GAN universal & vocoder pré-treinado & Mel $\rightarrow$ áudio (congelado)\\
-Whisper (\textit{faster-whisper}) & reconhecimento de fala & Inteligibilidade (WER)\\
-Resemblyzer & codificador de locutor & Medida de cópia de voz\\
-ECAPA-TDNN & codificador de locutor & Variantes \texttt{-spk} (entrada do modelo)\\
+Universal HiFi-GAN & pretrained vocoder & Mel $\rightarrow$ audio (frozen)\\
+Whisper (\textit{faster-whisper}) & speech recognition & Intelligibility (WER)\\
+Resemblyzer & speaker encoder & Voice-copying measure\\
+ECAPA-TDNN & speaker encoder & \texttt{-spk} variants (model input)\\
 \bottomrule
 \end{tabular}
-\caption{Dados e modelos auxiliares. Para medir cópia usa-se um codificador (Resemblyzer) diferente do que entra no modelo (ECAPA), para não avaliar com a mesma régua que treina.}
+\caption{Data and auxiliary models. Copying is measured with an encoder (Resemblyzer) different from the one fed to the model (ECAPA), so as not to evaluate with the same yardstick used in training.}
 \end{table}
 
-\paragraph{Computação.} Todos os treinos de cobertura rodaram em GPUs alugadas (Colab: L4 e A100), cerca de 2,5\,h por treino de 2.500 passos. Não há checkpoints guardados dos treinos de cobertura, só os resultados por amostra e os latentes de cerca de 1.500 frases por treino.
+\paragraph{Compute.} All coverage runs were trained on rented GPUs (Colab: L4 and A100), about 2.5\,h per 2,500-step run. No checkpoints of the coverage runs were kept, only the per-sample results and the latents of about 1,500 sentences per run.
 
 %=====================================================================
-\section{O experimento de cobertura}
+\section{The coverage experiment}
 
-\subsection{Desenho}
+\subsection{Design}
 
 \begin{figure}[H]
 \centering
 \resizebox{0.95\textwidth}{!}{%
 \begin{tikzpicture}[
   box/.style={rectangle, draw=black!30, rounded corners=5pt, fill=black!3, minimum height=1.1cm, align=center, font=\small, inner xsep=7pt},
-  hl/.style={box, draw=azul, line width=1pt, fill=azul!5},
+  hl/.style={box, draw=accentblue, line width=1pt, fill=accentblue!5},
   arr/.style={-{Stealth[length=2.4mm]}, semithick, draw=black!55}
 ]
-\node[box] (lj) at (0,1.1) {LJSpeech\\{\scriptsize 2.000 frases, voz padrão}};
-\node[box] (lt) at (0,-1.1) {LibriTTS\\{\scriptsize $N$ locutores $\times$ $K$ frases}};
-\node[hl] (tr) at (4.6,0) {Ajuste fino\\{\scriptsize do modelo em inglês, 2.500 passos}};
-\node[box] (m) at (8.6,0) {Modelo\\$(N,K,\text{semente})$};
-\node[box, align=left] (ev) at (13.6,0) {Síntese de 25 frases novas com referências:\\
-{\scriptsize $\bullet$ 8 vozes treinadas (frases fora do treino)}\\
-{\scriptsize $\bullet$ 4 vozes novas fixas (LibriTTS, nunca treinadas)}\\
-{\scriptsize $\bullet$ 4 ou 38 vozes externas (test-clean)}};
-\node[box, align=left] (me) at (13.6,-2.5) {{\scriptsize WER: Whisper transcreve, compara com o texto}\\{\scriptsize Copiada: $\mathrm{sim}(\hat x, \text{ref}) > \mathrm{sim}(\hat x, \text{voz padrão})$}};
+\node[box] (lj) at (0,1.1) {LJSpeech\\{\scriptsize 2,000 sentences, default voice}};
+\node[box] (lt) at (0,-1.1) {LibriTTS\\{\scriptsize $N$ speakers $\times$ $K$ sentences}};
+\node[hl] (tr) at (4.6,0) {Fine-tuning\\{\scriptsize of the English model, 2,500 steps}};
+\node[box] (m) at (8.6,0) {Model\\$(N,K,\text{seed})$};
+\node[box, align=left] (ev) at (13.6,0) {Synthesis of 25 new sentences with references:\\
+{\scriptsize $\bullet$ 8 trained voices (sentences outside training)}\\
+{\scriptsize $\bullet$ 4 fixed new voices (LibriTTS, never trained)}\\
+{\scriptsize $\bullet$ 4 or 38 external voices (test-clean)}};
+\node[box, align=left] (me) at (13.6,-2.5) {{\scriptsize WER: Whisper transcribes, compared with the text}\\{\scriptsize Copied: $\mathrm{sim}(\hat x, \text{ref}) > \mathrm{sim}(\hat x, \text{default voice})$}};
 \draw[arr] (lj) -- (tr); \draw[arr] (lt) -- (tr); \draw[arr] (tr) -- (m); \draw[arr] (m) -- (ev); \draw[arr] (ev) -- (me);
 \end{tikzpicture}}
-\caption{Protocolo. As seleções são aninhadas (os locutores de $N=8$ estão dentro de $N=32$, as frases de $K=8$ dentro de $K=32$), de modo que treinos diferem só no que foi acrescentado.}
+\caption{Protocol. The selections are nested (the speakers of $N=8$ are contained in $N=32$, the sentences of $K=8$ in $K=32$), so that runs differ only in what was added.}
 \end{figure}
 
-\paragraph{Métricas.} \emph{WER}: palavras erradas na transcrição automática. \emph{Voz copiada}: fração das amostras cujo áudio está mais perto (cosseno do Resemblyzer) da referência do que da voz padrão. É uma medida binária e relativa à voz padrão, o que tem consequências (Seção~\ref{sec:porvoz}). Variantes medem também a similaridade com a média de até 20 frases do locutor da referência (\texttt{sim\_spk}).
+\paragraph{Metrics.} \emph{WER}: word errors in the automatic transcription. \emph{Voice copied}: fraction of samples whose audio is closer (Resemblyzer cosine) to the reference than to the default voice. It is a binary measure, relative to the default voice, which has consequences (Section~\ref{sec:porvoz}). Variants also measure the similarity to the mean of up to 20 sentences of the reference speaker (\texttt{sim\_spk}).
 
-\subsection{Grade $N \times K$}
+\subsection{The $N \times K$ grid}
 
 \begin{table}[H]
 \centering\small
 \begin{tabular}{@{}rrcccc@{}}
 \toprule
-$N$ & $K$ & WER treinadas & WER novas & Copiada: treinadas & Copiada: novas\\
+$N$ & $K$ & WER trained & WER new & Copied: trained & Copied: new\\
 \midrule
 2 & 128 & 13\% / 11\% & 8\% / 5\% & 70\% / 74\% & 4\% / 2\%\\
 8 & 8 & 21\% / 26\% & 14\% / 24\% & 45\% / 44\% & 26\% / 39\%\\
@@ -177,21 +177,21 @@ $N$ & $K$ & WER treinadas & WER novas & Copiada: treinadas & Copiada: novas\\
 200 & 32 & 12\% & 7\% & 66\% & 64\%\\
 \bottomrule
 \end{tabular}
-\caption{Passo 2.500, estilo inteiro. ``Novas'' = as 4 vozes fixas nunca treinadas (25 frases cada). Dois números = duas sementes. As 4 vozes dão uma medida ruidosa: entre sementes a diferença chega a 18 pontos.}
+\caption{Step 2,500, full style. ``New'' = the 4 fixed never-trained voices (25 sentences each). Two numbers = two seeds. The 4 voices give a noisy measure: the difference between seeds reaches 18 points.}
 \label{tab:grade}
 \end{table}
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.82\textwidth]{fig_cobertura}
-\caption{Voz copiada em função das frases por locutor ($K$) e do número de locutores ($N$), grade original ($N\le32$).}
+\includegraphics[width=0.82\textwidth]{fig_coverage}
+\caption{Voice copied as a function of sentences per speaker ($K$) and number of speakers ($N$), original grid ($N\le32$).}
 \end{figure}
 
-\caixa{verde}{\textbf{Resultado 1 (dois níveis).} As vozes treinadas dependem de $K$: com 8 locutores, a cópia vai de 45\% ($K=8$) a 74\% (32) e 90\% (128). As vozes novas dependem de $N$: com $K=128$, de 3\% ($N=2$) a 44\% (8) e 59\% (32). Muitos locutores compensam poucas frases: $32\times 8$ (256 frases) copia vozes novas tanto quanto $8 \times 128$ (1.024 frases).}
+\callout{accentgreen}{\textbf{Result 1 (two levels).} Trained voices depend on $K$: with 8 speakers, copying goes from 45\% ($K=8$) to 74\% (32) and 90\% (128). New voices depend on $N$: with $K=128$, from 3\% ($N=2$) to 44\% (8) and 59\% (32). Many speakers make up for few sentences: $32\times 8$ (256 sentences) copies new voices as well as $8 \times 128$ (1,024 sentences).}
 
-\subsection{Avaliação larga: 38 vozes nunca ouvidas}
+\subsection{Wide evaluation: 38 never-heard voices}
 
-Como 4 vozes dão uma medida ruidosa, três treinos com $K=32$ foram avaliados em 38 locutores do LibriTTS \textit{test-clean} (950 amostras por treino). Os intervalos de 95\% vêm de reamostrar os locutores (10.000 vezes), e as diferenças entre treinos são pareadas nos mesmos locutores.
+Since 4 voices give a noisy measure, three runs with $K=32$ were evaluated on 38 speakers from LibriTTS \textit{test-clean} (950 samples per run). The 95\% intervals come from resampling the speakers (10,000 times), and the differences between runs are paired on the same speakers.
 
 \begin{figure}[H]
 \centering
@@ -199,12 +199,12 @@ Como 4 vozes dão uma medida ruidosa, três treinos com $K=32$ foram avaliados e
 \centering
 \begin{tikzpicture}
 \begin{axis}[width=\linewidth, height=6cm, xmode=log, log basis x=2, xtick={8,32,128}, xticklabels={8,32,128},
-  xlabel={locutores no treino ($N$)}, ylabel={vozes externas copiadas (\%)}, ymin=35, ymax=95, grid=major, grid style={black!12},
+  xlabel={training speakers ($N$)}, ylabel={external voices copied (\%)}, ymin=35, ymax=95, grid=major, grid style={black!12},
   xmin=5, xmax=200, legend style={font=\scriptsize, at={(0.03,0.97)}, anchor=north west}]
-\addplot+[azul, mark=*, thick, error bars/.cd, y dir=both, y explicit] coordinates {(8,57) +- (0,13.5) (32,70) +- (0,11.5) (128,79) +- (0,10.5)};
-\addlegendentry{medido (IC 95\%)}
-\addplot[laranja, dashed, thick, domain=5:200, samples=40] {100*(1-0.74*x^(-0.26))};
-\addlegendentry{$1-c\,N^{-\alpha}$ (só descreve)}
+\addplot+[accentblue, mark=*, thick, error bars/.cd, y dir=both, y explicit] coordinates {(8,57) +- (0,13.5) (32,70) +- (0,11.5) (128,79) +- (0,10.5)};
+\addlegendentry{measured (95\% CI)}
+\addplot[accentorange, dashed, thick, domain=5:200, samples=40] {100*(1-0.74*x^(-0.26))};
+\addlegendentry{$1-c\,N^{-\alpha}$ (descriptive only)}
 \end{axis}
 \end{tikzpicture}
 \end{minipage}\hfill
@@ -212,292 +212,292 @@ Como 4 vozes dão uma medida ruidosa, três treinos com $K=32$ foram avaliados e
 \small
 \begin{tabular}{@{}lccc@{}}
 \toprule
-Treino & Copiadas & WER & Por locutor\\
- & (IC 95\%) & & $R=1 \rightarrow 4$\\
+Run & Copied & WER & Per speaker\\
+ & (95\% CI) & & $R=1 \rightarrow 4$\\
 \midrule
 $8\times32$ & 57\% (43--70) & 13\% & 66\% $\rightarrow$ 64\%\\
 $32\times32$ & 70\% (58--81) & 12\% & 81\% $\rightarrow$ 79\%\\
 $128\times32$ & 79\% (68--89) & 12\% & 88\% $\rightarrow$ 84\%\\
 \bottomrule
 \end{tabular}\\[6pt]
-Ganho pareado: 13 pontos de 8 para 32 (IC 4--23); 9 pontos de 32 para 128 (IC 1,5--17).
+Paired gain: 13 points from 8 to 32 (CI 4--23); 9 points from 32 to 128 (CI 1.5--17).
 \end{minipage}
-\caption{Cópia de voz em 38 vozes nunca ouvidas. A curva tracejada é uma potência passando pelos três pontos ($\alpha=0{,}26$); com dois parâmetros, três pontos e uma semente, ela descreve e não testa nada: qualquer $\alpha$ entre cerca de 0,06 e 0,53 seria compatível (Seção~\ref{sec:revisao}). ``$R=4$'': código de estilo tirado da média de 4 frases do locutor.}
+\caption{Voice copying on 38 never-heard voices. The dashed curve is a power law passing through the three points ($\alpha=0.26$); with two parameters, three points and one seed, it describes and tests nothing: any $\alpha$ between about 0.06 and 0.53 would be compatible (Section~\ref{sec:revisao}). ``$R=4$'': style code taken from the mean of 4 sentences of the speaker.}
 \label{fig:larga}
 \end{figure}
 
-\caixa{verde}{\textbf{Resultado 2 (mais locutores continuam rendendo).} De 8 para 32 e de 32 para 128 locutores a cópia de vozes novas sobe 13 e 9 pontos, com WER constante (12--13\%); o ganho de 32 para 128 é real (IC não inclui zero). A impressão anterior, vinda das 4 vozes, de que acima de 128 locutores não havia ganho era ruído de medida. O que \emph{não} está estabelecido é a forma da curva: o expoente e qualquer extrapolação para milhares de locutores.}
+\callout{accentgreen}{\textbf{Result 2 (more speakers keep paying off).} From 8 to 32 and from 32 to 128 speakers, copying of new voices rises by 13 and 9 points, with constant WER (12--13\%); the gain from 32 to 128 is real (the CI does not include zero). The earlier impression, from the 4 voices, that there was no gain above 128 speakers was measurement noise. What is \emph{not} established is the shape of the curve: the exponent and any extrapolation to thousands of speakers.}
 
-\subsection{Tentativas de contornar a falta de locutores (todas negativas)}
+\subsection{Attempts to work around the shortage of speakers (all negative)}
 
 \begin{table}[H]
 \centering\small
 \begin{tabular}{@{}p{4.1cm}p{5.1cm}p{5.6cm}@{}}
 \toprule
-Ideia & Hipótese testada & Resultado\\
+Idea & Hypothesis tested & Result\\
 \midrule
-Troca de referência (\texttt{-swap}) e perda contrastiva (\texttt{-contrast}) & O código de estilo carrega o conteúdo da frase & Nada muda além da variação entre sementes (ex.: $8\times128$: novas 51\% $\rightarrow$ 38--39\%)\\
-Vetor de locutor ECAPA congelado (\texttt{-spk}) & Um codificador treinado em milhares de vozes descreve vozes novas & O modelo ignora a entrada: sem o VAE, 0\% de cópia\\
-ECAPA + \textit{dropout} do VAE (\texttt{-spkdrop}) & Forçar a voz a passar pelo vetor & Com 8 locutores o vetor sozinho copia 71\% das treinadas e 5\% das novas: decora. Com 32 locutores, vetor + VAE = treino normal\\
-Pseudo-locutores por mudança de velocidade (\texttt{-aug}) & Vozes alteradas contam como locutores novos & Previsto 31\% (não contam) ou 50\% (contam); medido 28\%. Idem com $K=128$: 42\% (previsto 44\% / 55\%). Não contam\\
-Média de 4 ou 16 referências & O erro vem do ruído de uma referência só & Ajuda nas 4 vozes da grade, mas não nas 38 externas (cai 2 a 4 pontos); só reduz o WER em 1 a 3 pontos\\
+Reference swap (\texttt{-swap}) and contrastive loss (\texttt{-contrast}) & The style code carries the sentence content & Nothing changes beyond the variation between seeds (e.g.\ $8\times128$: new 51\% $\rightarrow$ 38--39\%)\\
+Frozen ECAPA speaker vector (\texttt{-spk}) & An encoder trained on thousands of voices describes new voices & The model ignores the input: without the VAE, 0\% copying\\
+ECAPA + VAE \textit{dropout} (\texttt{-spkdrop}) & Force the voice to go through the vector & With 8 speakers the vector alone copies 71\% of the trained voices and 5\% of the new ones: it memorizes. With 32 speakers, vector + VAE = normal training\\
+Pseudo-speakers via speed change (\texttt{-aug}) & Altered voices count as new speakers & Predicted 31\% (they do not count) or 50\% (they count); measured 28\%. Likewise with $K=128$: 42\% (predicted 44\% / 55\%). They do not count\\
+Mean of 4 or 16 references & The error comes from the noise of a single reference & Helps on the 4 grid voices but not on the 38 external ones (drops 2 to 4 points); only reduces WER by 1 to 3 points\\
 \bottomrule
 \end{tabular}
-\caption{Variantes testadas, com previsões registradas antes nos casos indicados.}
+\caption{Variants tested, with predictions registered beforehand in the cases indicated.}
 \label{tab:neg}
 \end{table}
 
-\caixa{laranja}{\textbf{Resultado 3 (o que não resolve).} Nem um codificador melhor, nem referências melhores, nem perdas no latente, nem vozes artificiais simples substituem o decodificador ter ouvido muitas vozes reais.}
+\callout{accentorange}{\textbf{Result 3 (what does not solve it).} Neither a better encoder, nor better references, nor losses on the latent, nor simple artificial voices replace the decoder having heard many real voices.}
 
-\subsection{Quais vozes falham, e por quê}
+\subsection{Which voices fail, and why}
 \label{sec:porvoz}
 
-Correlações de postos sobre os 38 locutores externos (\texttt{scripts/coverage/voice\_hardness.py}):
+Rank correlations over the 38 external speakers (\texttt{scripts/coverage/voice\_hardness.py}):
 \begin{itemize}
-\item \textbf{A dificuldade é da voz:} a taxa de cópia por locutor se correlaciona 0,75 entre $N=8$ e 32, 0,74 entre 32 e 128, 0,59 entre 8 e 128. Em todos os treinos há vozes com 0\% e com 100\%: a cópia é quase tudo-ou-nada por voz.
-\item \textbf{Vozes agudas falham mais} ($-0{,}53$, $-0{,}52$, $-0{,}37$ entre cópia e F0 da referência). A voz padrão é feminina; a cópia sobe com a distância (no latente) até a voz padrão (0,47; 0,58; 0,53). Parte da falha é atração pela voz padrão, e parte pode ser artefato da medida relativa.
-\item \textbf{A distância à voz treinada mais próxima prevê a falha com poucos locutores e deixa de prever com muitos:} $-0{,}33$ ($N=8$), $-0{,}40$ ($N=32$), $+0{,}13$ ($N=128$).
+\item \textbf{The difficulty belongs to the voice:} the per-speaker copy rate correlates 0.75 between $N=8$ and 32, 0.74 between 32 and 128, 0.59 between 8 and 128. In every run there are voices at 0\% and at 100\%: copying is nearly all-or-nothing per voice.
+\item \textbf{High-pitched voices fail more} ($-0.53$, $-0.52$, $-0.37$ between copying and the reference F0). The default voice is female; copying increases with the distance (in the latent) to the default voice (0.47; 0.58; 0.53). Part of the failure is attraction to the default voice, and part may be an artifact of the relative measure.
+\item \textbf{The distance to the nearest trained voice predicts failure with few speakers and stops predicting it with many:} $-0.33$ ($N=8$), $-0.40$ ($N=32$), $+0.13$ ($N=128$).
 \end{itemize}
 
-\subsection{Informação no latente de estilo}
+\subsection{Information in the style latent}
 
 \begin{table}[H]
 \centering\small
 \begin{tabular}{@{}lccc@{}}
 \toprule
-Treino & Bits por frase (KL) & Bits sobre o locutor (aprox.) & $\log_2$(nº de locutores)\\
+Run & Bits per sentence (KL) & Bits about the speaker (approx.) & $\log_2$(no.\ of speakers)\\
 \midrule
-$2\times128$ & 64 & 5 & 1,6\\
-$8\times32$ & 67 & 10 & 3,2\\
-$32\times32$ & 72 & 16 & 5,0\\
-$128\times32$ & 73 & 19 & 6,9\\
-$200\times32$ & 72 & 20 & 7,4\\
+$2\times128$ & 64 & 5 & 1.6\\
+$8\times32$ & 67 & 10 & 3.2\\
+$32\times32$ & 72 & 16 & 5.0\\
+$128\times32$ & 73 & 19 & 6.9\\
+$200\times32$ & 72 & 20 & 7.4\\
 \bottomrule
 \end{tabular}
-\caption{O KL por frase é uma cota superior da informação que passa pelo latente (as 32 dimensões estão ativas em todos os treinos). ``Bits sobre o locutor'' usa uma aproximação gaussiana (covariância total sobre covariância dentro do locutor); a revisão (Seção~\ref{sec:revisao}) mostra que o viés é pequeno, mas que o número mede um vetor de voz contínuo, não a identidade entre os $N$ locutores. Cerca de 80\% da variância do latente é entre locutores, e a distância do código à voz padrão tem correlação 0,83 com a cópia.}
+\caption{The KL per sentence is an upper bound on the information that passes through the latent (all 32 dimensions are active in every run). ``Bits about the speaker'' uses a Gaussian approximation (total covariance over within-speaker covariance); the review (Section~\ref{sec:revisao}) shows that the bias is small, but that the number measures a continuous voice vector, not the identity among the $N$ speakers. About 80\% of the latent variance is between speakers, and the distance from the code to the default voice has a correlation of 0.83 with copying.}
 \label{tab:info}
 \end{table}
 
-O canal de estilo carrega 65--73 bits por frase (KL), mas a maior parte paga o posterior estreito; a informação estimada sobre a voz fica perto de 17 bits e não cresce de $N=32$ a 200. O latente não está saturado: o limite não é capacidade, é quantas vozes o decodificador ouviu.
+The style channel carries 65--73 bits per sentence (KL), but most of it pays for the narrow posterior; the estimated information about the voice stays near 17 bits and does not grow from $N=32$ to 200. The latent is not saturated: the limit is not capacity, it is how many voices the decoder has heard.
 
 %=====================================================================
-\section{Teoria}
+\section{Theory}
 
-\subsection{Lei em dois níveis}
+\subsection{Two-level law}
 
-Locutores são sorteados de uma população; frases são sorteadas dentro de cada locutor. Num modelo hierárquico (efeitos aleatórios) de dimensão finita, o erro numa voz treinada tem um termo que cai com $K$, e o erro numa voz nova tem um termo que cai com $N$ e outro com $NK$:
+Speakers are drawn from a population; sentences are drawn within each speaker. In a finite-dimensional hierarchical (random-effects) model, the error on a trained voice has a term that falls with $K$, and the error on a new voice has a term that falls with $N$ and another with $NK$:
 \begin{align*}
-\text{treinadas não copiadas} &\approx a' + \frac{C}{K} + \frac{A'}{N}, &
-\text{novas não copiadas} &\approx a + \frac{A}{N} + \frac{B}{NK}.
+\text{trained not copied} &\approx a' + \frac{C}{K} + \frac{A'}{N}, &
+\text{new not copied} &\approx a + \frac{A}{N} + \frac{B}{NK}.
 \end{align*}
-Ajuste em 16 treinos: $a'=0{,}14$, $C=2{,}87$, $A'=0{,}22$ (RMSE 0,057); $a=0{,}39$, $A=1{,}08$, $B=10{,}3$ (RMSE 0,060). É a forma da decomposição de variância em amostragem de dois estágios e das cotas de meta-aprendizado com tarefas gaussianas.
+Fit on 16 runs: $a'=0.14$, $C=2.87$, $A'=0.22$ (RMSE 0.057); $a=0.39$, $A=1.08$, $B=10.3$ (RMSE 0.060). This is the form of the variance decomposition in two-stage sampling and of meta-learning bounds with Gaussian tasks.
 
-\subsection{Dois regimes e o expoente}
+\subsection{Two regimes and the exponent}
 
-A forma acima prevê queda em $1/N$ até um piso $a\approx0{,}39$. A alternativa $a + A/\sqrt N + C/\sqrt K$ ajusta igualmente bem (RMSE 0,056, piso 0,19). A avaliação larga (Fig.~\ref{fig:larga}) mostra não copiadas 43\% $\rightarrow$ 30\% $\rightarrow$ 21\%, que uma potência $N^{-0{,}26}$ atravessa exatamente. Pelo critério registrado antes do experimento a razão entre os ganhos (0,7) favorecia a lei com raízes, mas a revisão estatística (Seção~\ref{sec:revisao}) mostra que nenhuma das leis se distingue das outras com estes dados.
+The form above predicts a $1/N$ decrease down to a floor $a\approx0.39$. The alternative $a + A/\sqrt N + C/\sqrt K$ fits equally well (RMSE 0.056, floor 0.19). The wide evaluation (Fig.~\ref{fig:larga}) shows not copied 43\% $\rightarrow$ 30\% $\rightarrow$ 21\%, which a power law $N^{-0.26}$ passes through exactly. By the criterion registered before the experiment, the ratio between the gains (0.7) favored the square-root law, but the statistical review (Section~\ref{sec:revisao}) shows that none of the laws can be distinguished from the others with these data.
 
-\caixa{azul}{\textbf{Interpretação proposta.} Há dois regimes:
+\callout{accentblue}{\textbf{Proposed interpretation.} There are two regimes:
 \begin{itemize}[leftmargin=12pt]
-\item \emph{paramétrico}: a voz vive numa família de baixa dimensão $k$ que o decodificador aprende como regra; o erro cai como $k/N$ (rápido);
-\item \emph{não paramétrico} (``cobertura''): o decodificador só reproduz vozes perto das que ouviu; o erro é governado pela distância à voz treinada mais próxima, que cai como $N^{-1/d}$ num espaço de vozes de dimensão intrínseca $d$ (lento).
+\item \emph{parametric}: the voice lives in a low-dimensional family of dimension $k$ that the decoder learns as a rule; the error falls as $k/N$ (fast);
+\item \emph{non-parametric} (``coverage''): the decoder only reproduces voices close to the ones it has heard; the error is governed by the distance to the nearest trained voice, which falls as $N^{-1/d}$ in a voice space of intrinsic dimension $d$ (slow).
 \end{itemize}
-A dimensão do espaço de vozes medida no latente é de 7 a 10 (Seção~\ref{sec:revisao}), o que descarta a versão mais simples (falha proporcional à distância, que pediria $d\approx4$ para $\alpha=0{,}26$); falha proporcional ao quadrado da distância pede $d\approx7{,}7$ e é compatível, sem ser um teste. A análise por voz (distância à voz mais próxima prevê a falha com $N$ pequeno) e o fracasso de codificadores e referências melhores apontam para o regime de cobertura.}
+The dimension of the voice space measured in the latent is 7 to 10 (Section~\ref{sec:revisao}), which rules out the simplest version (failure proportional to the distance, which would require $d\approx4$ for $\alpha=0.26$); failure proportional to the squared distance requires $d\approx7.7$ and is compatible, without being a test. The per-voice analysis (distance to the nearest voice predicts failure at small $N$) and the failure of better encoders and references point to the coverage regime.}
 
-\subsection{Consequências e previsões da teoria}
+\subsection{Consequences and predictions of the theory}
 \begin{itemize}
-\item Se o regime é de cobertura, \textbf{melhorar o codificador não muda o expoente}; mudar o que o decodificador ouviu, sim (consistente com a Tabela~\ref{tab:neg}).
-\item Uma arquitetura que force a dependência da voz a uma família de baixa dimensão deveria trocar a queda lenta pela queda em $1/N$, ao preço de um piso se o espaço real de vozes tiver mais dimensões que o módulo.
-\item As extrapolações para milhares de locutores que constavam da versão anterior deste documento foram retiradas: não têm apoio estatístico.
-\item O latente de 32 dimensões está superdimensionado para a voz: 8 a 10 dimensões deveriam bastar para a cópia (previsão do ``modelo mínimo'').
+\item If the regime is coverage, \textbf{improving the encoder does not change the exponent}; changing what the decoder has heard does (consistent with Table~\ref{tab:neg}).
+\item An architecture that forces the voice dependence into a low-dimensional family should trade the slow decrease for a $1/N$ decrease, at the price of a floor if the real voice space has more dimensions than the module.
+\item The extrapolations to thousands of speakers that appeared in the previous version of this document have been withdrawn: they have no statistical support.
+\item The 32-dimensional latent is oversized for the voice: 8 to 10 dimensions should suffice for copying (prediction of the ``minimal model'').
 \end{itemize}
 
-\subsection{O que já existe na literatura}
-Um levantamento (cerca de 35 buscas e 5 artigos lidos na íntegra) não encontrou lei explícita de cópia de voz em função de $N$ e $K$. O fato qualitativo ``são precisos milhares de locutores'' aparece desde \cite{jia2018}, cuja tabela de codificador de locutor dá um expoente aparente de 0,21--0,25 (conta nossa, com fatores misturados). O análogo em verificação de locutor (poucos locutores vs.\ muitas sessões) está em \cite{tinyvox}. As formas $1/N + 1/(NK)$ e $1/\sqrt N + 1/\sqrt K$ vêm de meta-aprendizado \cite{du2021,maurer2016}; expoentes ligados à dimensão dos dados, de \cite{sharma2020,bahri2021}. A capacidade do latente de estilo em bits já foi usada em \cite{capacitron}. O que parece novo: a lei fatorial $N\times K$ para clonagem, a ligação do expoente com a dimensão do espaço de \emph{locutores} (as amostras são grupos, não frases) e a decomposição dos bits do latente em voz e resto. A busca não cobriu o ISCA Archive nem o IEEE Xplore.
+\subsection{What already exists in the literature}
+A survey (about 35 searches and 5 papers read in full) did not find an explicit law of voice copying as a function of $N$ and $K$. The qualitative fact ``thousands of speakers are needed'' appears as early as \cite{jia2018}, whose speaker-encoder table gives an apparent exponent of 0.21--0.25 (our calculation, with confounded factors). The analogue in speaker verification (few speakers vs.\ many sessions) is in \cite{tinyvox}. The forms $1/N + 1/(NK)$ and $1/\sqrt N + 1/\sqrt K$ come from meta-learning \cite{du2021,maurer2016}; exponents tied to the dimension of the data, from \cite{sharma2020,bahri2021}. The capacity of the style latent in bits has already been used in \cite{capacitron}. What appears to be new: the factorial $N\times K$ law for cloning, the link between the exponent and the dimension of the \emph{speaker} space (the samples are groups, not sentences), and the decomposition of the latent bits into voice and the rest. The search did not cover the ISCA Archive or IEEE Xplore.
 
 %=====================================================================
-\section{Revisão crítica (três análises sem treino novo)}
+\section{Critical review (three analyses without new training)}
 \label{sec:revisao}
 
-Três análises independentes, só com CPU sobre os dados salvos, revisaram as afirmações acima (relatórios completos em \texttt{reports/teoria/}). O que mudou:
+Three independent analyses, using only CPU on the saved data, reviewed the claims above (full reports in \texttt{reports/theory/}). What changed:
 
-\paragraph{A régua.} Com vetores de locutor normalizados, a margem medida tem uma forma exata:
+\paragraph{The yardstick.} With normalized speaker vectors, the measured margin has an exact form:
 \[
-m = \mathrm{sim}_{\text{ref}} - \mathrm{sim}_{\text{padrão}} = \left(\tfrac12 - \rho\right)\lVert e_{\text{ref}} - e_0\rVert^2,
+m = \mathrm{sim}_{\text{ref}} - \mathrm{sim}_{\text{default}} = \left(\tfrac12 - \rho\right)\lVert e_{\text{ref}} - e_0\rVert^2,
 \]
-em que $\rho$ é quanto a saída é puxada para a voz padrão ao longo do eixo referência--padrão. A voz conta como copiada se e só se $\rho<\tfrac12$, e o tamanho da margem é proporcional a $\lVert e_{\text{ref}}-e_0\rVert^2$: vozes parecidas com a voz padrão têm margens minúsculas e mudam de lado por ruído. Pitch e semelhança com a voz padrão explicam 28--59\% da dificuldade das vozes na medida binária e só 2--9\% na semelhança direta com a referência. Parte da ``dificuldade das vozes agudas'' é, portanto, da régua.
+where $\rho$ is how much the output is pulled toward the default voice along the reference--default axis. The voice counts as copied if and only if $\rho<\tfrac12$, and the size of the margin is proportional to $\lVert e_{\text{ref}}-e_0\rVert^2$: voices similar to the default voice have tiny margins and switch sides due to noise. Pitch and similarity to the default voice explain 28--59\% of the voices' difficulty in the binary measure and only 2--9\% in the direct similarity to the reference. Part of the ``difficulty of high-pitched voices'' therefore belongs to the yardstick.
 
-\paragraph{O expoente.} A potência $N^{-0{,}26}$ é exatamente o que dois parâmetros fazem passar por três pontos de uma semente. Numa simulação com a variância medida, esse desenho recupera expoentes entre 0,06 e 0,53 quando o verdadeiro é 0,26, e escolhe a lei certa entre 16\% e 62\% das vezes. Com medidas que não usam a voz padrão o expoente aparente sobe para 0,41--0,55. Na grade de 4 vozes, a lei com raízes só ganha por causa dos treinos com $N=2$; sem eles, as quatro leis testadas empatam.
+\paragraph{The exponent.} The power law $N^{-0.26}$ is exactly what two parameters do when passed through three points from one seed. In a simulation with the measured variance, this design recovers exponents between 0.06 and 0.53 when the true one is 0.26, and picks the correct law between 16\% and 62\% of the time. With measures that do not use the default voice, the apparent exponent rises to 0.41--0.55. On the 4-voice grid, the square-root law only wins because of the $N=2$ runs; without them, the four laws tested tie.
 
-\paragraph{O que se mantém.} Vozes treinadas seguem só $K$ (colapso em $K^{0{,}46}$, efeito de $N$ igual a zero $\pm 0{,}07$). A cópia é quase tudo-ou-nada por voz (correlação intraclasse 0,83--0,94; dois terços das 38 vozes ficam abaixo de 10\% ou acima de 90\%). A variação vem da voz de referência (desvio 0,095 na margem) e não da frase (0,007); entre sementes, o desvio da fração copiada é de 7,7 pontos, dos quais cerca de 40\% é só ruído de ressíntese. A média de 4 referências não melhora a cópia nas 38 vozes ($-2{,}5$ pontos, IC $[-6{,}4; +0{,}8]$) e reduz o WER em 1,8 ponto.
+\paragraph{What holds.} Trained voices follow only $K$ (collapse in $K^{0.46}$, effect of $N$ equal to zero $\pm 0.07$). Copying is nearly all-or-nothing per voice (intraclass correlation 0.83--0.94; two thirds of the 38 voices fall below 10\% or above 90\%). The variation comes from the reference voice (standard deviation 0.095 in the margin) and not from the sentence (0.007); across seeds, the standard deviation of the copied fraction is 7.7 points, of which about 40\% is just resynthesis noise. The mean of 4 references does not improve copying on the 38 voices ($-2.5$ points, CI $[-6.4, +0.8]$) and reduces WER by 1.8 points.
 
-\paragraph{Informação e dimensão.} Dos 64--75 bits por frase do KL, 62--70 pagam o posterior estreito; a informação gaussiana sobre a frase fica em 17--29 bits e a informação sobre a voz em cerca de 17 bits na média $\mu$, estável de $N=32$ a 200. Um classificador com validação cruzada recupera 5,1--5,3 dos 6,9 bits possíveis com 128 locutores. A voz ocupa 6--8 direções úteis (razão de participação 5,8--9,7) e a dimensão intrínseca das médias por locutor é 7--10 (TwoNN 9,7--10,6; Levina--Bickel 7,0--7,5).
+\paragraph{Information and dimension.} Of the 64--75 bits per sentence of the KL, 62--70 pay for the narrow posterior; the Gaussian information about the sentence is 17--29 bits and the information about the voice about 17 bits in the mean $\mu$, stable from $N=32$ to 200. A cross-validated classifier recovers 5.1--5.3 of the 6.9 possible bits with 128 speakers. The voice occupies 6--8 useful directions (participation ratio 5.8--9.7) and the intrinsic dimension of the per-speaker means is 7--10 (TwoNN 9.7--10.6; Levina--Bickel 7.0--7.5).
 
-\paragraph{Um modelo que reproduz os fatos.} Um suavizador que pondera as vozes treinadas pelo número de frases e compete com a voz padrão (2.000 frases) dá a regra
+\paragraph{A model that reproduces the facts.} A smoother that weights the trained voices by their number of sentences and competes with the default voice (2,000 sentences) gives the rule
 \[
-\text{copiada} \iff K\textstyle\sum_i k(v,v_i) > M\,k(v,v_0),
+\text{copied} \iff K\textstyle\sum_i k(v,v_i) > M\,k(v,v_0),
 \]
-com $M$ o número de frases da voz padrão. Com um espectro de vozes $\lambda_j\propto 1/j$ (o latente mede expoente 1,05--1,1), esse modelo reproduz a curva, os sinais das correlações por voz e a grade ($r=0{,}97$). São cinco parâmetros escolhidos com três pontos, então isto não é um teste. O modelo também prevê que os pseudo-locutores por mudança de velocidade deveriam ter contado, e eles não contaram: é a principal tensão em aberto.
+with $M$ the number of sentences of the default voice. With a voice spectrum $\lambda_j\propto 1/j$ (the latent measures an exponent of 1.05--1.1), this model reproduces the curve, the signs of the per-voice correlations, and the grid ($r=0.97$). These are five parameters chosen with three points, so this is not a test. The model also predicts that the speed-change pseudo-speakers should have counted, and they did not: this is the main open tension.
 
-\paragraph{Previsões novas e baratas.}
+\paragraph{New, cheap predictions.}
 \begin{itemize}
-\item \textbf{Metade das frases da voz padrão equivale a dobrar $K$} para as vozes novas (consequência direta da regra acima). Custa dois treinos.
-\item \textbf{Latente de 8 dimensões} não muda a cópia; com 2 dimensões, cai. A taxa pode descer a 25--30 bits por frase sem perda.
-\item \textbf{$N=2.456$, $K=32$}: cerca de 9\% de vozes não copiadas sob o modelo de cobertura contra 16\% ou mais sob as leis com piso; decidir isso exige pelo menos 200 vozes de avaliação.
-\item \textbf{Sem treino}: o espectro dos vetores de locutor do LibriTTS decide entre os regimes e fixa o piso de um módulo de voz de dimensão $k$.
-\item \textbf{Duas etapas}: a cópia segue $N_{\text{voz}}$ se as unidades de conteúdo vazarem pouca informação de voz; um vazamento de peso 0,2 já impõe um piso de cerca de 15\% de vozes não copiadas.
+\item \textbf{Half the sentences of the default voice is equivalent to doubling $K$} for new voices (a direct consequence of the rule above). Costs two runs.
+\item \textbf{An 8-dimensional latent} does not change copying; with 2 dimensions, it drops. The rate can go down to 25--30 bits per sentence without loss.
+\item \textbf{$N=2{,}456$, $K=32$}: about 9\% of voices not copied under the coverage model versus 16\% or more under the laws with a floor; deciding this requires at least 200 evaluation voices.
+\item \textbf{Without training}: the spectrum of the LibriTTS speaker vectors decides between the regimes and fixes the floor of a voice module of dimension $k$.
+\item \textbf{Two stages}: copying follows $N_{\text{voice}}$ if the content units leak little voice information; a leak of weight 0.2 already imposes a floor of about 15\% of voices not copied.
 \end{itemize}
 
 %=====================================================================
-\section{Teoria da informação: onde os bits da voz se perdem}
+\section{Information theory: where the voice bits are lost}
 \label{sec:info}
 
-Duas teorias foram propostas por agentes independentes (cobertura como codificação de fonte; cópia como teste de hipótese bayesiano) e criticadas em três rodadas. Ficou o que sobreviveu às duas e que pode ser medido sem modelo, a partir dos próprios áudios (relatórios em \texttt{reports/teoria/informacao/}).
+Two theories were proposed by independent agents (coverage as source coding; copying as Bayesian hypothesis testing) and critiqued in three rounds. What remains is what survived both and can be measured without a model, from the audio itself (reports in \texttt{reports/theory/information/}).
 
-\paragraph{A medida.} A informação de voz que atravessa o sistema é $C = I(\hat Y; S)$: quanto a voz do áudio gerado $\hat Y$ diz sobre qual das 38 vozes externas $S$ foi a referência. Estima-se identificando, com um codificador de locutor, de qual referência veio cada saída; a matriz de confusão dá cotas inferiores (Fano e entropia cruzada). O teto é $\log_2 38 = 5{,}25$ bits.
+\paragraph{The measure.} The voice information that passes through the system is $C = I(\hat Y; S)$: how much the voice of the generated audio $\hat Y$ says about which of the 38 external voices $S$ was the reference. It is estimated by identifying, with a speaker encoder, which reference each output came from; the confusion matrix gives lower bounds (Fano and cross-entropy). The ceiling is $\log_2 38 = 5.25$ bits.
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}
 \begin{axis}[ybar, width=0.8\textwidth, height=5.6cm, bar width=12pt, ymin=0, ymax=5.6,
-  symbolic x coords={fala real, $\mu$, $z$, saída}, xtick=data, ylabel={bits sobre a voz (Fano)},
+  symbolic x coords={real speech, $\mu$, $z$, output}, xtick=data, ylabel={bits about the voice (Fano)},
   legend style={font=\small, at={(0.97,0.97)}, anchor=north east}, nodes near coords, nodes near coords style={font=\scriptsize},
   every node near coord/.append style={/pgf/number format/fixed, /pgf/number format/precision=1}]
-\addplot[fill=azul!35, draw=azul] coordinates {(fala real,4.45) ($\mu$,5.1) ($z$,4.4) (saída,0.3)};
-\addplot[fill=verde!40, draw=verde] coordinates {(fala real,4.45) ($\mu$,5.2) ($z$,4.8) (saída,1.0)};
-\draw[dashed, cinza] (rel axis cs:0,0.9375) -- (rel axis cs:1,0.9375);
+\addplot[fill=accentblue!35, draw=accentblue] coordinates {(real speech,4.45) ($\mu$,5.1) ($z$,4.4) (output,0.3)};
+\addplot[fill=accentgreen!40, draw=accentgreen] coordinates {(real speech,4.45) ($\mu$,5.2) ($z$,4.8) (output,1.0)};
+\draw[dashed, accentgray] (rel axis cs:0,0.9375) -- (rel axis cs:1,0.9375);
 \legend{$N=8$, $N=128$}
 \end{axis}
 \end{tikzpicture}
-\caption{Orçamento de bits ao longo da cadeia, nas mesmas 38 vozes (linha tracejada: teto de 5,25 bits). Fala real: verificador sobre os áudios de referência (4,2--4,7). $\mu$ e $z$: modelo gaussiano no latente. Saída: medida nos áudios gerados. Pela desigualdade de processamento de dados a informação só pode cair ao longo da cadeia; quase tudo se perde no decodificador.}
+\caption{Bit budget along the chain, on the same 38 voices (dashed line: ceiling of 5.25 bits). Real speech: verifier on the reference recordings (4.2--4.7). $\mu$ and $z$: Gaussian model in the latent. Output: measured on the generated audio. By the data processing inequality, information can only decrease along the chain; almost all of it is lost in the decoder.}
 \label{fig:budget}
 \end{figure}
 
-\caixa{verde}{\textbf{Resultado 4 (o gargalo é o decodificador).} A referência e o latente carregam de 4 a 5 bits sobre qual das 38 vozes está falando; o áudio gerado carrega 0,3 bit com 8 locutores e cerca de 1 bit com 128 (cota de Fano; pela cota de entropia cruzada, 0,75 e 2,0). O codificador não é o problema.}
+\callout{accentgreen}{\textbf{Result 4 (the bottleneck is the decoder).} The reference and the latent carry 4 to 5 bits about which of the 38 voices is speaking; the generated audio carries 0.3 bit with 8 speakers and about 1 bit with 128 (Fano bound; by the cross-entropy bound, 0.75 and 2.0). The encoder is not the problem.}
 
-\paragraph{De onde vem o ganho com $N$.} Escrevendo $I(\hat Y;S) = H(\hat Y) - H(\hat Y\mid S)$, de $N=8$ para 128 a variedade de vozes alcançáveis $H(\hat Y)$ sobe 1,44 bit (IC $[0{,}68; 2{,}32]$) e o ruído por voz $H(\hat Y\mid S)$ não muda ($+0{,}07$, IC $[-1{,}24; 1{,}54]$). A outra teoria, por um caminho independente (a largura da transição entre copiar e não copiar, voz a voz), chega ao mesmo: uma ``temperatura'' do decodificador de cerca de 20, igual nos três treinos. Mais locutores não tornam o decodificador mais preciso por voz; aumentam o número de regiões de voz que ele alcança. É cobertura, não precisão.
+\paragraph{Where the gain with $N$ comes from.} Writing $I(\hat Y;S) = H(\hat Y) - H(\hat Y\mid S)$, from $N=8$ to 128 the variety of reachable voices $H(\hat Y)$ rises by 1.44 bit (CI $[0.68, 2.32]$) and the per-voice noise $H(\hat Y\mid S)$ does not change ($+0.07$, CI $[-1.24, 1.54]$). The other theory, by an independent route (the width of the transition between copying and not copying, voice by voice), reaches the same conclusion: a decoder ``temperature'' of about 20, the same in all three runs. More speakers do not make the decoder more precise per voice; they increase the number of voice regions it reaches. It is coverage, not precision.
 
-\paragraph{Uma lei em bits.} O ganho é de 0,31 bit por duplicação de $N$ (IC $[0{,}17; 0{,}47]$), medido em dois pontos. Se $C \approx c + 0{,}31\log_2 N$ continuar valendo, o áudio gerado carregaria 2,6 bits com 512 locutores e 3,2 com 2.048, e só alcançaria o que a fala real carrega com cerca de $10^5$ locutores (intervalo de $10^{3{,}6}$ a $10^{8{,}2}$). A lei seria falseada por $C(2.048) < 2{,}25$ bits.
+\paragraph{A law in bits.} The gain is 0.31 bit per doubling of $N$ (CI $[0.17, 0.47]$), measured at two points. If $C \approx c + 0.31\log_2 N$ continues to hold, the generated audio would carry 2.6 bits with 512 speakers and 3.2 with 2,048, and would only reach what real speech carries with about $10^5$ speakers (interval from $10^{3.6}$ to $10^{8.2}$). The law would be falsified by $C(2{,}048) < 2.25$ bits.
 
-\paragraph{Os resultados negativos em uma conta.} O vetor ECAPA sozinho transmite 0,00 bit (o decodificador o ignora); com \textit{dropout}, 0,6--1,3. A média de 4 ou 16 referências muda $C$ entre $-0{,}40$ e $+0{,}31$ bit, sem direção. O estilo a 60\% baixa $C$ em 8 de 10 treinos. Entre 12 treinos, a fração não copiada e $C$ têm correlação de postos $-0{,}49$. Nada que atue só antes do decodificador muda os bits que saem.
+\paragraph{The negative results in one calculation.} The ECAPA vector alone transmits 0.00 bit (the decoder ignores it); with \textit{dropout}, 0.6--1.3. The mean of 4 or 16 references changes $C$ by between $-0.40$ and $+0.31$ bit, with no consistent direction. Style at 60\% lowers $C$ in 8 of 10 runs. Across 12 runs, the not-copied fraction and $C$ have a rank correlation of $-0.49$. Nothing that acts only before the decoder changes the bits that come out.
 
-\paragraph{Previsão a priori confirmada.} Se cada voz é decidida por uma razão de verossimilhança, frases de referência mais longas (mais evidência) devem tornar a cópia mais tudo-ou-nada. Confirmado nos três treinos: $+0{,}035$ (IC $[0{,}015; 0{,}053]$), $p=0{,}0002$ por permutação.
+\paragraph{A priori prediction confirmed.} If each voice is decided by a likelihood ratio, longer reference sentences (more evidence) should make copying more all-or-nothing. Confirmed in all three runs: $+0.035$ (CI $[0.015, 0.053]$), $p=0.0002$ by permutation.
 
-\paragraph{O que morreu nas rodadas de crítica.} Um decodificador bayesiano ótimo sem parâmetros (prevê quase toda voz copiada: usa 22 vezes mais evidência do que o real); a voz treinada como ponto ruidoso (erra o efeito de $K$); a ``informação por voz'' como preditor de quais vozes falham; um expoente estável entre 8 e 2.456 locutores; a hipótese de que a capacidade por voz cresce com $N$. A atração pela voz padrão sobrevive com massa efetiva compatível com as 2.000 frases reais (2.300 a 5.000), mas o efeito previsto de cortá-las pela metade (4 a 9 pontos) exige cerca de 6 treinos por condição para ser medido.
+\paragraph{What died in the rounds of critique.} An optimal parameter-free Bayesian decoder (it predicts nearly every voice copied: it uses 22 times more evidence than the real one); the trained voice as a noisy point (it gets the effect of $K$ wrong); ``information per voice'' as a predictor of which voices fail; a stable exponent between 8 and 2,456 speakers; the hypothesis that per-voice capacity grows with $N$. Attraction to the default voice survives with an effective mass compatible with the 2,000 real sentences (2,300 to 5,000), but the predicted effect of halving them (4 to 9 points) requires about 6 runs per condition to be measured.
 
-\caixa{azul}{\textbf{Consequência para a arquitetura.} O alvo não é um codificador melhor nem referências melhores: é aumentar $H(\hat Y)$, o conjunto de vozes que o decodificador consegue produzir. Há duas alavancas: (i) dar ao decodificador mais vozes, o que a etapa de voz da Fig.~\ref{fig:proposta} faz com áudio sem transcrição; (ii) um condicionamento que deixe o decodificador interpolar entre vozes em vez de cair na região treinada mais próxima (no modelo atual o estilo é somado uma única vez à memória do encoder; condicionamento em todas as camadas é a hipótese a testar). Cada treino novo deve medir $C$, $H(\hat Y)$ e $H(\hat Y\mid S)$ em 60 a 100 vozes, e guardar o áudio gerado de todos os pontos.}
+\callout{accentblue}{\textbf{Consequence for the architecture.} The target is neither a better encoder nor better references: it is to increase $H(\hat Y)$, the set of voices the decoder can produce. There are two levers: (i) give the decoder more voices, which the voice stage of Fig.~\ref{fig:proposta} does with untranscribed audio; (ii) a conditioning that lets the decoder interpolate between voices instead of falling into the nearest trained region (in the current model the style is added only once to the encoder memory; conditioning at every layer is the hypothesis to test). Every new run should measure $C$, $H(\hat Y)$ and $H(\hat Y\mid S)$ on 60 to 100 voices, and keep the generated audio for every point.}
 
 %=====================================================================
-\section{Limites do que temos}
+\section{Limits of what we have}
 \label{sec:limites}
 \begin{itemize}
-\item \textbf{Arquitetura antiga.} Tacotron~2 (2017) foi superado por modelos de linguagem sobre tokens de codec e por modelos de \textit{flow matching}/difusão treinados em dezenas de milhares de horas. A atenção do Tacotron é frágil e a qualidade bate num teto. O resultado só vale para a área se se repetir num modelo atual.
-\item \textbf{Escala pequena.} $N\le200$, uma semente na maior parte das células, 2.500 passos. Três pontos na avaliação larga não distinguem potência de logaritmo.
-\item \textbf{Uma medida.} A cópia depende de um codificador de locutor e é relativa à voz padrão, o que distorce a dificuldade das vozes parecidas com ela (Seção~\ref{sec:revisao}); não há teste de escuta nem medida de naturalidade.
-\item \textbf{Sem checkpoints.} A conta de bits por parâmetro do decodificador não pode ser feita com o que foi guardado.
+\item \textbf{Old architecture.} Tacotron~2 (2017) has been surpassed by language models over codec tokens and by \textit{flow matching}/diffusion models trained on tens of thousands of hours. Tacotron's attention is fragile and its quality hits a ceiling. The result only matters for the field if it repeats on a current model.
+\item \textbf{Small scale.} $N\le200$, one seed in most cells, 2,500 steps. Three points in the wide evaluation do not distinguish a power law from a logarithm.
+\item \textbf{One measure.} Copying depends on a speaker encoder and is relative to the default voice, which distorts the difficulty of voices similar to it (Section~\ref{sec:revisao}); there is no listening test and no naturalness measure.
+\item \textbf{No checkpoints.} The bits-per-decoder-parameter calculation cannot be done with what was saved.
 \end{itemize}
 
 %=====================================================================
-\section{Proposta}
+\section{Proposal}
 
-\subsection{Pergunta e hipótese}
+\subsection{Question and hypothesis}
 
-\caixa{azul}{\textbf{Pergunta.} A cópia de vozes novas depende do número de locutores no áudio \emph{transcrito} ou do número de locutores que o módulo de voz ouviu, transcrito ou não?\\[3pt]
-\textbf{Hipótese.} Se a voz é aprendida por uma etapa separada, a partir de áudio sem transcrição, a cópia passa a seguir o número de locutores dessa etapa, com a mesma lei; poucos locutores transcritos bastam para o conteúdo. Para clonar bem, junte vozes, não transcrições.}
+\callout{accentblue}{\textbf{Question.} Does copying of new voices depend on the number of speakers in the \emph{transcribed} audio, or on the number of speakers the voice module has heard, transcribed or not?\\[3pt]
+\textbf{Hypothesis.} If the voice is learned by a separate stage, from untranscribed audio, copying comes to follow the number of speakers of that stage, with the same law; few transcribed speakers suffice for the content. To clone well, collect voices, not transcripts.}
 
-\subsection{Arquitetura proposta: conteúdo e voz separados}
+\subsection{Proposed architecture: content and voice separated}
 
 \begin{figure}[H]
 \centering
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
   box/.style={rectangle, draw=black!30, rounded corners=5pt, fill=black!3, minimum height=1.15cm, align=center, font=\small, inner xsep=5pt},
-  ca/.style={box, draw=azul, line width=1pt, fill=azul!5},
-  cb/.style={box, draw=verde, line width=1pt, fill=verde!6},
+  ca/.style={box, draw=accentblue, line width=1pt, fill=accentblue!5},
+  cb/.style={box, draw=accentgreen, line width=1pt, fill=accentgreen!6},
   fz/.style={box, fill=black!8},
   arr/.style={-{Stealth[length=2.2mm]}, semithick, draw=black!55},
   tr/.style={-{Stealth[length=2.2mm]}, semithick, dashed, draw=black!45},
   lab/.style={font=\scriptsize, fill=white, inner sep=1pt}
 ]
-\node[font=\small\bfseries, anchor=west] at (-1.2,3.4) {Inferência (dublagem)};
-\node[box] (txt) at (0,0) {Texto traduzido\\{\scriptsize ex.: português}};
-\node[ca] (A) at (3.6,0) {\textbf{Etapa A: conteúdo}\\{\scriptsize texto $\rightarrow$ unidades}\\{\scriptsize sem identidade de voz}};
-\node[box] (u) at (7.0,0) {Unidades\\{\scriptsize $u_{1:T}$ + duração}};
-\node[cb] (B) at (10.4,0) {\textbf{Etapa B: voz}\\{\scriptsize $(u_{1:T}, v) \rightarrow$ mel}};
+\node[font=\small\bfseries, anchor=west] at (-1.2,3.4) {Inference (dubbing)};
+\node[box] (txt) at (0,0) {Translated text\\{\scriptsize e.g.\ Portuguese}};
+\node[ca] (A) at (3.6,0) {\textbf{Stage A: content}\\{\scriptsize text $\rightarrow$ units}\\{\scriptsize no voice identity}};
+\node[box] (u) at (7.0,0) {Units\\{\scriptsize $u_{1:T}$ + duration}};
+\node[cb] (B) at (10.4,0) {\textbf{Stage B: voice}\\{\scriptsize $(u_{1:T}, v) \rightarrow$ mel}};
 \node[fz] (voc) at (13.4,0) {Vocoder};
-\node[box] (out) at (16.0,0) {Fala dublada};
-\node[box] (ator) at (6.4,2.2) {Áudio do ator original\\{\scriptsize qualquer língua}};
-\node[cb] (ve) at (10.4,2.2) {Codificador de voz\\{\scriptsize código $v$ de baixa dimensão}};
+\node[box] (out) at (16.0,0) {Dubbed speech};
+\node[box] (ator) at (6.4,2.2) {Original actor's audio\\{\scriptsize any language}};
+\node[cb] (ve) at (10.4,2.2) {Voice encoder\\{\scriptsize low-dimensional code $v$}};
 \draw[arr] (txt) -- (A); \draw[arr] (A) -- (u); \draw[arr] (u) -- (B); \draw[arr] (B) -- (voc); \draw[arr] (voc) -- (out);
 \draw[arr] (ator) -- (ve); \draw[arr] (ve) -- node[right, font=\scriptsize]{$v$} (B);
 \draw[black!20] (-1.2,-1.65) -- (17.2,-1.65);
-\node[font=\small\bfseries, anchor=west] at (-1.2,-2.0) {Treino};
-\node[box, fill=azul!3, draw=azul!60] (dA) at (3.6,-3.6) {Áudio \textbf{transcrito}\\{\scriptsize poucos locutores ($N_{\text{texto}}$)}\\{\scriptsize língua de destino}};
-\node[fz] (ssl) at (9.9,-3.6) {Extrator de unidades\\{\scriptsize auto-supervisionado, congelado}};
-\node[box, fill=verde!3, draw=verde!60] (dB) at (15.3,-3.6) {Áudio \textbf{sem transcrição}\\{\scriptsize muitos locutores ($N_{\text{voz}}$)}\\{\scriptsize qualquer língua}};
-\draw[tr] (dA.north) -- node[lab, right]{treina A} (A.south);
-\draw[tr] (dB.west) -- node[lab, above]{áudio} (ssl.east);
-\draw[tr] (ssl.north) -- node[lab, left]{unidades} (9.9,-0.6);
-\draw[tr] (dB.north) -- (15.3,-1.2) -- node[lab, below]{alvo: o próprio áudio} (11.0,-1.2) -- (11.0,-0.6);
+\node[font=\small\bfseries, anchor=west] at (-1.2,-2.0) {Training};
+\node[box, fill=accentblue!3, draw=accentblue!60] (dA) at (3.6,-3.6) {\textbf{Transcribed} audio\\{\scriptsize few speakers ($N_{\text{text}}$)}\\{\scriptsize target language}};
+\node[fz] (ssl) at (9.9,-3.6) {Unit extractor\\{\scriptsize self-supervised, frozen}};
+\node[box, fill=accentgreen!3, draw=accentgreen!60] (dB) at (15.3,-3.6) {\textbf{Untranscribed} audio\\{\scriptsize many speakers ($N_{\text{voice}}$)}\\{\scriptsize any language}};
+\draw[tr] (dA.north) -- node[lab, right]{trains A} (A.south);
+\draw[tr] (dB.west) -- node[lab, above]{audio} (ssl.east);
+\draw[tr] (ssl.north) -- node[lab, left]{units} (9.9,-0.6);
+\draw[tr] (dB.north) -- (15.3,-1.2) -- node[lab, below]{target: the audio itself} (11.0,-1.2) -- (11.0,-0.6);
 \end{tikzpicture}}
-\caption{Proposta. A etapa A aprende o que falar e precisa de texto; a etapa B aprende a renderizar vozes e é treinada por reconstrução (unidades extraídas do próprio áudio $\rightarrow$ o mesmo áudio), sem texto. Os alvos da etapa A são as unidades extraídas do áudio transcrito. As setas tracejadas são treino; as contínuas, inferência. A lei de escala prevê que a cópia de vozes novas siga $N_{\text{voz}}$, não $N_{\text{texto}}$.}
+\caption{Proposal. Stage A learns what to say and needs text; stage B learns to render voices and is trained by reconstruction (units extracted from the audio itself $\rightarrow$ the same audio), without text. The targets of stage A are the units extracted from the transcribed audio. Dashed arrows are training; solid ones, inference. The scaling law predicts that copying of new voices follows $N_{\text{voice}}$, not $N_{\text{text}}$.}
 \label{fig:proposta}
 \end{figure}
 
-A separação em etapas não é nova em si: há sistemas que geram primeiro tokens de conteúdo e depois o áudio, e trabalhos que usam fala sem transcrição para reduzir a necessidade de texto. O que esta proposta acrescenta é \textbf{medir de qual conjunto de dados vem a cópia de vozes e com que lei}, com o expoente previsto antes, e o caso de \textbf{línguas diferentes nas duas etapas}. Antes de investir, é preciso uma busca dedicada para confirmar que isso não foi feito.
+Splitting into stages is not new in itself: there are systems that first generate content tokens and then the audio, and works that use untranscribed speech to reduce the need for text. What this proposal adds is \textbf{measuring which dataset voice copying comes from, and with what law}, with the exponent predicted beforehand, and the case of \textbf{different languages in the two stages}. Before investing, a dedicated search is needed to confirm that this has not been done.
 
-\subsection{Experimentos planejados (GPU dedicada, NVIDIA RTX A4500, 20\,GB)}
+\subsection{Planned experiments (dedicated GPU, NVIDIA RTX A4500, 20\,GB)}
 
 \begin{table}[H]
 \centering\small
 \begin{tabular}{@{}p{0.6cm}p{4.6cm}p{5.4cm}p{4.2cm}@{}}
 \toprule
-& Experimento & Previsão registrada & O que decide\\
+& Experiment & Registered prediction & What it decides\\
 \midrule
-E0 & Sem treino: espectro dos vetores de locutor do LibriTTS; pequeno teste de escuta nas vozes agudas & Espectro em $1/j$ (cobertura); ouvintes não confirmam a ``dificuldade'' das vozes agudas & Regime; quanto da curva é da régua\\
-E0b & Metade das frases da voz padrão ($M=1.000$) contra o dobro de $K$ & Mesmo efeito nas vozes novas & O modelo de cobertura + atração\\
-E1 & Repetir a varredura de $N$ (8 a 2.456, LibriTTS completo) numa arquitetura atual aberta, em configuração pequena; $N\in\{8,32,128,512,2048\}$, 3--5 sementes, 60--100 vozes de avaliação $\times$ 10 frases, métrica contínua sem voz padrão & Ganho continua até 2.048; não copiadas $\approx$9\% (cobertura) ou $\ge$16\% (piso) & Se a lei é do Tacotron ou da tarefa, e qual\\
-E2 & Arquitetura em duas etapas: $N_{\text{texto}}=8$ fixo, $N_{\text{voz}}$ de 8 a 2.456 & $C$ segue $N_{\text{voz}}$ (cerca de 0,3 bit por duplicação); WER segue $N_{\text{texto}}$; vazamento de voz nas unidades abaixo de cerca de 0,2 bit por frase & A hipótese central\\
-E3 & Etapa B em inglês, etapa A em português com poucos locutores & Cópia de vozes novas próxima da de E2; WER do português próximo do sistema atual (10\%) & Dublagem com poucos dados\\
-E5 & Mesmo decodificador com estilo condicionando todas as camadas (normalização adaptativa) contra estilo somado à memória do encoder, $N \in \{8, 128\}$ & $H(\hat Y)$ e $C$ maiores com condicionamento em todas as camadas, ruído por voz igual & Se o gargalo é o mecanismo de condicionamento\\
-E4 & Latente de voz menor (32 $\rightarrow$ 16, 8, 4, 2) e KL maior & Cópia inalterada com 8 dimensões e taxa de 25--30 bits; cai com 2 & O ``modelo mínimo''\\
+E0 & No training: spectrum of the LibriTTS speaker vectors; small listening test on the high-pitched voices & Spectrum in $1/j$ (coverage); listeners do not confirm the ``difficulty'' of the high-pitched voices & Regime; how much of the curve belongs to the yardstick\\
+E0b & Half the sentences of the default voice ($M=1{,}000$) versus twice $K$ & Same effect on new voices & The coverage + attraction model\\
+E1 & Repeat the $N$ sweep (8 to 2,456, full LibriTTS) on an open current architecture, in a small configuration; $N\in\{8,32,128,512,2048\}$, 3--5 seeds, 60--100 evaluation voices $\times$ 10 sentences, continuous metric without a default voice & Gain continues up to 2,048; not copied $\approx$9\% (coverage) or $\ge$16\% (floor) & Whether the law belongs to Tacotron or to the task, and which law\\
+E2 & Two-stage architecture: $N_{\text{text}}=8$ fixed, $N_{\text{voice}}$ from 8 to 2,456 & $C$ follows $N_{\text{voice}}$ (about 0.3 bit per doubling); WER follows $N_{\text{text}}$; voice leakage in the units below about 0.2 bit per sentence & The central hypothesis\\
+E3 & Stage B in English, stage A in Portuguese with few speakers & Copying of new voices close to that of E2; Portuguese WER close to the current system (10\%) & Dubbing with little data\\
+E5 & Same decoder with style conditioning every layer (adaptive normalization) versus style added to the encoder memory, $N \in \{8, 128\}$ & Larger $H(\hat Y)$ and $C$ with conditioning at every layer, same per-voice noise & Whether the bottleneck is the conditioning mechanism\\
+E4 & Smaller voice latent (32 $\rightarrow$ 16, 8, 4, 2) and larger KL & Copying unchanged with 8 dimensions and a rate of 25--30 bits; drops with 2 & The ``minimal model''\\
 \bottomrule
 \end{tabular}
-\caption{Plano. Cada previsão é escrita na nota teórica antes de rodar. O desenho de avaliação vem de uma simulação de poder com a variância medida: a partir de cerca de 40 vozes o gargalo é o número de sementes. Checkpoints passam a ser guardados para a análise de informação por parâmetro.}
+\caption{Plan. Each prediction is written into the theory note before running. The evaluation design comes from a power simulation with the measured variance: from about 40 voices on, the bottleneck is the number of seeds. Checkpoints will now be kept for the information-per-parameter analysis.}
 \end{table}
 
-\paragraph{Critério de sucesso.} A tese vale se, em E2, a cópia de vozes novas com 8 locutores transcritos e milhares de locutores sem transcrição ficar dentro do intervalo de um modelo treinado com milhares de locutores transcritos. Se E1 não reproduzir a lei numa arquitetura atual, o trabalho se reduz a um estudo sobre o Tacotron, e a proposta de arquitetura deve ser revista antes de E2.
+\paragraph{Success criterion.} The thesis holds if, in E2, copying of new voices with 8 transcribed speakers and thousands of untranscribed speakers falls within the interval of a model trained with thousands of transcribed speakers. If E1 does not reproduce the law on a current architecture, the work reduces to a study of Tacotron, and the architecture proposal must be revised before E2.
 
-\subsection{Produtos esperados}
+\subsection{Expected outputs}
 \begin{enumerate}
-\item \textbf{Artigo de workshop} com o que já existe: ``How Many Voices Does It Take to Clone One? A Scaling Law for Zero-Shot Voice Cloning'' (estudo controlado, lei em dois níveis, negativos, análise por voz).
-\item \textbf{Artigo principal}, se E1--E3 confirmarem: ``Voices, Not Transcripts: Scaling Zero-Shot Voice Cloning with Untranscribed Speech''.
-\item \textbf{Sistema de dublagem} para o português usando a etapa de voz treinada em outra língua.
+\item \textbf{Workshop paper} with what already exists: ``How Many Voices Does It Take to Clone One? A Scaling Law for Zero-Shot Voice Cloning'' (controlled study, two-level law, negatives, per-voice analysis).
+\item \textbf{Main paper}, if E1--E3 confirm: ``Voices, Not Transcripts: Scaling Zero-Shot Voice Cloning with Untranscribed Speech''.
+\item \textbf{Dubbing system} for Portuguese using the voice stage trained in another language.
 \end{enumerate}
 
 %=====================================================================
-\section{Onde está cada coisa}
+\section{Where everything is}
 
 \begin{table}[H]
 \centering\small
 \begin{tabular}{@{}p{7.6cm}p{8cm}@{}}
 \toprule
-Caminho no repositório & Conteúdo\\
+Path in the repository & Content\\
 \midrule
-\texttt{src/training/training-tacotron2-vae/} & Modelo e treino\\
-\texttt{scripts/coverage/coverage\_manifest.py} & Montagem dos conjuntos $N\times K$ e das referências\\
-\texttt{scripts/coverage/colab\_job.sh} & Treino e avaliação de uma rodada de ponta a ponta\\
-\texttt{scripts/eval/synth\_check.py} & Síntese e WER (opção \texttt{--n-refs})\\
-\texttt{scripts/coverage/speaker\_similarity.py} & Medida de cópia de voz\\
-\texttt{scripts/coverage/fit\_law.py} & Ajuste das leis\\
-\texttt{scripts/coverage/voice\_hardness.py} & Análise por voz\\
-\texttt{reports/coverage/results/} & Resultados por amostra de todos os treinos\\
-\texttt{reports/teoria\_cobertura.md} & Nota teórica com previsões e resultados em ordem cronológica\\
-\texttt{reports/relatorio\_final.pdf} & Relatório do trabalho final de ML2\\
+\texttt{src/training/training-tacotron2-vae/} & Model and training\\
+\texttt{scripts/coverage/coverage\_manifest.py} & Construction of the $N\times K$ sets and of the references\\
+\texttt{scripts/coverage/colab\_job.sh} & End-to-end training and evaluation of one run\\
+\texttt{scripts/eval/synth\_check.py} & Synthesis and WER (option \texttt{--n-refs})\\
+\texttt{scripts/coverage/speaker\_similarity.py} & Voice-copying measure\\
+\texttt{scripts/coverage/fit\_law.py} & Law fitting\\
+\texttt{scripts/coverage/voice\_hardness.py} & Per-voice analysis\\
+\texttt{reports/coverage/results/} & Per-sample results of all runs\\
+\texttt{reports/theory/coverage\_theory.md} & Theory note with predictions and results in chronological order\\
+\texttt{reports/final\_report.pdf} & Report of the ML2 final project\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Página do projeto: \url{https://rick0110.github.io/ml2_final_project}. Repositório: \url{https://github.com/rick0110/ml2_final_project}.
+Project page: \url{https://rick0110.github.io/ml2_final_project}. Repository: \url{https://github.com/rick0110/ml2_final_project}.
 
 \begin{thebibliography}{99}\small
 \bibitem{shen} J.~Shen et al. Natural TTS synthesis by conditioning WaveNet on mel spectrogram predictions (Tacotron~2). ICASSP, 2018.
@@ -505,7 +505,7 @@ Página do projeto: \url{https://rick0110.github.io/ml2_final_project}. Reposit�
 \bibitem{zhang} Y.-J.~Zhang et al. Learning latent representations for style control and transfer in end-to-end speech synthesis. ICASSP, 2019.
 \bibitem{hifigan} J.~Kong, J.~Kim, J.~Bae. HiFi-GAN: generative adversarial networks for efficient and high fidelity speech synthesis. NeurIPS, 2020.
 \bibitem{jia2018} Y.~Jia et al. Transfer learning from speaker verification to multispeaker text-to-speech synthesis. NeurIPS, 2018. arXiv:1806.04558.
-\bibitem{tinyvox} Treino de reconhecimento de locutor com dados limitados (subconjuntos do VoxCeleb2). arXiv:2203.14688.
+\bibitem{tinyvox} Speaker recognition training with limited data (subsets of VoxCeleb2). arXiv:2203.14688.
 \bibitem{du2021} S.~Du et al. Few-shot learning via learning the representation, provably. ICLR, 2021. arXiv:2002.09434.
 \bibitem{maurer2016} A.~Maurer, M.~Pontil, B.~Romera-Paredes. The benefit of multitask representation learning. JMLR, 2016. arXiv:1505.06279.
 \bibitem{sharma2020} U.~Sharma, J.~Kaplan. A neural scaling law from the dimension of the data manifold. arXiv:2004.10802.

@@ -24,11 +24,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-STAGES = [("en_vae_v1", "Inglês (LJSpeech)"), ("pt_vae_v1", "Português (TTS-Portuguese)"),
-          ("ptverbo_vae_v1", "Português + VERBO")]
+STAGES = [("en_vae_v1", "English (LJSpeech)"), ("pt_vae_v1", "Portuguese (TTS-Portuguese)"),
+          ("ptverbo_vae_v1", "Portuguese + VERBO")]
 BLUE, ORANGE, GRAY = "#2563eb", "#ea580c", "#6b7280"
 EMO_COLORS = {"neutro": "#6b7280", "alegria": "#eab308", "tristeza": "#2563eb", "raiva": "#dc2626",
               "surpresa": "#9333ea", "medo": "#0d9488", "desgosto": "#65a30d"}
+# English display names for the emotion labels stored in the evaluation tables
+EMO_NAMES = {"neutro": "neutral", "alegria": "joy", "tristeza": "sadness", "raiva": "anger",
+             "surpresa": "surprise", "medo": "fear", "desgosto": "disgust"}
 
 
 def read_metrics(path: Path) -> List[dict]:
@@ -52,49 +55,49 @@ def fig_curves(runs: Path, out: Path) -> None:
         tr = [r for r in rec if not r.get("eval")]
         ev = [r for r in rec if r.get("eval")]
         ax = axes[0][j]
-        ax.plot([r["it"] for r in tr], [r["recon"] for r in tr], color=GRAY, lw=0.8, label="treino")
-        ax.plot([r["it"] for r in ev], [r["val_recon"] for r in ev], color=BLUE, marker="o", ms=3, label="validação")
+        ax.plot([r["it"] for r in tr], [r["recon"] for r in tr], color=GRAY, lw=0.8, label="training")
+        ax.plot([r["it"] for r in ev], [r["val_recon"] for r in ev], color=BLUE, marker="o", ms=3, label="validation")
         ax.set_title(title, fontsize=10)
-        ax.set_ylabel("erro de reconstrução do mel")
+        ax.set_ylabel("mel reconstruction error")
         ax.set_ylim(0.4, min(2.2, max([r["val_recon"] for r in ev] + [r["recon"] for r in tr[2:]]) * 1.05))
         ax.legend(frameon=False, fontsize=8)
         ax = axes[1][j]
         ax.plot([r["it"] for r in ev], [r["align_peak"] for r in ev], color=ORANGE, marker="o", ms=3)
         ax.set_ylim(0, 1)
-        ax.set_ylabel("nitidez do alinhamento (síntese livre)")
-        ax.set_xlabel("passo de treino")
+        ax.set_ylabel("alignment sharpness (free-running synthesis)")
+        ax.set_xlabel("training step")
         ax2 = ax.twinx()
         ax2.plot([r["it"] for r in ev], [r["active_dims"] for r in ev], color=BLUE, ls="--", lw=1)
         ax2.set_ylim(0, 33)
-        ax2.set_ylabel("dimensões ativas do latente (de 32)", color=BLUE)
+        ax2.set_ylabel("active latent dimensions (of 32)", color=BLUE)
     for ax in axes.ravel():
         ax.spines["top"].set_visible(False)
         ax.grid(alpha=0.25)
     fig.tight_layout()
-    fig.savefig(out / "fig_retreino_curvas.png", dpi=130)
+    fig.savefig(out / "fig_retraining_curves.png", dpi=130)
     plt.close(fig)
 
 
 def fig_wer(evals: Path, out: Path, old_en: float, old_pt: float) -> None:
-    bars = [("Inglês\nmodelo antigo", old_en, GRAY), ("Português\nmodelo antigo", old_pt, GRAY)]
-    for exp, label in [("en_vae_v1", "Inglês\nretreinado"), ("pt_vae_v1", "Português\nretreinado"),
-                       ("verbo_vae_v1", "Emoção\nsó VERBO"), ("ptverbo_vae_v1", "Emoção\nPT + VERBO"),
-                       ("mix_strength_0.6", "Emoção, PT + VERBO\nestilo a 60%")]:
+    bars = [("English\nold model", old_en, GRAY), ("Portuguese\nold model", old_pt, GRAY)]
+    for exp, label in [("en_vae_v1", "English\nretrained"), ("pt_vae_v1", "Portuguese\nretrained"),
+                       ("verbo_vae_v1", "Emotion\nVERBO only"), ("ptverbo_vae_v1", "Emotion\nPT + VERBO"),
+                       ("mix_strength_0.6", "Emotion, PT + VERBO\nstyle at 60%")]:
         p = evals / exp / "results.csv"
         if p.exists():
             bars.append((label, float(np.mean([float(r["wer"]) for r in read_eval(p)])), BLUE))
     fig, ax = plt.subplots(figsize=(8.2, 3.2))
     ax.bar(range(len(bars)), [100 * b[1] for b in bars], color=[b[2] for b in bars], width=0.62)
     for i, b in enumerate(bars):
-        ax.text(i, 100 * b[1] + 2, f"{100 * b[1]:.0f}%".replace(".", ","), ha="center", fontsize=9)
+        ax.text(i, 100 * b[1] + 2, f"{100 * b[1]:.0f}%", ha="center", fontsize=9)
     ax.set_xticks(range(len(bars)))
     ax.set_xticklabels([b[0] for b in bars], fontsize=8)
-    ax.set_ylabel("palavras erradas (%)")
+    ax.set_ylabel("word error rate (%)")
     ax.set_ylim(0, 115)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     fig.tight_layout()
-    fig.savefig(out / "fig_retreino_wer.png", dpi=130)
+    fig.savefig(out / "fig_retraining_wer.png", dpi=130)
     plt.close(fig)
 
 
@@ -108,27 +111,27 @@ def fig_style(evals: Path, out: Path, exp: str) -> None:
         groups[r["reference"]].append(r)
     fig, axes = plt.subplots(1, 2, figsize=(8.4, 3.6))
     for (col, ref_col, name, unit), ax in zip(
-            [("f0_hz", "ref_f0_hz", "Tom médio (F0)", "Hz"), ("chars_per_s", "ref_chars_per_s", "Velocidade", "caracteres/s")], axes):
+            [("f0_hz", "ref_f0_hz", "Mean pitch (F0)", "Hz"), ("chars_per_s", "ref_chars_per_s", "Speaking rate", "characters/s")], axes):
         xs, ys = [], []
         for ref, rows in groups.items():
             x = float(rows[0][ref_col])
             y = float(np.nanmean([float(r[col]) for r in rows]))
             emo = rows[0]["reference_emotion"]
             ax.scatter(x, y, s=60, color=EMO_COLORS.get(emo, BLUE), marker="s" if "-m" in ref else "o", zorder=3)
-            ax.annotate(emo or ref, (x, y), textcoords="offset points", xytext=(5, 4), fontsize=7)
+            ax.annotate(EMO_NAMES.get(emo, emo) or ref, (x, y), textcoords="offset points", xytext=(5, 4), fontsize=7)
             xs.append(x)
             ys.append(y)
         lo, hi = min(xs + ys) * 0.9, max(xs + ys) * 1.08
         ax.plot([lo, hi], [lo, hi], color=GRAY, ls=":", lw=1)
         r = float(np.corrcoef(xs, ys)[0, 1]) if len(xs) > 2 else float("nan")
-        ax.set_title(f"{name} — correlação {r:.2f}".replace(".", ","), fontsize=10)
-        ax.set_xlabel(f"áudio de referência ({unit})")
-        ax.set_ylabel(f"fala gerada ({unit})")
+        ax.set_title(f"{name} — correlation {r:.2f}", fontsize=10)
+        ax.set_xlabel(f"reference audio ({unit})")
+        ax.set_ylabel(f"generated speech ({unit})")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.grid(alpha=0.25)
     fig.tight_layout()
-    fig.savefig(out / f"fig_retreino_estilo_{exp}.png", dpi=130)
+    fig.savefig(out / f"fig_retraining_style_{exp}.png", dpi=130)
     plt.close(fig)
 
 
@@ -155,20 +158,20 @@ def fig_strength(evals: Path, out: Path, full: str, pattern: str = "mix_strength
     axes[0].plot(xs, wers, color=BLUE, marker="o")
     for x, w in zip(xs, wers):
         axes[0].annotate(f"{w:.0f}%", (x, w), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8)
-    axes[0].set_ylabel("palavras erradas (%)")
+    axes[0].set_ylabel("word error rate (%)")
     axes[0].set_ylim(0, max(wers) * 1.25)
     axes[1].fill_between(xs, lo, hi, color=ORANGE, alpha=0.25)
     axes[1].plot(xs, lo, color=ORANGE, marker="o")
     axes[1].plot(xs, hi, color=ORANGE, marker="o")
-    axes[1].set_ylabel("tom médio gerado: menor e maior\nentre as 7 emoções (Hz)")
+    axes[1].set_ylabel("generated mean pitch: lowest and highest\nacross the 7 emotions (Hz)")
     for ax in axes:
-        ax.set_xlabel("intensidade do estilo (1 = referência inteira)")
+        ax.set_xlabel("style strength (1 = full reference)")
         ax.set_xticks(xs)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.grid(alpha=0.25)
     fig.tight_layout()
-    fig.savefig(out / "fig_retreino_intensidade.png", dpi=130)
+    fig.savefig(out / "fig_retraining_strength.png", dpi=130)
     plt.close(fig)
 
 

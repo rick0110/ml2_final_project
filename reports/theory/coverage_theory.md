@@ -1,291 +1,293 @@
-# Por que copiar uma voz nova exige tantos locutores: tratativa teórica e uma solução
+*Historical note from the Colab phase. The organized, current research lives in [research/](../../research/README.md).*
 
-Este texto organiza os resultados do experimento de cobertura (README, seção 9) num modelo simples, verifica o modelo contra os 12 treinos da grade, e tira dele uma solução e a testa (o teste deu negativo, seção 6). O argumento é heurístico: as fórmulas são uma lei de amostragem ajustada aos dados, não um teorema.
+# Why copying a new voice takes so many speakers: a theoretical treatment and a solution
 
-## 1. O que precisa ser explicado
+This text organizes the results of the coverage experiment (README, section 9) into a simple model, checks the model against the 12 training runs of the grid, and derives a solution from it and tests it (the test came out negative, section 6). The argument is heuristic: the formulas are a sampling law fitted to the data, not a theorem.
 
-O modelo lê um texto com a voz de um áudio de referência. Treina-se com 2.000 frases de uma voz (a "voz padrão", LJSpeech) mais N locutores com K frases cada. Mede-se, em frases novas, a parcela de amostras em que a voz da referência foi copiada.
+## 1. What needs to be explained
 
-1. A cópia de vozes **treinadas** depende de K (frases por locutor) e quase não depende de N.
-2. A cópia de vozes **novas** depende de N (número de locutores) e pouco de K.
-3. Quanto mais longe o código de estilo está da voz padrão, mais a voz é copiada e mais palavras saem erradas.
-4. Quatro mudanças no modelo não reduziram a necessidade de dados: tirar o estilo de outra frase do mesmo locutor, uma perda contrastiva no latente, um vetor de locutor pré-treinado, e esse vetor com dropout de estilo.
+The model reads a text in the voice of a reference audio clip. It is trained on 2,000 sentences from one voice (the "default voice", LJSpeech) plus N speakers with K sentences each. On new sentences, we measure the fraction of samples in which the reference voice was copied.
 
-## 2. Modelo: o treino cobre uma cruz, o teste pede o retângulo
+1. Copying of **trained** voices depends on K (sentences per speaker) and hardly depends on N.
+2. Copying of **new** voices depends on N (number of speakers) and only weakly on K.
+3. The farther the style code is from the default voice, the more the voice is copied and the more words come out wrong.
+4. Four changes to the model did not reduce the need for data: taking the style from another sentence by the same speaker, a contrastive loss on the latent, a pre-trained speaker vector, and that vector with style dropout.
 
-O decodificador é uma função `f(c, s)`: `c` é o texto codificado e `s` o vetor de estilo (que carrega a voz). Gerar bem exige que `f` esteja certa no par `(c, s)` pedido. O conjunto de pares possíveis é o produto `C × S` (todos os textos × todas as vozes), e o treino só visita uma parte dele:
+## 2. Model: training covers a cross, the test asks for the rectangle
 
-- uma linha longa: muitos textos (2.000) na voz padrão `s₀`;
-- N linhas curtas: K textos em cada voz `sᵢ`.
+The decoder is a function `f(c, s)`: `c` is the encoded text and `s` the style vector (which carries the voice). Generating well requires `f` to be correct at the requested pair `(c, s)`. The set of possible pairs is the product `C × S` (all texts × all voices), and training visits only part of it:
 
-O teste pede um texto novo `c*` numa voz `s`. O erro nesse ponto se decompõe em dois passos:
+- one long row: many texts (2,000) in the default voice `s₀`;
+- N short rows: K texts in each voice `sᵢ`.
 
-```
-erro(c*, s) = erro(c*, s₀) + [erro(c*, s) − erro(c*, s₀)]
-              \_________/    \________________________/
-              ler texto novo      interação texto × voz:
-              na voz padrão       o que muda ao trocar a voz
-```
-
-O primeiro termo é pequeno (WER de 4–6% com o estilo desligado), porque a linha longa cobre bem os textos. Todo o problema está no segundo termo, e sobre ele o treino só tem as N·K amostras das linhas curtas. Isso já explica o fato 3: longe de `s₀`, a leitura do texto só foi treinada em K frases por voz; o decodificador ou volta para a voz padrão (voz não copiada, texto certo) ou segue a voz e erra o texto. A força do estilo só escolhe o ponto entre esses dois erros.
-
-## 3. Lei de amostragem em dois níveis
-
-Os dados de treino fora da voz padrão vêm de uma amostragem em dois níveis: sorteiam-se N locutores e, dentro de cada um, K frases. Em qualquer estimador desse tipo (modelos mistos, amostragem por conglomerados) o erro tem três componentes, cada um caindo com a contagem que o alimenta:
-
-- o que é comum às vozes (como uma voz qualquer altera a fala) é aprendido dos N locutores: erro ∝ 1/N;
-- o que é próprio de um locutor treinado é aprendido das K frases dele: erro ∝ 1/K;
-- a interação texto × voz é aprendida de todas as amostras: erro ∝ 1/(N·K).
-
-Uma voz nova não tem o segundo componente (nenhuma frase dela foi vista), então a previsão para a parcela de amostras com a voz **não** copiada é:
+The test asks for a new text `c*` in a voice `s`. The error at that point decomposes into two steps:
 
 ```
-vozes novas:      p = a + A/N + B/(N·K)
-vozes treinadas:  p = a' + C/K + A'/N
+error(c*, s) = error(c*, s₀) + [error(c*, s) − error(c*, s₀)]
+               \___________/    \__________________________/
+               read new text      text × voice interaction:
+               in default voice   what changes when the voice changes
 ```
 
-`a` e `a'` são o que sobra com dados infinitos desse tipo.
+The first term is small (WER of 4–6% with the style turned off), because the long row covers the texts well. The whole problem lies in the second term, and for it training only has the N·K samples of the short rows. This already explains fact 3: far from `s₀`, reading the text was trained on only K sentences per voice; the decoder either falls back to the default voice (voice not copied, text correct) or follows the voice and gets the text wrong. The style strength only picks the point between these two errors.
 
-**Ajuste aos 12 treinos** (passo 2.500, estilo inteiro; `scripts/coverage/fit_law.py`):
+## 3. Two-level sampling law
 
-| Vozes | Lei | Parâmetros | Erro do ajuste (RMSE) |
+The training data outside the default voice come from two-level sampling: N speakers are drawn and, within each one, K sentences. In any estimator of this kind (mixed models, cluster sampling) the error has three components, each falling with the count that feeds it:
+
+- what is common to voices (how any voice alters speech) is learned from the N speakers: error ∝ 1/N;
+- what is specific to a trained speaker is learned from that speaker's K sentences: error ∝ 1/K;
+- the text × voice interaction is learned from all samples: error ∝ 1/(N·K).
+
+A new voice lacks the second component (none of its sentences was seen), so the prediction for the fraction of samples in which the voice is **not** copied is:
+
+```
+new voices:      p = a + A/N + B/(N·K)
+trained voices:  p = a' + C/K + A'/N
+```
+
+`a` and `a'` are what remains with infinite data of this kind.
+
+**Fit to the 12 training runs** (step 2,500, full style; `scripts/coverage/fit_law.py`):
+
+| Voices | Law | Parameters | Fit error (RMSE) |
 |---|---|---|---|
-| novas | a + A/N + B/(NK) | a = 0,42; A = 1,03; B = 8,9 | 0,050 |
-| novas | a + A/N | a = 0,45; A = 1,05 | 0,068 |
-| novas | a + B/(NK) (só o total de frases) | | 0,175 |
-| novas | a + C/K | | 0,184 |
-| treinadas | a' + C/K + A'/N | a' = 0,08; C = 3,2; A' = 0,36 | 0,034 |
-| treinadas | a' + C/K | a' = 0,15; C = 2,8 | 0,065 |
-| treinadas | a' + A'/N | | 0,162 |
+| new | a + A/N + B/(NK) | a = 0.42; A = 1.03; B = 8.9 | 0.050 |
+| new | a + A/N | a = 0.45; A = 1.05 | 0.068 |
+| new | a + B/(NK) (total sentences only) | | 0.175 |
+| new | a + C/K | | 0.184 |
+| trained | a' + C/K + A'/N | a' = 0.08; C = 3.2; A' = 0.36 | 0.034 |
+| trained | a' + C/K | a' = 0.15; C = 2.8 | 0.065 |
+| trained | a' + A'/N | | 0.162 |
 
-O desvio entre duas sementes do mesmo treino é 0,048. As duas leis de dois níveis ajustam os dados até o nível do ruído; as alternativas de um fator só (só N, só K, só o total N·K) ficam de 2 a 4 vezes acima. Ressalva: são 3 parâmetros para 7 configurações, com N ≤ 32; o ajuste não distingue 1/N de uma queda mais lenta.
+The deviation between two seeds of the same training run is 0.048. The two two-level laws fit the data down to the noise level; the single-factor alternatives (N only, K only, total N·K only) are 2 to 4 times higher. Caveat: these are 3 parameters for 7 configurations, with N ≤ 32; the fit does not distinguish 1/N from a slower decay.
 
-## 4. O que a teoria explica e o que ela prevê
+## 4. What the theory explains and what it predicts
 
-**Os fatos 1 e 2** são a própria lei: K entra nas vozes treinadas pelo termo C/K, que não existe para vozes novas; N domina as vozes novas pelo termo A/N.
+**Facts 1 and 2** are the law itself: K enters the trained voices through the term C/K, which does not exist for new voices; N dominates the new voices through the term A/N.
 
-**Os quatro resultados negativos (fato 4).** As quatro mudanças atuam sobre como a voz é *representada* (o que o latente carrega, de onde vem o vetor). Nenhuma acrescenta pares (texto, voz) ao treino do decodificador, que é o que A/N e B/(NK) contam. O vetor de locutor pré-treinado dá boas coordenadas para o espaço de vozes, mas o decodificador continua vendo só N pontos nele: com 8 locutores ele decora (71% das treinadas, 5% das novas), com 32 começa a interpolar (47% das novas), como a lei prevê para qualquer caminho de entrada.
+**The four negative results (fact 4).** All four changes act on how the voice is *represented* (what the latent carries, where the vector comes from). None of them adds (text, voice) pairs to the decoder's training, which is what A/N and B/(NK) count. The pre-trained speaker vector gives good coordinates for the voice space, but the decoder still sees only N points in it: with 8 speakers it memorizes (71% of trained voices, 5% of new ones), with 32 it starts to interpolate (47% of new ones), as the law predicts for any input path.
 
-**Mais locutores reais rendem cada vez menos.** Pela lei ajustada, com K = 128:
+**More real speakers yield less and less.** By the fitted law, with K = 128:
 
-| N | Vozes novas copiadas (previsão) |
+| N | New voices copied (prediction) |
 |---|---|
-| 8 | 44% (medido: 51% / 37%) |
-| 32 | 55% (medido: 61% / 57%) |
+| 8 | 44% (measured: 51% / 37%) |
+| 32 | 55% (measured: 61% / 57%) |
 | 128 | 57% |
-| infinito | 58% |
+| infinity | 58% |
 
-Passar de 32 para 128 locutores (4 vezes mais dados) renderia cerca de 2 pontos. Se a queda real for mais lenta que 1/N, o ganho é maior, mas continua caro. Esta é a previsão mais arriscada da teoria, porque extrapola além de N = 32.
+Going from 32 to 128 speakers (4 times more data) would yield about 2 points. If the real decay is slower than 1/N, the gain is larger, but it remains expensive. This is the riskiest prediction of the theory, because it extrapolates beyond N = 32.
 
-**O piso `a` = 0,42 é o problema que sobra.** Mesmo com infinitos locutores, 4 em cada 10 amostras de vozes novas não copiariam a voz, contra 1 em 10 nas treinadas. A diferença é o componente próprio do locutor, que para uma voz nova tem de vir inteiro de uma única referência curta passando por um vetor global de 32 dimensões.
+**The floor `a` = 0.42 is the remaining problem.** Even with infinitely many speakers, 4 out of 10 samples of new voices would not copy the voice, against 1 in 10 for trained voices. The difference is the speaker-specific component, which for a new voice has to come entirely from a single short reference passing through a 32-dimensional global vector.
 
-## 5. Soluções que saem da teoria
+## 5. Solutions that follow from the theory
 
-A lei diz o que conta: pares (texto, voz) vistos pelo decodificador, com N (vozes distintas) pesando mais que K. Três caminhos:
+The law says what counts: (text, voice) pairs seen by the decoder, with N (distinct voices) weighing more than K. Three paths:
 
-**(a) Preencher o retângulo com pseudo-locutores (testado; não funcionou, seção 6).** Existe uma transformação barata que troca a voz e mantém o texto: tocar a gravação mais rápido ou mais devagar por um fator r sobe ou desce o tom e os formantes por r. Aplicada à linha longa (as 2.000 frases da voz padrão) e às linhas curtas, ela cria vozes novas com as mesmas frases, sem gravar nada. Em reconhecimento de locutor é prática comum tratar cópias com velocidade alterada como locutores novos. Na lei, isso aumenta N (e K) de graça. O limite previsível: as pseudo-vozes variam em uma direção só do espaço de vozes (tamanho do trato vocal/tom); elas contam como locutores apenas na medida em que as vozes reais diferem nessa direção.
+**(a) Fill the rectangle with pseudo-speakers (tested; did not work, section 6).** There is a cheap transformation that changes the voice and keeps the text: playing the recording faster or slower by a factor r raises or lowers the pitch and the formants by r. Applied to the long row (the 2,000 sentences of the default voice) and to the short rows, it creates new voices with the same sentences, without recording anything. In speaker recognition it is common practice to treat speed-altered copies as new speakers. In the law, this increases N (and K) for free. The predictable limit: the pseudo-voices vary along only one direction of the voice space (vocal tract size/pitch); they count as speakers only to the extent that real voices differ along that direction.
 
-Implementação: `scripts/coverage/augment_voices.py` acrescenta, para cada frase de treino, uma cópia com velocidade alterada entre 1,5 e 4 semitons para cima ou para baixo; variante `-aug` em `scripts/coverage/colab_job.sh`. O número de passos de treino é o mesmo.
+Implementation: `scripts/coverage/augment_voices.py` adds, for each training sentence, a speed-altered copy shifted between 1.5 and 4 semitones up or down; variant `-aug` in `scripts/coverage/colab_job.sh`. The number of training steps is the same.
 
-Previsões registradas antes do resultado (vozes novas copiadas, passo 2.500, estilo inteiro):
+Predictions registered before the result (new voices copied, step 2,500, full style):
 
-| Treino | Normal (medido, 2 sementes) | Se as pseudo-vozes não contarem | Se contarem como locutores (N efetivo ≥ 32) |
+| Training run | Normal (measured, 2 seeds) | If the pseudo-voices do not count | If they count as speakers (effective N ≥ 32) |
 |---|---|---|---|
 | 8 × 8 | 26% / 39% | ~31% | ~50% |
 | 8 × 128 | 51% / 37% | ~44% | ~55% |
 
-Como uma semente varia ±5 pontos (até 14 entre sementes), só um ganho acima de ~10 pontos sobre a média normal conta como efeito.
+Since a seed varies by ±5 points (up to 14 between seeds), only a gain of more than ~10 points over the normal mean counts as an effect.
 
-**(b) Tirar o texto da conta: fala na voz padrão + conversão de voz.** Se `f(c, s) = V(T(c), s)`, com `T` lendo o texto na voz padrão e `V` trocando a voz sem olhar o texto, o termo de interação some por construção. `T` já funciona (primeiro termo da decomposição). `V` não precisa de transcrição, então pode ser treinado em milhares de locutores de fala não transcrita: N deixa de ser limitado pelos dados com texto. É o caminho estrutural; custa treinar um segundo modelo.
+**(b) Take the text out of the equation: speech in the default voice + voice conversion.** If `f(c, s) = V(T(c), s)`, with `T` reading the text in the default voice and `V` changing the voice without looking at the text, the interaction term vanishes by construction. `T` already works (first term of the decomposition). `V` does not need transcriptions, so it can be trained on thousands of speakers of untranscribed speech: N is no longer limited by the data with text. This is the structural path; it costs training a second model.
 
-**(c) Baixar o piso `a`.** O piso vem de resumir uma voz nova em um vetor global tirado de uma referência. Usar várias referências do mesmo ator (na dublagem há o filme inteiro) e um código que varie ao longo da frase atacam esse termo, e não os termos de cobertura.
+**(c) Lower the floor `a`.** The floor comes from summarizing a new voice in a global vector taken from one reference. Using several references from the same actor (in dubbing there is the whole film) and a code that varies along the sentence attack this term, not the coverage terms.
 
-Para a dublagem, (b) e (c) combinam com o cenário: há muito áudio do ator original sem transcrição alinhada, e nenhum texto de treino na voz dele.
+For dubbing, (b) and (c) fit the scenario: there is a lot of audio of the original actor without aligned transcription, and no training text in their voice.
 
-## 6. Resultado do teste de (a): as pseudo-vozes não contam como locutores
+## 6. Result of the test of (a): the pseudo-voices do not count as speakers
 
-Dois treinos com pseudo-locutores (`n8_k8_s1-aug`, `n8_k128_s1-aug`; cada frase de treino ganha uma cópia com velocidade alterada, 41 e 54 pseudo-locutores no total), mesma quantidade de passos e mesma avaliação. Passo 2.500, estilo inteiro:
+Two training runs with pseudo-speakers (`n8_k8_s1-aug`, `n8_k128_s1-aug`; each training sentence gets a speed-altered copy, 41 and 54 pseudo-speakers in total), same number of steps and same evaluation. Step 2,500, full style:
 
-| Treino | Vozes treinadas copiadas | Vozes novas copiadas | WER vozes novas | Previsão "não contam" | Previsão "contam" |
+| Training run | Trained voices copied | New voices copied | WER new voices | Prediction "do not count" | Prediction "count" |
 |---|---|---|---|---|---|
-| 8 × 8 normal (2 sementes) | 45% / 44% | 26% / 39% | 14% / 24% | | |
-| 8 × 8 com pseudo-locutores | 50% | **28%** | 14% | ~31% | ~50% |
-| 8 × 128 normal (2 sementes) | 91% / 88% | 51% / 37% | 8% / 9% | | |
-| 8 × 128 com pseudo-locutores | 84% | **42%** | 8% | ~44% | ~55% |
+| 8 × 8 normal (2 seeds) | 45% / 44% | 26% / 39% | 14% / 24% | | |
+| 8 × 8 with pseudo-speakers | 50% | **28%** | 14% | ~31% | ~50% |
+| 8 × 128 normal (2 seeds) | 91% / 88% | 51% / 37% | 8% / 9% | | |
+| 8 × 128 with pseudo-speakers | 84% | **42%** | 8% | ~44% | ~55% |
 
-Os dois resultados caem na previsão "as pseudo-vozes não contam" (28% contra ~31%; 42% contra ~44%) e dentro do intervalo das duas sementes normais. No passo 1.000 o quadro é o mesmo (22% contra 24%; 36% contra 30%). A solução (a) não funciona. É uma semente por configuração, mas a diferença para a previsão "contam" (22 e 13 pontos) é maior que a variação entre sementes.
+Both results fall on the prediction "the pseudo-voices do not count" (28% against ~31%; 42% against ~44%) and within the range of the two normal seeds. At step 1,000 the picture is the same (22% against 24%; 36% against 30%). Solution (a) does not work. It is one seed per configuration, but the gap to the "count" prediction (22 and 13 points) is larger than the variation between seeds.
 
-O que isso diz sobre a teoria:
+What this says about the theory:
 
-- A lei de dois níveis previu os dois números com N = 8, sem reajuste. O N que entra nela é o número de vozes **reais**; quinze a vinte vezes mais rótulos de locutor não mudaram nada.
-- O limite antecipado na seção 5 é o que aconteceu: mudar a velocidade desloca a voz em uma direção só (tom e formantes juntos). As vozes novas do teste diferem das treinadas em muitas direções (timbre, fonte glotal, articulação, ritmo), e o decodificador precisa ter visto variação nessas direções.
-- O termo A/N conta, portanto, a variedade real de vozes, e não pares (texto, voz) em geral. Preencher o retângulo com transformações simples do sinal não substitui locutores.
+- The two-level law predicted both numbers with N = 8, without refitting. The N that enters it is the number of **real** voices; fifteen to twenty times more speaker labels changed nothing.
+- The limit anticipated in section 5 is what happened: changing the speed shifts the voice along only one direction (pitch and formants together). The new voices in the test differ from the trained ones along many directions (timbre, glottal source, articulation, rhythm), and the decoder needs to have seen variation along those directions.
+- The term A/N therefore counts the real variety of voices, not (text, voice) pairs in general. Filling the rectangle with simple signal transformations does not replace speakers.
 
-Consequência prática: sobram os caminhos (b) e (c). O (b) é o que ataca o termo A/N diretamente, porque a conversão de voz treina sem transcrição e pode usar milhares de locutores reais; o (c) ataca o piso `a`. Uma versão mais forte de (a) seria gerar as pseudo-vozes com um conversor de voz já treinado em muitos locutores (as 2.000 frases da voz padrão ditas em centenas de vozes reais), o que é o caminho (b) usado como aumento de dados.
+Practical consequence: paths (b) and (c) remain. Path (b) is the one that attacks the term A/N directly, because voice conversion trains without transcriptions and can use thousands of real speakers; path (c) attacks the floor `a`. A stronger version of (a) would be to generate the pseudo-voices with a voice converter already trained on many speakers (the 2,000 sentences of the default voice spoken in hundreds of real voices), which is path (b) used as data augmentation.
 
-## 7. Próximo teste: conversão de voz (caminho b), com previsões registradas
+## 7. Next test: voice conversion (path b), with registered predictions
 
-Dois experimentos com um conversor de voz pré-treinado (kNN-VC: troca as características WavLM do áudio pelas mais próximas entre as do locutor-alvo; não usa texto e não é treinado aqui).
+Two experiments with a pre-trained voice converter (kNN-VC: replaces the WavLM features of the audio with the closest ones among those of the target speaker; it does not use text and is not trained here).
 
-**7.1 Cascata: ler na voz padrão, depois converter** (`scripts/coverage/vc_cascade.py`). O modelo de inglês, sem nenhum treino com outros locutores, lê as 25 frases na voz padrão; o conversor leva cada áudio para a voz da referência, descrita por R = 1, 4, 16 ou 64 frases do mesmo locutor. As referências agora incluem 4 locutores "externos" (LibriTTS test-clean), que nem os nossos modelos nem o conversor ouviram.
+**7.1 Cascade: read in the default voice, then convert** (`scripts/coverage/vc_cascade.py`). The English model, without any training on other speakers, reads the 25 sentences in the default voice; the converter takes each audio clip to the reference voice, described by R = 1, 4, 16 or 64 sentences from the same speaker. The references now include 4 "external" speakers (LibriTTS test-clean), whom neither our models nor the converter have heard.
 
-Previsões:
+Predictions:
 
-- O WER fica perto do da voz padrão (até ~8%) em todos os grupos, porque o termo de interação texto × voz some.
-- A cópia da voz não depende de a voz ser treinada, nova ou externa.
-- A cópia sobe com R (caminho c: mais referência baixa o piso). Com R ≥ 16, passa de 58% nas vozes novas, o teto que a lei dá ao modelo atual com infinitos locutores. Se com R = 64 ficar abaixo de 58%, o caminho (b) com este conversor falha.
+- The WER stays close to that of the default voice (up to ~8%) in all groups, because the text × voice interaction term vanishes.
+- Voice copying does not depend on whether the voice is trained, new or external.
+- Copying rises with R (path c: more reference lowers the floor). With R ≥ 16, it exceeds 58% on the new voices, the ceiling the law gives the current model with infinitely many speakers. If with R = 64 it stays below 58%, path (b) with this converter fails.
 
-**7.2 Vozes reais por conversão no treino** (`scripts/coverage/vc_voices.py`, variante `-vcaug`). As 2.000 frases da voz padrão ganham uma cópia convertida para 200 locutores reais do LibriTTS (10 frases por voz; locutores fora de todos os treinos e de todas as referências; só o áudio deles é usado). É o teste do que a seção 6 concluiu: se o termo A/N conta variedade real de vozes, estas cópias devem contar, ao contrário das de velocidade alterada.
+**7.2 Real voices via conversion in training** (`scripts/coverage/vc_voices.py`, variant `-vcaug`). The 2,000 sentences of the default voice get a copy converted to 200 real LibriTTS speakers (10 sentences per voice; speakers outside all training runs and all references; only their audio is used). This is the test of what section 6 concluded: if the term A/N counts real variety of voices, these copies should count, unlike the speed-altered ones.
 
-| Treino | Normal (2 sementes) | Se as vozes convertidas não contarem | Se contarem (N ≈ 208) |
+| Training run | Normal (2 seeds) | If the converted voices do not count | If they count (N ≈ 208) |
 |---|---|---|---|
 | 8 × 8 | 26% / 39% | ~31% | ~55% |
 | 8 × 128 | 51% / 37% | ~44% | ~57% |
 
-O critério é o mesmo: só mais de ~10 pontos acima da média normal conta como efeito.
+The criterion is the same: only more than ~10 points above the normal mean counts as an effect.
 
-**Situação de 7.1 e 7.2:** os scripts estão no repositório, mas não foram executados. Rodar o conversor de voz de terceiros foi barrado pelo controle de permissões do ambiente em que os experimentos são lançados; depende de autorização do autor.
+**Status of 7.1 and 7.2:** the scripts are in the repository but have not been run. Running the third-party voice converter was blocked by the permission controls of the environment in which the experiments are launched; it depends on the author's authorization.
 
-## 8. Dois testes só com o nosso modelo, com previsões registradas
+## 8. Two tests with our model only, with registered predictions
 
-**8.1 A previsão arriscada: 128 locutores.** Treinos `n128_k8_s1` e `n128_k32_s1` (os 32 locutores da grade mais 96 do mesmo corpus; mesmas vozes novas, mesmos passos). A lei ajustada na seção 3 prevê, para as vozes novas copiadas, 56% (K = 8) e 57% (K = 32): quase nada acima dos 32 locutores (medido: 51% / 47% com K = 8; 61% / 57% com K = 128). Para as treinadas, 52% (K = 8) e 82% (K = 32). Se a queda real for mais lenta que 1/N, as vozes novas passam de 67% (previsão + 10 pontos) e a lei está errada nesse ponto, o que seria uma boa notícia: mais locutores ainda renderiam.
+**8.1 The risky prediction: 128 speakers.** Training runs `n128_k8_s1` and `n128_k32_s1` (the 32 speakers of the grid plus 96 from the same corpus; same new voices, same steps). The law fitted in section 3 predicts, for new voices copied, 56% (K = 8) and 57% (K = 32): almost nothing above the 32 speakers (measured: 51% / 47% with K = 8; 61% / 57% with K = 128). For trained voices, 52% (K = 8) and 82% (K = 32). If the real decay is slower than 1/N, the new voices exceed 67% (prediction + 10 points) and the law is wrong at this point, which would be good news: more speakers would still pay off.
 
-**8.2 Várias referências por voz (caminho c).** Na avaliação, o código de estilo passa a ser a média dos códigos de R = 4 e 16 frases do mesmo locutor (`--n-refs` em `scripts/eval/synth_check.py`), sem treinar nada. A medida de voz ganha uma segunda coluna, a semelhança com a média de 20 frases do locutor (`sim_spk`), comparável à da voz padrão. Duas hipóteses para o piso `a`:
+**8.2 Several references per voice (path c).** In evaluation, the style code becomes the mean of the codes of R = 4 and 16 sentences from the same speaker (`--n-refs` in `scripts/eval/synth_check.py`), without training anything. The voice measure gains a second column, the similarity to the mean of 20 sentences of the speaker (`sim_spk`), comparable to that of the default voice. Two hypotheses for the floor `a`:
 
-- o piso é ruído de estimar a voz a partir de uma frase só: a cópia das vozes novas sobe 10 pontos ou mais de R = 1 para R = 16;
-- o piso é do decodificador, que não sabe produzir a voz mesmo com o código certo: nada muda (ou piora, se a média puxar o código para perto da voz padrão).
+- the floor is noise from estimating the voice from a single sentence: copying of new voices rises by 10 points or more from R = 1 to R = 16;
+- the floor belongs to the decoder, which cannot produce the voice even with the right code: nothing changes (or it gets worse, if the mean pulls the code toward the default voice).
 
-As referências incluem agora 4 locutores externos (LibriTTS test-clean), além dos 8 treinados e 4 novos de sempre.
+The references now include 4 external speakers (LibriTTS test-clean), in addition to the usual 8 trained and 4 new ones.
 
-**8.3 Resultado** (passo 2.500, estilo inteiro; uma semente por treino; `sim_ref > sim_default` como nas seções anteriores):
+**8.3 Result** (step 2,500, full style; one seed per training run; `sim_ref > sim_default` as in the previous sections):
 
-| Treino | Treinadas copiadas (previsto → medido) | Novas copiadas (previsto → medido) | Externas copiadas | WER treinadas / novas / externas |
+| Training run | Trained copied (predicted → measured) | New copied (predicted → measured) | External copied | WER trained / new / external |
 |---|---|---|---|---|
 | 128 × 8 | 52% → **52%** | 56% → **55%** | 86% | 12% / 8% / 13% |
 | 128 × 32 | 82% → **76%** | 57% → **74%** | 86% | 12% / 8% / 16% |
 
-- Com K = 8 a lei acertou os dois números a menos de 1 ponto.
-- Com K = 32 as vozes novas ficaram 17 pontos acima do previsto, além do limite de 67% que eu tinha fixado. Nesse ponto a lei errou: com 128 locutores, mais frases por locutor ainda rendem, e o teto de 58% não vale. É o melhor resultado do projeto para vozes novas (74% copiadas com 8% de WER; o melhor anterior era 61% / 57% com 32 × 128).
-- As vozes externas (outro conjunto de gravações) são copiadas mais que as novas do mesmo corpus. Elas estão mais longe da voz padrão (`sim_default` menor), o que facilita o critério; não é sinal de que sejam mais fáceis de imitar.
+- With K = 8 the law got both numbers right to within 1 point.
+- With K = 32 the new voices came out 17 points above the prediction, beyond the 67% limit I had set. At this point the law was wrong: with 128 speakers, more sentences per speaker still pay off, and the 58% ceiling does not hold. It is the best result of the project for new voices (74% copied with 8% WER; the previous best was 61% / 57% with 32 × 128).
+- The external voices (another set of recordings) are copied more than the new ones from the same corpus. They are farther from the default voice (lower `sim_default`), which makes the criterion easier to meet; it is not a sign that they are easier to imitate.
 
-Refazendo o ajuste com os 14 treinos, a lei a + A/N + B/(NK) dá a = 0,39 e RMSE 0,063 (antes 0,050), e continua prevendo 60% para 128 × 32. Leis com raiz quadrada, como a + A/√N + C/√K, ajustam igualmente bem os 12 treinos antigos (RMSE 0,052) e, ajustadas só neles, previam 58% e 65% para os dois treinos novos; nelas o piso `a` cai para 0,16. Conclusão honesta: **os dados não identificam o piso nem a forma da queda**. O que se mantém é a estrutura em dois níveis (N para vozes novas, K para treinadas, e K ajudando também as novas quando N é grande). A frase "mais locutores rendem cada vez menos" da seção 4 fica em suspenso até a réplica (seção 8.5).
+Redoing the fit with the 14 training runs, the law a + A/N + B/(NK) gives a = 0.39 and RMSE 0.063 (previously 0.050), and still predicts 60% for 128 × 32. Square-root laws, such as a + A/√N + C/√K, fit the 12 old training runs equally well (RMSE 0.052) and, fitted on those alone, predicted 58% and 65% for the two new training runs; in them the floor `a` drops to 0.16. Honest conclusion: **the data identify neither the floor nor the shape of the decay**. What holds is the two-level structure (N for new voices, K for trained ones, and K also helping the new ones when N is large). The statement "more speakers yield less and less" from section 4 is on hold until the replicate (section 8.5).
 
-**8.4 Resultado das várias referências.** Vozes copiadas pela medida por locutor (`sim_spk > sim_default`), que é a adequada quando o código vem de várias frases:
+**8.4 Result of the several references.** Voices copied by the per-speaker measure (`sim_spk > sim_default`), which is the appropriate one when the code comes from several sentences:
 
-| Treino | Grupo | R = 1 | R = 4 | R = 16 |
+| Training run | Group | R = 1 | R = 4 | R = 16 |
 |---|---|---|---|---|
-| 128 × 8 | treinadas | 66% | 66% | 66% |
-| 128 × 8 | novas | 47% | 67% | 67% |
-| 128 × 8 | externas | 77% | 83% | 90% |
-| 128 × 32 | treinadas | 84% | 71% | 75% |
-| 128 × 32 | novas | 74% | 78% | 72% |
-| 128 × 32 | externas | 95% | 94% | 99% |
+| 128 × 8 | trained | 66% | 66% | 66% |
+| 128 × 8 | new | 47% | 67% | 67% |
+| 128 × 8 | external | 77% | 83% | 90% |
+| 128 × 32 | trained | 84% | 71% | 75% |
+| 128 × 32 | new | 74% | 78% | 72% |
+| 128 × 32 | external | 95% | 94% | 99% |
 
-Nenhuma das duas hipóteses se confirma por inteiro. Com K = 8 as vozes novas sobem 20 pontos já com 4 referências; com K = 32, onde a cópia já era alta, nada muda nas novas e as treinadas caem. A semelhança média com o locutor sobe em todos os grupos (por exemplo 0,713 → 0,743 nas novas com K = 32), mas a semelhança com a voz padrão sobe junto, porque a média dos códigos fica mais perto do centro. O WER das vozes externas cai (16% → 9% com K = 32; 13% → 10% com K = 8) e o das outras fica igual. Pela medida por frase (`sim_ref`), a cópia cai com R, como esperado: o código deixa de ser o daquela frase. Leitura: a média de códigos ajuda quando o modelo copia mal e deixa a fala mais estável, mas não é um ganho geral; um ganho consistente pediria treinar com o código médio do locutor, e não só usá-lo no teste.
+Neither of the two hypotheses is fully confirmed. With K = 8 the new voices rise by 20 points already with 4 references; with K = 32, where copying was already high, nothing changes for the new ones and the trained ones drop. The mean similarity to the speaker rises in all groups (for example 0.713 → 0.743 for the new ones with K = 32), but the similarity to the default voice rises with it, because the mean of the codes lies closer to the center. The WER of the external voices drops (16% → 9% with K = 32; 13% → 10% with K = 8) and that of the others stays the same. By the per-sentence measure (`sim_ref`), copying drops with R, as expected: the code is no longer that of that sentence. Reading: averaging codes helps when the model copies poorly and makes speech more stable, but it is not a general gain; a consistent gain would require training with the speaker's mean code, not just using it at test time.
 
-**8.5 Réplica e 200 locutores: previsões.** `n128_k32_s2` (mesma configuração, outra semente) e `n200_k32_s1` (200 locutores). Se os 74% forem reais, a réplica fica em 64% ou mais; se forem sorte da semente, perto de 60%. Para 200 × 32, a lei em 1/N reajustada prevê 60% e a lei com raízes prevê 68%.
+**8.5 Replicate and 200 speakers: predictions.** `n128_k32_s2` (same configuration, another seed) and `n200_k32_s1` (200 speakers). If the 74% is real, the replicate lands at 64% or more; if it is seed luck, near 60%. For 200 × 32, the refitted 1/N law predicts 60% and the square-root law predicts 68%.
 
-**8.6 Resultado da réplica e dos 200 locutores.** Passo 2.500, estilo a 100%:
+**8.6 Result of the replicate and the 200 speakers.** Step 2,500, style at 100%:
 
-| Treino | Treinadas copiadas | Novas copiadas | Externas copiadas | WER treinadas / novas / externas |
+| Training run | Trained copied | New copied | External copied | WER trained / new / external |
 |---|---|---|---|---|
-| 128 × 32, semente 1 | 76% | 74% | 86% | 12% / 8% / 16% |
-| 128 × 32, semente 2 | 66% | 56% | 86% | 13% / 8% / 11% |
-| 200 × 32, semente 1 | 66% | 64% | 91% | 12% / 7% / 11% |
+| 128 × 32, seed 1 | 76% | 74% | 86% | 12% / 8% / 16% |
+| 128 × 32, seed 2 | 66% | 56% | 86% | 13% / 8% / 11% |
+| 200 × 32, seed 1 | 66% | 64% | 91% | 12% / 7% / 11% |
 
-- **Os 74% eram em boa parte sorte da semente.** A réplica deu 56%, abaixo do limiar de 64% registrado; a média das duas sementes é 65%. A diferença de 18 pontos entre sementes é a maior do projeto (antes, 14).
-- **200 locutores não passam de 128.** 64%, entre as duas previsões (60% e 68%) e igual à média de 128 × 32. Nenhuma das duas leis é rejeitada.
-- Reajustadas nos 16 treinos, as duas leis ficam equivalentes: a + A/N + B/(NK) com a = 0,39 (RMSE 0,060) e a + A/√N + C/√K com a = 0,19 (RMSE 0,056). Para 128 × 32 e 200 × 32 elas preveem 60% e 65–66%; só divergem de fato para N na casa dos milhares (61% contra 70% com 1.000 locutores).
-- **O que limita a conclusão agora é a medida, não o treino.** Com 4 vozes novas × 25 frases, o ruído entre sementes (até 18 pontos) é maior que a diferença entre as leis (5 pontos). Para separar as leis é preciso avaliar cada treino em dezenas de vozes novas (o LibriTTS tem locutores de sobra fora do treino), o que custa só avaliação.
-- A frase "mais locutores rendem cada vez menos" da seção 4 volta a valer como descrição: de 32 para 128 locutores há ganho com K = 32 (52% → 65%), de 128 para 200 não há ganho mensurável.
+- **The 74% was largely seed luck.** The replicate gave 56%, below the registered threshold of 64%; the mean of the two seeds is 65%. The 18-point difference between seeds is the largest in the project (previously, 14).
+- **200 speakers do not beat 128.** 64%, between the two predictions (60% and 68%) and equal to the mean of 128 × 32. Neither of the two laws is rejected.
+- Refitted on the 16 training runs, the two laws become equivalent: a + A/N + B/(NK) with a = 0.39 (RMSE 0.060) and a + A/√N + C/√K with a = 0.19 (RMSE 0.056). For 128 × 32 and 200 × 32 they predict 60% and 65–66%; they only truly diverge for N in the thousands (61% against 70% with 1,000 speakers).
+- **What limits the conclusion now is the measurement, not the training.** With 4 new voices × 25 sentences, the noise between seeds (up to 18 points) is larger than the difference between the laws (5 points). To separate the laws, each training run must be evaluated on dozens of new voices (LibriTTS has plenty of speakers outside training), which costs only evaluation.
+- The statement "more speakers yield less and less" from section 4 holds again as a description: from 32 to 128 speakers there is a gain with K = 32 (52% → 65%), from 128 to 200 there is no measurable gain.
 
-Várias referências (R = 4), pela medida por locutor, nos três treinos novos e nos dois da seção 8.4:
+Several references (R = 4), by the per-speaker measure, in the three new training runs and the two from section 8.4:
 
-| Treino | Treinadas R = 1 → 4 | Novas R = 1 → 4 | Externas R = 1 → 4 |
+| Training run | Trained R = 1 → 4 | New R = 1 → 4 | External R = 1 → 4 |
 |---|---|---|---|
 | 128 × 8 | 66% → 66% | 47% → 67% | 77% → 83% |
-| 128 × 32, semente 1 | 84% → 71% | 74% → 78% | 95% → 94% |
-| 128 × 32, semente 2 | 73% → 68% | 59% → 69% | 74% → 97% |
+| 128 × 32, seed 1 | 84% → 71% | 74% → 78% | 95% → 94% |
+| 128 × 32, seed 2 | 73% → 68% | 59% → 69% | 74% → 97% |
 | 200 × 32 | 77% → 68% | 57% → 75% | 76% → 90% |
 
-Com os treinos novos o quadro fica mais claro que na seção 8.4: a média de 4 referências **sobe a cópia das vozes novas nos quatro treinos** (+4 a +20 pontos, chegando a 67–78%) e das externas em três de quatro, e **baixa a das treinadas** em três de quatro. É a previsão da decomposição da seção 2: a média remove a parte do código que é da frase e não do locutor, o que ajuda onde o modelo não decorou a voz e atrapalha onde decorou. Como solução prática, é a única das testadas que melhora vozes novas sem treinar nada.
+With the new training runs the picture becomes clearer than in section 8.4: the mean of 4 references **raises the copying of new voices in all four training runs** (+4 to +20 points, reaching 67–78%) and of external voices in three out of four, and **lowers that of trained voices** in three out of four. This is the prediction of the decomposition in section 2: the mean removes the part of the code that belongs to the sentence and not to the speaker, which helps where the model has not memorized the voice and hurts where it has. As a practical solution, it is the only one of those tested that improves new voices without training anything.
 
-**8.7 Avaliação larga: previsões.** Três treinos com K = 32 (N = 8, 32 e 128; sufixo `-wide`) avaliados em todas as vozes do LibriTTS test-clean com frases suficientes (até 39 locutores, 25 frases cada, cerca de 10 vezes mais vozes novas que antes), com R = 1 e R = 4. As vozes externas são copiadas com mais facilidade que as 4 "novas" da grade (86–91% contra 56–74%), então a previsão é sobre a forma, não sobre o nível. Registrado antes de rodar:
+**8.7 Wide evaluation: predictions.** Three training runs with K = 32 (N = 8, 32 and 128; suffix `-wide`) evaluated on all LibriTTS test-clean voices with enough sentences (up to 39 speakers, 25 sentences each, about 10 times more new voices than before), with R = 1 and R = 4. External voices are copied more easily than the 4 "new" ones of the grid (86–91% against 56–74%), so the prediction is about the shape, not the level. Registered before running:
 
-- Pela lei em 1/N, a parcela não copiada cai 13 pontos de N = 8 para 32 e 3 pontos de 32 para 128 (razão 0,25). Pela lei com raízes, cai 18 e 9 pontos (razão 0,5). Se o ganho de 32 para 128 ficar abaixo de um terço do ganho de 8 para 32, a lei em 1/N fica de pé; se passar de 40%, a lei com raízes.
-- Com R = 4, a cópia por locutor sobe nas vozes externas nos três treinos.
+- By the 1/N law, the non-copied fraction drops by 13 points from N = 8 to 32 and by 3 points from 32 to 128 (ratio 0.25). By the square-root law, it drops by 18 and 9 points (ratio 0.5). If the gain from 32 to 128 is below one third of the gain from 8 to 32, the 1/N law stands; if it exceeds 40%, the square-root law does.
+- With R = 4, per-speaker copying rises on the external voices in all three training runs.
 
-**8.8 Resultado da avaliação larga.** Passo 2.500, estilo a 100%, 38 locutores do LibriTTS test-clean × 25 frases (950 amostras por treino), nenhum deles ouvido por nenhum modelo:
+**8.8 Result of the wide evaluation.** Step 2,500, style at 100%, 38 LibriTTS test-clean speakers × 25 sentences (950 samples per training run), none of them heard by any model:
 
-| Treino | Externas copiadas (IC 95%) | WER externas | Por locutor, R = 1 → 4 | 4 vozes novas da grade |
+| Training run | External copied (95% CI) | WER external | Per speaker, R = 1 → 4 | 4 new voices of the grid |
 |---|---|---|---|---|
 | 8 × 32 | 57% (43–70) | 13% | 66% → 64% | 36% |
 | 32 × 32 | 70% (58–81) | 12% | 81% → 79% | 48% |
 | 128 × 32 | 79% (68–89) | 12% | 88% → 84% | 75% |
 
-Os intervalos vêm de reamostrar os 38 locutores (10.000 vezes); as diferenças entre treinos são pareadas nos mesmos locutores.
+The intervals come from resampling the 38 speakers (10,000 times); the differences between training runs are paired on the same speakers.
 
-- **O ganho de 32 para 128 locutores é real**: 9 pontos (IC 95% de 1,5 a 17), contra 13 pontos de 8 para 32 (4 a 23). A razão entre os dois ganhos é 0,7; em 80% das reamostragens ela passa de 0,4 (critério da lei com raízes) e em 14% fica abaixo de 1/3 (critério da lei em 1/N). ~~A lei com raízes sai favorecida~~ (revisto na seção 8.10: as leis não se distinguem). Isso reverte a leitura das seções 4 e 8.6 de que mais locutores rendem cada vez menos; aquela leitura vinha do ruído de avaliar em 4 vozes.
-- O WER das vozes externas não muda com N (12–13%): mais locutores melhoram a cópia sem custo de inteligibilidade.
-- **A previsão sobre várias referências falhou.** Nas 38 vozes externas a média de 4 referências não sobe a cópia por locutor em nenhum dos três treinos (cai 2 a 4 pontos). O ganho visto nas seções 8.4 e 8.6 era das 4 vozes novas da grade (aqui de novo 34% → 62% com N = 32) e não se generaliza; o que a média faz de consistente é baixar o WER (13% → 12%, 12% → 10%, 12% → 9%). A "solução sem treino" da seção 8.6 fica, portanto, rebaixada a um estabilizador da fala.
-- As 4 vozes novas da grade são mais difíceis que a média (36–75% contra 57–79%) e, sozinhas, dão a ordem certa mas valores instáveis. O treino 128 × 32 com a semente 1 repetiu nelas o valor da primeira vez (75% contra 74%): a diferença para a semente 2 (56%) é da semente, não do acaso da avaliação.
-- Por locutor externo, o número de vozes copiadas em mais da metade das frases vai de 21 a 27 e 30 (de 38). Em todos os treinos há locutores com 0% e com 100%: a cópia é quase tudo-ou-nada por voz.
+- **The gain from 32 to 128 speakers is real**: 9 points (95% CI from 1.5 to 17), against 13 points from 8 to 32 (4 to 23). The ratio between the two gains is 0.7; in 80% of the resamples it exceeds 0.4 (criterion of the square-root law) and in 14% it falls below 1/3 (criterion of the 1/N law). ~~The square-root law comes out favored~~ (revised in section 8.10: the laws cannot be told apart). This reverses the reading of sections 4 and 8.6 that more speakers yield less and less; that reading came from the noise of evaluating on 4 voices.
+- The WER of the external voices does not change with N (12–13%): more speakers improve copying at no cost in intelligibility.
+- **The prediction about several references failed.** On the 38 external voices the mean of 4 references does not raise per-speaker copying in any of the three training runs (it drops 2 to 4 points). The gain seen in sections 8.4 and 8.6 came from the 4 new voices of the grid (here again 34% → 62% with N = 32) and does not generalize; what averaging consistently does is lower the WER (13% → 12%, 12% → 10%, 12% → 9%). The "training-free solution" of section 8.6 is therefore downgraded to a speech stabilizer.
+- The 4 new voices of the grid are harder than average (36–75% against 57–79%) and, on their own, give the right order but unstable values. The 128 × 32 training run with seed 1 repeated on them the value from the first time (75% against 74%): the difference from seed 2 (56%) comes from the seed, not from evaluation chance.
+- Per external speaker, the number of voices copied in more than half of the sentences goes from 21 to 27 and 30 (out of 38). In every training run there are speakers at 0% and at 100%: copying is almost all-or-nothing per voice.
 
-Uma falha de execução: o primeiro treino de 8 locutores foi avaliado sem as vozes externas (download falhou) e reavaliado depois a partir do mesmo checkpoint; os números acima são da reavaliação.
+One execution failure: the first 8-speaker training run was evaluated without the external voices (the download failed) and re-evaluated later from the same checkpoint; the numbers above are from the re-evaluation.
 
-**8.9 Quais vozes falham, e por quê** (`scripts/coverage/voice_hardness.py`, sem treino novo; correlações de postos sobre os 38 locutores externos):
+**8.9 Which voices fail, and why** (`scripts/coverage/voice_hardness.py`, no new training; rank correlations over the 38 external speakers):
 
-- **A dificuldade é da voz, não do acaso:** a taxa de cópia por locutor se correlaciona 0,75 entre N = 8 e 32, 0,74 entre 32 e 128 e 0,59 entre 8 e 128.
-- **Vozes agudas falham mais:** correlação de −0,53, −0,52 e −0,37 entre a cópia e o F0 da referência. A voz padrão (LJSpeech) é feminina; vozes perto dela são mais difíceis de "vencer" pela medida `sim_ref > sim_default`. A cópia sobe com a distância (no latente) da referência à voz padrão: 0,47, 0,58 e 0,53. Parte do "não copiado" é, portanto, a voz puxada para a voz padrão, e parte pode ser artefato da medida; separar as duas pede a margem contínua ou um teste de escuta.
-- **A distância à voz treinada mais próxima prevê a falha com poucos locutores e deixa de prever com muitos:** −0,33 (N = 8), −0,40 (N = 32), +0,13 (N = 128). É o que a leitura de "cobertura" prevê: com poucos locutores, o decodificador só reproduz vozes perto das que ouviu; com 128, quase toda voz tem uma vizinha, e o que sobra de falha é a atração pela voz padrão.
+- **The difficulty belongs to the voice, not to chance:** the per-speaker copy rate correlates 0.75 between N = 8 and 32, 0.74 between 32 and 128, and 0.59 between 8 and 128.
+- **High-pitched voices fail more:** correlation of −0.53, −0.52 and −0.37 between copying and the F0 of the reference. The default voice (LJSpeech) is female; voices close to it are harder to "beat" under the measure `sim_ref > sim_default`. Copying rises with the distance (in the latent) from the reference to the default voice: 0.47, 0.58 and 0.53. Part of the "not copied" is therefore the voice being pulled toward the default voice, and part may be an artifact of the measure; separating the two requires the continuous margin or a listening test.
+- **The distance to the nearest trained voice predicts failure with few speakers and stops predicting it with many:** −0.33 (N = 8), −0.40 (N = 32), +0.13 (N = 128). This is what the "coverage" reading predicts: with few speakers, the decoder only reproduces voices close to those it has heard; with 128, almost every voice has a neighbor, and the failure that remains is the attraction toward the default voice.
 
-Leitura conjunta com as seções 8.4–8.8: o gargalo não é o codificador descrever a voz nova (o vetor ECAPA, treinado em milhares de vozes, não ajuda; a média de referências não ajuda), e sim o decodificador conseguir **renderizá-la**. Isso é uma hipótese sobre a arquitetura, testável.
+Joint reading with sections 8.4–8.8: the bottleneck is not the encoder describing the new voice (the ECAPA vector, trained on thousands of voices, does not help; averaging references does not help), but the decoder being able to **render** it. This is a hypothesis about the architecture, and it is testable.
 
-**8.10 Revisão crítica, sem treino novo** (relatórios completos em `reports/teoria/02_derivacao.md`, `03_informacao.md` e `04_dados.md`; scripts em `reports/teoria/analises/`). Correções ao que está acima:
+**8.10 Critical review, no new training** (full reports in `reports/theory/02_derivation.md`, `03_information.md` and `04_data.md`; scripts in `reports/theory/analyses/`). Corrections to what is above:
 
-- **O expoente 0,26 não tem apoio estatístico.** É o que dois parâmetros fazem passar por três pontos de uma semente. Simulando o desenho com a variância medida, um expoente verdadeiro de 0,26 aparece estimado entre 0,06 e 0,53, e a lei certa é escolhida em 16–62% dos casos. O "80% a favor da lei com raízes" (8.8) e as extrapolações para 247 e 1.000 locutores ficam retirados. Na grade de 4 vozes, a lei com raízes só vence por causa dos treinos com N = 2.
-- **A medida distorce a dificuldade das vozes.** Com vetores normalizados, a margem é exatamente m = (½ − ρ)·‖e_ref − e_0‖², com ρ a atração da saída para a voz padrão; vozes parecidas com a voz padrão têm margem minúscula e trocam de lado por ruído. Pitch e semelhança com a voz padrão explicam 28–59% da dificuldade das vozes na medida binária e 2–9% na semelhança direta com a referência. Sem a voz padrão na medida, o expoente aparente sobe para 0,41–0,55 (mesma ressalva de poucos pontos).
-- **Bits de voz não crescem como log N** (seção 8.8 e tabela da proposta): a estimativa gaussiana fica perto de 17 bits na média do latente, estável de N = 32 a 200; o viés é pequeno, mas ela mede um vetor de voz contínuo. A dimensão intrínseca das médias por locutor é 7–10, o que descarta "falha ∝ distância" (pediria d ≈ 4) e é compatível com "falha ∝ distância²" (d ≈ 7,7), sem ser teste.
-- **Mantém-se:** vozes treinadas seguem só K (colapso K^0,46, efeito de N nulo ± 0,07); cópia quase tudo-ou-nada por voz (ICC 0,83–0,94); a variação vem da voz de referência, não da frase; média de 4 referências não ajuda nas 38 vozes (−2,5 pontos, IC [−6,4; +0,8]); o ganho de 32 para 128 locutores é real.
-- **Modelo de cobertura + atração pela voz padrão:** copiada ⇔ K·Σ_i k(v, v_i) > M·k(v, v_0), com M = 2.000 frases da voz padrão e espectro de vozes λ_j ∝ 1/j (o latente mede 1,05–1,1). Reproduz curva, sinais das correlações e grade (r = 0,97), mas com 5 parâmetros escolhidos em 3 pontos; e prevê que os pseudo-locutores (seção 6) deveriam ter contado, o que não aconteceu.
+- **The exponent 0.26 has no statistical support.** It is what two parameters do when passed through three single-seed points. Simulating the design with the measured variance, a true exponent of 0.26 is estimated anywhere between 0.06 and 0.53, and the right law is chosen in 16–62% of cases. The "80% in favor of the square-root law" (8.8) and the extrapolations to 247 and 1,000 speakers are withdrawn. On the 4-voice grid, the square-root law wins only because of the training runs with N = 2.
+- **The measure distorts the difficulty of the voices.** With normalized vectors, the margin is exactly m = (½ − ρ)·‖e_ref − e_0‖², with ρ the attraction of the output toward the default voice; voices similar to the default voice have a tiny margin and switch sides due to noise. Pitch and similarity to the default voice explain 28–59% of the voice difficulty in the binary measure and 2–9% in the direct similarity to the reference. Without the default voice in the measure, the apparent exponent rises to 0.41–0.55 (same caveat of few points).
+- **Voice bits do not grow as log N** (section 8.8 and the proposal's table): the Gaussian estimate stays near 17 bits on the latent mean, stable from N = 32 to 200; the bias is small, but it measures a continuous voice vector. The intrinsic dimension of the per-speaker means is 7–10, which rules out "failure ∝ distance" (would require d ≈ 4) and is compatible with "failure ∝ distance²" (d ≈ 7.7), without being a test.
+- **What holds:** trained voices follow only K (collapse K^0.46, N effect null ± 0.07); copying is almost all-or-nothing per voice (ICC 0.83–0.94); the variation comes from the reference voice, not from the sentence; the mean of 4 references does not help on the 38 voices (−2.5 points, CI [−6.4, +0.8]); the gain from 32 to 128 speakers is real.
+- **Coverage model + attraction toward the default voice:** copied ⇔ K·Σ_i k(v, v_i) > M·k(v, v_0), with M = 2,000 sentences of the default voice and voice spectrum λ_j ∝ 1/j (the latent measures 1.05–1.1). It reproduces the curve, the signs of the correlations and the grid (r = 0.97), but with 5 parameters chosen on 3 points; and it predicts that the pseudo-speakers (section 6) should have counted, which did not happen.
 
-Previsões registradas agora, antes de qualquer treino:
+Predictions registered now, before any training:
 
-1. Metade das frases da voz padrão (M = 1.000) tem sobre as vozes novas o mesmo efeito que dobrar K.
-2. Latente de 8 dimensões não muda a cópia; com 2, cai. A taxa pode descer a 25–30 bits por frase sem perda.
-3. N = 2.456, K = 32: cerca de 9% de vozes não copiadas sob cobertura contra 16% ou mais sob as leis com piso (exige pelo menos 200 vozes de avaliação).
-4. Duas etapas: a cópia segue N_voz desde que as unidades vazem pouca voz; vazamento de peso 0,2 impõe piso de cerca de 15%.
+1. Half of the default-voice sentences (M = 1,000) has the same effect on new voices as doubling K.
+2. An 8-dimensional latent does not change copying; with 2, it drops. The rate can go down to 25–30 bits per sentence without loss.
+3. N = 2,456, K = 32: about 9% of voices not copied under coverage, against 16% or more under the laws with a floor (requires at least 200 evaluation voices).
+4. Two stages: copying follows N_voice as long as the units leak little voice; a leak of weight 0.2 imposes a floor of about 15%.
 
-Desenho recomendado para os próximos treinos (simulação de poder): 60–100 vozes fixas × 10 frases, N ∈ {8, 32, 128, 512, 2.048}, 3–5 sementes por N, métrica contínua sem voz padrão como principal, síntese com estilo zerado por voz e ressíntese dupla de cada checkpoint.
+Recommended design for the next training runs (power simulation): 60–100 fixed voices × 10 sentences, N ∈ {8, 32, 128, 512, 2,048}, 3–5 seeds per N, a continuous metric without the default voice as the main one, synthesis with zeroed style per voice, and double resynthesis of each checkpoint.
 
-**8.11 Teoria da informação: onde os bits da voz se perdem.** Duas teorias propostas por agentes independentes (cobertura como codificação de fonte; cópia como teste de hipótese bayesiano), criticadas em três rodadas cada (relatórios v1–v3 e scripts em `reports/teoria/informacao/A` e `B`). O que sobreviveu, medido sem modelo nos áudios gerados das 38 vozes externas (C = I(voz da saída; referência), cotas pela matriz de confusão de identificação; teto log2 38 = 5,25 bits):
+**8.11 Information theory: where the voice bits are lost.** Two theories proposed by independent agents (coverage as source coding; copying as a Bayesian hypothesis test), each critiqued in three rounds (reports v1–v3 and scripts in `reports/theory/information/A` and `B`). What survived, measured without a model on the generated audio of the 38 external voices (C = I(output voice; reference), bounds from the identification confusion matrix; ceiling log2 38 = 5.25 bits):
 
-| Elo da cadeia | N = 8 | N = 128 |
+| Link in the chain | N = 8 | N = 128 |
 |---|---|---|
-| Fala real (verificador) | 4,2–4,7 | 4,2–4,7 |
-| μ (modelo gaussiano) | 5,1 | 5,2 |
-| z (modelo gaussiano) | 4,4 | 4,8 |
-| Saída, cota de Fano | 0,3 | 0,9–1,1 |
-| Saída, cota de entropia cruzada | 0,75 [0,28; 1,20] | 1,99 [1,35; 2,60] |
+| Real speech (verifier) | 4.2–4.7 | 4.2–4.7 |
+| μ (Gaussian model) | 5.1 | 5.2 |
+| z (Gaussian model) | 4.4 | 4.8 |
+| Output, Fano bound | 0.3 | 0.9–1.1 |
+| Output, cross-entropy bound | 0.75 [0.28, 1.20] | 1.99 [1.35, 2.60] |
 
-- **O gargalo é o decodificador:** perde cerca de 4 bits; codificador e latente não são o problema.
-- **O ganho com N é cobertura, não precisão:** H(Ŷ) sobe 1,44 bit [0,68; 2,32] de N = 8 para 128, H(Ŷ|S) não muda (+0,07 [−1,24; 1,54]). A teoria de cobertura chega ao mesmo por outro caminho: uma "temperatura" do decodificador de cerca de 20, comum aos três treinos (19–27; um valor comum não é rejeitado).
-- **Lei em bits:** 0,31 bit por duplicação de N [0,17; 0,47], com dois pontos. Previsões: C(512) = 2,6 [1,9; 3,5], C(2.048) = 3,2 [2,3; 4,5]; igualar a fala real exigiria cerca de 10^5 locutores (10^3,6–10^8,2). Falseia: C(2.048) < 2,25.
-- **Negativos em uma conta:** ECAPA sozinho transmite 0,00 bit; média de referências muda C entre −0,40 e +0,31 sem direção; estilo a 60% baixa C em 8 de 10 treinos; correlação de postos entre não copiadas e C em 12 treinos: −0,49.
-- **Previsão a priori confirmada:** frases de referência mais longas tornam a cópia mais tudo-ou-nada (+0,035 [0,015; 0,053], p = 0,0002).
-- **Morreram:** Bayes ótimo sem parâmetros (usa 22× mais evidência que o decodificador real); voz treinada como ponto ruidoso; "informação por voz" como preditor; expoente estável; capacidade por voz crescendo com N. A atração pela voz padrão sobrevive com massa efetiva de 2.300–5.000 frases (as 2.000 reais); o efeito de cortá-las pela metade (4–9 pontos) pede cerca de 6 treinos por condição.
-- **Consequência:** o alvo de arquitetura é aumentar H(Ŷ), o conjunto de vozes que o decodificador alcança, com mais vozes na etapa de voz (áudio sem transcrição) ou com condicionamento em todas as camadas do decodificador (hipótese, experimento E5 da proposta). Cada treino novo deve medir C, H(Ŷ) e H(Ŷ|S) em 60–100 vozes e guardar o áudio gerado.
+- **The bottleneck is the decoder:** it loses about 4 bits; the encoder and the latent are not the problem.
+- **The gain with N is coverage, not precision:** H(Ŷ) rises 1.44 bit [0.68, 2.32] from N = 8 to 128, H(Ŷ|S) does not change (+0.07 [−1.24, 1.54]). The coverage theory reaches the same conclusion by another route: a decoder "temperature" of about 20, common to the three training runs (19–27; a common value is not rejected).
+- **Law in bits:** 0.31 bit per doubling of N [0.17, 0.47], with two points. Predictions: C(512) = 2.6 [1.9, 3.5], C(2,048) = 3.2 [2.3, 4.5]; matching real speech would require about 10^5 speakers (10^3.6–10^8.2). Falsified if: C(2,048) < 2.25.
+- **Negatives in one number:** ECAPA alone transmits 0.00 bit; averaging references changes C between −0.40 and +0.31 with no direction; style at 60% lowers C in 8 of 10 training runs; rank correlation between non-copied and C across 12 training runs: −0.49.
+- **A priori prediction confirmed:** longer reference sentences make copying more all-or-nothing (+0.035 [0.015, 0.053], p = 0.0002).
+- **Died:** parameter-free optimal Bayes (uses 22× more evidence than the real decoder); trained voice as a noisy point; "information per voice" as a predictor; stable exponent; per-voice capacity growing with N. The attraction toward the default voice survives with an effective mass of 2,300–5,000 sentences (the 2,000 real ones); the effect of cutting them in half (4–9 points) requires about 6 training runs per condition.
+- **Consequence:** the architectural target is to increase H(Ŷ), the set of voices the decoder can reach, with more voices in the voice stage (untranscribed audio) or with conditioning in all decoder layers (hypothesis, experiment E5 of the proposal). Each new training run should measure C, H(Ŷ) and H(Ŷ|S) on 60–100 voices and keep the generated audio.
 
-**8.12 Experimentos prontos no código, com previsões registradas antes de rodar.** Sem GPU, foram implementados e testados em CPU (modelo pequeno: passo de treino, inferência e carga de checkpoint):
+**8.12 Experiments ready in the code, with predictions registered before running.** Without a GPU, they were implemented and tested on CPU (small model: training step, inference and checkpoint loading):
 
-- `-film` (`--style-film`): o vetor de estilo também modula, por FiLM, os estados das duas LSTMs do decodificador a cada passo. Inicializado em zero, então o modelo pré-treinado começa idêntico (conferido). **Previsão:** se o mecanismo de condicionamento é o gargalo, C (cota de entropia cruzada, 38 vozes externas) sobe pelo menos 0,5 bit em N = 8 e em N = 128, com H(Y|S) igual ou menor; se C ficar dentro do intervalo do treino normal, o gargalo não é o ponto de entrada do estilo.
-- `-z8` / `-z2` (`--z-latent-dim`): latente de 8 ou 2 dimensões, com as cabeças do VAE reinicializadas ao carregar o checkpoint de 32. **Previsão** (seção 8.10): cópia e C inalterados com 8; caem com 2.
-- `-lj1000`: metade das frases da voz padrão, com as mesmas frases de teste. **Previsão** (seção 8.11): de 4 a 9 pontos a menos de vozes não copiadas em N = 128; separar as teorias exige cerca de 6 treinos por condição.
-- Toda avaliação agora salva os vetores de locutor de todas as amostras (`embeddings.npz`) e calcula os bits de voz por grupo de referências (`scripts/coverage/voice_bits.py`: C pelas cotas de entropia cruzada e de Fano, H(Y), H(Y|S), intervalos por reamostragem das vozes). Conferido em dados sintéticos: cópia perfeita dá 5,25 de 5,25 bits; nenhuma cópia dá 0,00.
+- `-film` (`--style-film`): the style vector also modulates, via FiLM, the states of the decoder's two LSTMs at each step. Initialized at zero, so the pre-trained model starts out identical (checked). **Prediction:** if the conditioning mechanism is the bottleneck, C (cross-entropy bound, 38 external voices) rises by at least 0.5 bit at N = 8 and at N = 128, with H(Y|S) equal or lower; if C stays within the interval of the normal training run, the bottleneck is not the style's point of entry.
+- `-z8` / `-z2` (`--z-latent-dim`): latent of 8 or 2 dimensions, with the VAE heads re-initialized when loading the 32-dimensional checkpoint. **Prediction** (section 8.10): copying and C unchanged with 8; they drop with 2.
+- `-lj1000`: half of the default-voice sentences, with the same test sentences. **Prediction** (section 8.11): 4 to 9 points fewer non-copied voices at N = 128; separating the theories requires about 6 training runs per condition.
+- Every evaluation now saves the speaker vectors of all samples (`embeddings.npz`) and computes the voice bits per reference group (`scripts/coverage/voice_bits.py`: C by the cross-entropy and Fano bounds, H(Y), H(Y|S), intervals by resampling the voices). Checked on synthetic data: perfect copying gives 5.25 out of 5.25 bits; no copying gives 0.00.
 
-## 9. Limites desta tratativa
+## 9. Limits of this treatment
 
-- A lei foi ajustada depois de ver os dados; o teste honesto dela são as previsões das seções 4 e 5.
-- 10 configurações, N ≤ 200, 4 vozes novas por avaliação (ruído entre sementes de até 18 pontos); a avaliação larga da seção 8.8 tem 38 vozes, mas uma semente e só K = 32, uma medida de voz (um codificador de locutor).
-- A medida é binária por amostra (voz mais perto da referência que da voz padrão); não mede naturalidade.
-- A decomposição da seção 2 é sobre o erro esperado; não foi medida termo a termo.
+- The law was fitted after seeing the data; its honest test is the predictions of sections 4 and 5.
+- 10 configurations, N ≤ 200, 4 new voices per evaluation (noise between seeds of up to 18 points); the wide evaluation of section 8.8 has 38 voices, but one seed and only K = 32, and one voice measure (one speaker encoder).
+- The measure is binary per sample (voice closer to the reference than to the default voice); it does not measure naturalness.
+- The decomposition of section 2 is about the expected error; it was not measured term by term.

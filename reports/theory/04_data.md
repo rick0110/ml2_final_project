@@ -1,13 +1,13 @@
-# Análise estatística dos resultados salvos de cobertura (N locutores × K frases)
+# Statistical analysis of the saved coverage results (N speakers × K utterances)
 
-Só CPU, sem treino novo. Todos os números vêm dos `results.csv` salvos em `reports/coverage/results/<treino>/step_2500/strength_<s>[_r<R>]/`. Condição principal: passo 2.500, força do estilo 1,0, R = 1. "Copiado" = `sim_ref > sim_default`; margem contínua `m = sim_ref − sim_default`; margem por locutor `ms = sim_spk − sim_default`; q = 1 − fração copiada (fração **não** copiada).
+CPU only, no new training. All numbers come from the `results.csv` files saved in `reports/coverage/results/<training>/step_2500/strength_<s>[_r<R>]/`. Main condition: step 2,500, style strength 1.0, R = 1. "Copied" = `sim_ref > sim_default`; continuous margin `m = sim_ref − sim_default`; per-speaker margin `ms = sim_spk − sim_default`; q = 1 − fraction copied (fraction **not** copied).
 
-Scripts (todos em `scratchpad/teoria/`, rodados com `python3 -I script.py <results_dir> out [B]`):
+Scripts (all in [`analyses/`](analyses/), run with `python3 -I script.py <results_dir> out [B]`):
 
-| Script | Tarefa | Saídas em `out/` |
+| Script | Task | Outputs in `out/` |
 |---|---|---|
-| `dados_comum.py`, `dados_modelos.py`, `dados_leis_bin.py` | carregador; motores de ajuste | — |
-| `dados_00_check.py` | conferência (conjuntos de referência iguais entre treinos; forças disponíveis) | — |
+| `dados_comum.py`, `dados_modelos.py`, `dados_leis_bin.py` | loader; fitting engines | — |
+| `dados_00_check.py` | check (identical reference sets across training runs; available strengths) | — |
 | `dados_01_tabela.py` | 1 | `tabela_runs.csv` |
 | `dados_02_margem.py` | 2 | `02.txt`, `varcomp_por_treino.csv`, `seed_sd.json`, `precisao_por_treino.csv`, `leis_margem_unseen.csv`, `boot_dev_margem_unseen.npy` |
 | `dados_03_link.py` | 3 | `03.txt`, `link_probit.csv`, `tudo_ou_nada.csv` |
@@ -17,15 +17,15 @@ Scripts (todos em `scratchpad/teoria/`, rodados com `python3 -I script.py <resul
 | `dados_07_R.py` | 7 | `07.txt`, `efeito_R.csv` |
 | `dados_08_poder.py`, `dados_08b_poder_extra.py` | 8 | `08.txt`, `08b.txt`, `poder.csv`, `poder_extra.csv` |
 
-**Verificação do trabalho anterior (interrompido).** Os arquivos `dados_comum.py`, `dados_01_tabela.py`, `dados_02_margem.py`, `dados_modelos.py` e as saídas de `out/` foram relidos e conferidos: (i) os 33 treinos usam exatamente as mesmas 4 referências "unseen"; 30 usam as mesmas 8 "seen" (os 3 treinos N = 2 usam 8 referências de 2 locutores); as 3 avaliações `-wide` têm os mesmos 38 locutores externos × 25 frases (950 amostras); os 4 treinos plain com vozes externas (N = 128, 200) usam as mesmas 4. Isso valida empilhar treinos × locutores × frases numa ANOVA cruzada. (ii) A tabela reproduz os números de `teoria_cobertura.md` (ex.: 128 × 32 s1: 74% novas; `-wide`: 57/70/79% externas). (iii) A força 0 só existe nos treinos `-spk`/`-spkdrop` e não inclui as 38 vozes externas (relevante para a tarefa 6). Os resultados anteriores foram reaproveitados; nada foi corrigido neles, exceto o que vai indicado abaixo.
+**Verification of the previous (interrupted) work.** The files `dados_comum.py`, `dados_01_tabela.py`, `dados_02_margem.py`, `dados_modelos.py` and the outputs in `out/` were re-read and checked: (i) the 33 training runs use exactly the same 4 "unseen" references; 30 use the same 8 "seen" ones (the 3 N = 2 training runs use 8 references from 2 speakers); the 3 `-wide` evaluations have the same 38 external speakers × 25 utterances (950 samples); the 4 plain training runs with external voices (N = 128, 200) use the same 4. This validates stacking training runs × speakers × utterances in a crossed ANOVA. (ii) The table reproduces the numbers of [`coverage_theory.md`](coverage_theory.md) (e.g., 128 × 32 s1: 74% unseen; `-wide`: 57/70/79% external). (iii) Strength 0 exists only in the `-spk`/`-spkdrop` training runs and does not include the 38 external voices (relevant to task 6). The previous results were reused; nothing in them was corrected, except what is indicated below.
 
 ---
 
-## 1. Tabela dos treinos
+## 1. Table of training runs
 
-Grade (plain) e avaliação larga (`-wide`, mesmo checkpoint do plain de mesmo nome, re-sintetizado). Copiado = fração; WER novas/treinadas/externas; margem m média (dp entre amostras). "Ext." nos plain = 4 vozes externas; nos `-wide` = 38.
+Grid (plain) and wide evaluation (`-wide`, same checkpoint as the plain run of the same name, re-synthesized). Copied = fraction; WER unseen/trained/external; mean margin m (SD across samples). "Ext." in the plain runs = 4 external voices; in the `-wide` runs = 38.
 
-| treino | N | K | semente | copiado novas | copiado treinadas | copiado ext. | WER nov / trein / ext | m novas | m treinadas | m ext. | ms ext. |
+| training run | N | K | seed | copied unseen | copied trained | copied ext. | WER unseen / trained / ext | m unseen | m trained | m ext. | ms ext. |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | n2_k128_s1 | 2 | 128 | 1 | 0.04 | 0.69 | — | 0.079 / 0.129 / — | -0.112 (0.065) | +0.098 (0.134) | — | — |
 | n2_k128_s2 | 2 | 128 | 2 | 0.02 | 0.73 | — | 0.055 / 0.114 / — | -0.114 (0.048) | +0.091 (0.103) | — | — |
@@ -47,9 +47,9 @@ Grade (plain) e avaliação larga (`-wide`, mesmo checkpoint do plain de mesmo n
 | n128_k32_s2 | 128 | 32 | 2 | 0.56 | 0.66 | 0.86 | 0.076 / 0.128 / 0.105 | +0.016 (0.082) | +0.063 (0.100) | +0.076 (0.058) | +0.055 (0.079) |
 | n200_k32_s1 | 200 | 32 | 1 | 0.64 | 0.67 | 0.91 | 0.073 / 0.122 / 0.105 | +0.030 (0.073) | +0.073 (0.116) | +0.097 (0.071) | +0.077 (0.084) |
 
-Variantes (uma semente salvo indicação; 4 novas × 25 e 8 treinadas × 25):
+Variants (one seed unless stated; 4 unseen × 25 and 8 trained × 25):
 
-| treino | copiado novas | copiado treinadas | WER nov / trein | m novas | m treinadas |
+| training run | copied unseen | copied trained | WER unseen / trained | m unseen | m trained |
 |---|---|---|---|---|---|
 | n2_k128_s1-spk | 0.04 | 0.69 | 0.079 / 0.139 | -0.101 | +0.097 |
 | n8_k8_s1-aug | 0.28 | 0.50 | 0.139 / 0.175 | -0.042 | -0.004 |
@@ -66,353 +66,353 @@ Variantes (uma semente salvo indicação; 4 novas × 25 e 8 treinadas × 25):
 | n32_k8_s1-spkdrop | 0.60 | 0.57 | 0.147 / 0.218 | +0.029 | +0.035 |
 | n32_k128_s1-spkdrop | 0.62 | 0.83 | 0.056 / 0.119 | +0.038 | +0.142 |
 
-Tabela completa (inclui sd de `ms`, `sim_ref`, `sim_default` médios e cópia por `sim_spk`): `out/tabela_runs.csv` e `out/tabela_runs.md`. Nas variantes, todas as margens das vozes novas caem dentro da faixa das duas sementes plain da mesma configuração ± 2 DP de semente (0,015), exceto `-spkdrop` 32 × 8 (+0,029 contra +0,009/−0,006), que fica ~1,5 DP acima: nenhuma variante tem efeito demonstrável com uma semente.
+Full table (includes the SD of `ms`, mean `sim_ref` and `sim_default`, and copying by `sim_spk`): [`out/tabela_runs.csv`](analyses/out/tabela_runs.csv) and [`out/tabela_runs.md`](analyses/out/tabela_runs.md). In the variants, all the margins of the unseen voices fall within the range of the two plain seeds of the same configuration ± 2 seed SDs (0.015), except `-spkdrop` 32 × 8 (+0.029 against +0.009/−0.006), which sits ~1.5 SD above: no variant has a demonstrable effect with one seed.
 
 ---
 
-## 2. Margem contínua
+## 2. Continuous margin
 
-### 2.1 Métodos
+### 2.1 Methods
 
-- **Por treino e grupo**: ANOVA de 2 vias balanceada locutor × frase (efeitos aleatórios, estimadores de momentos), separando DP entre locutores, entre frases e residual (que inclui a interação locutor × frase).
-- **Conjunta**: ANOVA de 3 vias cruzada treino × locutor × frase (16 treinos plain × 4 novas × 25; 14 treinos × 8 treinadas sem N = 2; 3 treinos `-wide` × 38 externas × 25). O "efeito de treino" contém o efeito fixo de (N, K) e a semente; por isso a variância de semente é estimada à parte.
-- **Sementes**: 6 pares de réplicas (2×128, 8×8, 8×128, 32×8, 32×128, 128×32). Para cada par, D = (Y₁ − Y₂)/√2 por locutor × frase; E[D̄²] estima a variância de semente da média do treino (com o conjunto de avaliação fixo). Decompõe-se em efeito principal de semente e interações semente × locutor e semente × frase (ANOVA de D). IC 95% qui-quadrado com 6 g.l.
-- **Re-síntese**: os 3 pares plain/`-wide` são o mesmo checkpoint sintetizado de novo; dão a variância da síntese sozinha.
+- **Per training run and group**: balanced two-way ANOVA speaker × utterance (random effects, method-of-moments estimators), separating the SD between speakers, between utterances, and the residual (which includes the speaker × utterance interaction).
+- **Joint**: crossed three-way ANOVA training run × speaker × utterance (16 plain training runs × 4 unseen × 25; 14 training runs × 8 trained without N = 2; 3 `-wide` training runs × 38 external × 25). The "training-run effect" contains the fixed effect of (N, K) and the seed; for this reason the seed variance is estimated separately.
+- **Seeds**: 6 pairs of replicates (2×128, 8×8, 8×128, 32×8, 32×128, 128×32). For each pair, D = (Y₁ − Y₂)/√2 per speaker × utterance; E[D̄²] estimates the seed variance of the training-run mean (with the evaluation set fixed). It is decomposed into a seed main effect and seed × speaker and seed × utterance interactions (ANOVA of D). 95% chi-square CI with 6 d.f.
+- **Re-synthesis**: the 3 plain/`-wide` pairs are the same checkpoint synthesized again; they give the variance of the synthesis alone.
 
-### 2.2 Componentes de variância (DP)
+### 2.2 Variance components (SD)
 
-| Fonte | Margem m, novas (3 vias, 16 treinos) | Binário, novas | Margem m, externas (38, 3 treinos) | Binário, externas |
+| Source | Margin m, unseen (3-way, 16 training runs) | Binary, unseen | Margin m, external (38, 3 training runs) | Binary, external |
 |---|---|---|---|---|
-| locutor | 0,095 | 0,374 | 0,076 | 0,309 |
-| treino × locutor | 0,033 | 0,196 | 0,046 | 0,209 |
-| frase | 0,007 | 0,024 | 0,009 | 0,025 |
-| treino × frase | 0,008 | 0,030 | 0,006 | 0,022 |
-| locutor × frase | 0,016 | 0,077 | 0,014 | 0,055 |
-| residual | 0,028 | 0,265 | 0,031 | 0,261 |
-| treino (inclui o efeito de N, K) | 0,048 | 0,171 | 0,041 | 0,107 |
+| speaker | 0.095 | 0.374 | 0.076 | 0.309 |
+| training run × speaker | 0.033 | 0.196 | 0.046 | 0.209 |
+| utterance | 0.007 | 0.024 | 0.009 | 0.025 |
+| training run × utterance | 0.008 | 0.030 | 0.006 | 0.022 |
+| speaker × utterance | 0.016 | 0.077 | 0.014 | 0.055 |
+| residual | 0.028 | 0.265 | 0.031 | 0.261 |
+| training run (includes the effect of N, K) | 0.048 | 0.171 | 0.041 | 0.107 |
 
-A frase quase não importa (DP 0,007–0,009 na margem); **a variabilidade é de locutor** (ICC da margem dentro do treino: mediana 0,91 nas novas, 0,92 nas treinadas, 0,81–0,85 nas externas).
+The utterance barely matters (SD 0.007–0.009 on the margin); **the variability is from the speaker** (ICC of the margin within a training run: median 0.91 for unseen, 0.92 for trained, 0.81–0.85 for external).
 
-DP **entre sementes** da média de um treino (avaliação fixa), 6 pares:
+SD **between seeds** of a training-run mean (fixed evaluation), 6 pairs:
 
-| | DP total (IC 95%) | efeito principal de semente | parte vinda de interações semente × locutor/frase |
+| | Total SD (95% CI) | seed main effect | part coming from seed × speaker/utterance interactions |
 |---|---|---|---|
-| margem, novas | 0,0150 (0,0097–0,033) | 0,0127 | 0,0080 |
-| binário, novas | 0,077 (0,050–0,169) | 0,054 | 0,054 |
-| margem, treinadas | 0,0125 (0,0081–0,028) | 0,0098 | 0,0078 |
-| binário, treinadas | 0,039 (0,025–0,085) | 0,000 | 0,041 |
+| margin, unseen | 0.0150 (0.0097–0.033) | 0.0127 | 0.0080 |
+| binary, unseen | 0.077 (0.050–0.169) | 0.054 | 0.054 |
+| margin, trained | 0.0125 (0.0081–0.028) | 0.0098 | 0.0078 |
+| binary, trained | 0.039 (0.025–0.085) | 0.000 | 0.041 |
 
-Re-síntese do mesmo checkpoint (3 pares): DP da média 0,0080 (margem, novas) e 0,048 (binário, novas). Ou seja, **cerca de 40% da variância "de semente" do binário nas 4 vozes novas é só re-síntese** (amostragem do decodificador), não treino.
+Re-synthesis of the same checkpoint (3 pairs): SD of the mean 0.0080 (margin, unseen) and 0.048 (binary, unseen). That is, **about 40% of the "seed" variance of the binary measure on the 4 unseen voices is just re-synthesis** (decoder sampling), not training.
 
-Implicação central: o efeito principal de semente (0,0127 na margem ≈ 0,05 na fração) **não diminui com mais vozes de avaliação**. Com 38 vozes, a parte locutor da incerteza cai para ~0,046/√38 ≈ 0,007, e a semente passa a dominar.
+Central implication: the seed main effect (0.0127 on the margin ≈ 0.05 on the fraction) **does not shrink with more evaluation voices**. With 38 voices, the speaker part of the uncertainty drops to ~0.046/√38 ≈ 0.007, and the seed becomes dominant.
 
-### 2.3 Ganho de precisão da margem sobre o binário
+### 2.3 Precision gain of the margin over the binary measure
 
-Comparação na mesma escala (fração copiada), por três caminhos:
+Comparison on the same scale (fraction copied), by three routes:
 
-| Caminho | Razão de variâncias binário / margem | Leitura |
+| Route | Variance ratio binary / margin | Interpretation |
 |---|---|---|
-| Dentro do treino: bootstrap locutor × frase de p̂ vs Φ(m̄/s) | mediana 1,00 (novas), 1,56 (treinadas), 1,31 (externas, 38) | quase nenhum ganho com 4 vozes, porque a incerteza é de locutor e afeta as duas medidas |
-| Entre sementes (DP de semente × inclinação dp/dμ entre treinos = 3,83 novas, 2,68 treinadas) | 1,78 (novas), 1,32 (treinadas) | margem equivale a 1,3–1,8× mais treinos |
-| Re-síntese | 2,4 (novas), 7,8 (treinadas) | a margem é bem mais estável à amostragem do decodificador |
+| Within a training run: speaker × utterance bootstrap of p̂ vs Φ(m̄/s) | median 1.00 (unseen), 1.56 (trained), 1.31 (external, 38) | almost no gain with 4 voices, because the uncertainty is from the speaker and affects both measures |
+| Between seeds (seed SD × slope dp/dμ across training runs = 3.83 unseen, 2.68 trained) | 1.78 (unseen), 1.32 (trained) | the margin is equivalent to 1.3–1.8× more training runs |
+| Re-synthesis | 2.4 (unseen), 7.8 (trained) | the margin is much more stable to decoder sampling |
 
-Razão sinal/ruído (DP entre configurações / DP de semente): fração 2,38, margem 3,13 (novas). **O ganho é real, porém modesto (1,3–2×)**: a margem não resolve o problema principal, que é variância de locutor e de semente.
+Signal-to-noise ratio (SD between configurations / seed SD): fraction 2.38, margin 3.13 (unseen). **The gain is real but modest (1.3–2×)**: the margin does not solve the main problem, which is speaker and seed variance.
 
-### 2.4 Leis para a margem média (novas, 16 treinos, 10 configurações)
+### 2.4 Laws for the mean margin (unseen, 16 training runs, 10 configurations)
 
-Mínimos quadrados não ponderados por treino; CV deixando uma configuração de fora (LOCO: as duas sementes saem juntas); AICc/BIC com k+1 parâmetros (σ).
+Unweighted least squares per training run; CV leaving one configuration out (LOCO: both seeds are left out together); AICc/BIC with k+1 parameters (σ).
 
-| Lei | k | RMSE | CV-RMSE (LOCO) | ΔAICc | ΔBIC | peso AICc |
+| Law | k | RMSE | CV-RMSE (LOCO) | ΔAICc | ΔBIC | AICc weight |
 |---|---|---|---|---|---|---|
-| a + b/N | 2 | 0,0196 | 0,044 | 11,8 | 12,7 | 0,002 |
-| a + b/N + c/(NK) [L1] | 3 | 0,0146 | 0,033 | 6,0 | 6,0 | 0,033 |
-| a + b/√N | 2 | 0,0172 | 0,019 | 7,6 | 8,5 | 0,015 |
-| a + b/√N + c/√K [L2] | 3 | 0,0121 | **0,016** | 0,0 | 0,0 | 0,65 |
-| a + b ln N | 2 | 0,0252 | 0,034 | 19,9 | 20,8 | 0 |
-| a + b ln N + c ln K | 3 | 0,0240 | 0,038 | 22,0 | 22,0 | 0 |
-| a + b N^−α | 3 | 0,0170 | 0,141 | 10,8 | 10,9 | 0,003 |
-| a + b N^−α + c ln K | 4 | 0,0111 | 0,069 | 1,6 | 0,0 | 0,30 |
-| só K / constante | 2 / 1 | 0,048 / 0,049 | 0,065 / 0,055 | ≥38 | ≥39 | 0 |
+| a + b/N | 2 | 0.0196 | 0.044 | 11.8 | 12.7 | 0.002 |
+| a + b/N + c/(NK) [L1] | 3 | 0.0146 | 0.033 | 6.0 | 6.0 | 0.033 |
+| a + b/√N | 2 | 0.0172 | 0.019 | 7.6 | 8.5 | 0.015 |
+| a + b/√N + c/√K [L2] | 3 | 0.0121 | **0.016** | 0.0 | 0.0 | 0.65 |
+| a + b ln N | 2 | 0.0252 | 0.034 | 19.9 | 20.8 | 0 |
+| a + b ln N + c ln K | 3 | 0.0240 | 0.038 | 22.0 | 22.0 | 0 |
+| a + b N^−α | 3 | 0.0170 | 0.141 | 10.8 | 10.9 | 0.003 |
+| a + b N^−α + c ln K | 4 | 0.0111 | 0.069 | 1.6 | 0.0 | 0.30 |
+| K only / constant | 2 / 1 | 0.048 / 0.049 | 0.065 / 0.055 | ≥38 | ≥39 | 0 |
 
-- Piso de RMSE alcançável por treino = DP de semente = 0,015. **L2 já está no nível do ruído** (0,012 dentro, 0,016 fora da amostra); nada mais complexo se justifica.
-- Sem N = 2 (14 treinos): L2 e a + b N^−α + c ln K continuam à frente (CV 0,016 e 0,015), mas 1/N, 1/√N e ln N ficam a ≤0,01 delas.
-- Expoente α na forma a + b N^−α + c ln K: 0,64, IC bootstrap locutor × frase [0,08; 1,08]; sem N = 2 o ponto vai para 1,24. **O expoente da margem não é identificado.**
-- Bootstrap (B = 1.000) das diferenças de CV-RMSE em relação a a + b ln N + c ln K: só "só K" e "constante" são piores com certeza (P = 1,00 e 0,99). L2 é melhor em 90% das reamostras, sem significância. (Ressalva: o bootstrap reamostra os 4 locutores, o que com 4 locutores cria conjuntos degenerados; nas tarefas seguintes os 4 locutores ficam fixos.)
-- **Identificabilidade** (bootstrap paramétrico: dados = lei ajustada + N(0; 0,015²) por treino, B = 1.000): escolhendo pelo AICc, a lei certa é escolhida em 57–85% dos casos; a potência a + b N^−α é confundida com a + b/√N em 73% e a + b N^−α + c ln K com L2 em 46%. Na grade atual, formas com expoente livre são indistinguíveis de 1/√N.
-- **Treinadas** (margem): só K importa. a + c ln K (sem N = 2: peso AICc 0,75); somar ln N dá coeficiente −0,0006. Isso confirma o fato 1 da teoria com a medida contínua.
-
----
-
-## 3. Ligação probit e tudo-ou-nada por locutor
-
-### 3.1 Φ(média/dp) prevê a fração binária?
-
-Para cada treino × grupo (45 casos plain + wide):
-
-| Preditor de p | viés médio | RMSE | correlação | máx. desvio |
-|---|---|---|---|---|
-| Φ(m̄/s) global (normal única) | +0,030 | 0,050 | 0,984 | 0,103 |
-| mistura por locutor: média_s Φ(m̄_s/s_w), s_w = dp dentro do locutor | +0,003 | **0,018** | 0,996 | 0,062 |
-
-O probit global superestima a cópia, sobretudo nas treinadas (viés +0,05): a distribuição da margem é uma mistura de locutores, não uma normal. Com a mistura por locutor o ajuste fica dentro do erro amostral (|z| mediano do probit global já é 0,28 EPs bootstrap). **A fração binária é, em boa aproximação, uma função determinística das margens médias por locutor e de um DP dentro do locutor (~0,034).** Isso justifica usar a margem como medida primária e converter para "% copiado" só no final.
-
-### 3.2 Tudo-ou-nada
-
-| Grupo | locutores com cópia ≤10% ou ≥90% (observado) | esperado sob binomial homogênea | ICC latente (probit, intercepto aleatório, MV com quadratura de Gauss-Hermite) | ICC da margem |
-|---|---|---|---|---|
-| novas (4) | mediana 50–75% | ~0–3% | mediana 0,87 (0,62–1,00) | 0,91 |
-| treinadas (8) | 69–75% | ~0–30% | 0,93 | 0,92 |
-| externas (38, wide) | 66% (25, 24, 28 de 38) | 0–8% | 0,83–0,91 | 0,82–0,89 |
-
-Qui-quadrado de sobredispersão da fração por locutor: 584–687 com 37 g.l. nas externas (p ≈ 0). Histograma das 38 externas (≤10% | … | ≥90%): N = 8: 10 | 4 | 3 | 1 | 5 | 15; N = 32: 4 | 3 | 4 | 5 | 2 | 20; N = 128: 4 | 1 | 3 | 2 | 4 | 24. A dificuldade é da voz: correlação de postos da taxa por locutor entre N = 8–32, 32–128, 8–128: 0,75 / 0,74 / 0,59 (binário) e 0,78 / 0,84 / 0,72 (margem). **Consequência:** a unidade de amostragem efetiva é o locutor, não a amostra; 25 frases por voz são muito mais do que o necessário (frase tem DP 0,007), enquanto 4 vozes são muito poucas.
+- Achievable RMSE floor per training run = seed SD = 0.015. **L2 is already at the noise level** (0.012 in-sample, 0.016 out-of-sample); nothing more complex is justified.
+- Without N = 2 (14 training runs): L2 and a + b N^−α + c ln K remain ahead (CV 0.016 and 0.015), but 1/N, 1/√N and ln N come within ≤0.01 of them.
+- Exponent α in the form a + b N^−α + c ln K: 0.64, speaker × utterance bootstrap CI [0.08, 1.08]; without N = 2 the point moves to 1.24. **The exponent of the margin is not identified.**
+- Bootstrap (B = 1,000) of the CV-RMSE differences relative to a + b ln N + c ln K: only "K only" and "constant" are worse with certainty (P = 1.00 and 0.99). L2 is better in 90% of the resamples, without significance. (Caveat: the bootstrap resamples the 4 speakers, which with 4 speakers creates degenerate sets; in the following tasks the 4 speakers are kept fixed.)
+- **Identifiability** (parametric bootstrap: data = fitted law + N(0, 0.015²) per training run, B = 1,000): choosing by AICc, the correct law is chosen in 57–85% of cases; the power law a + b N^−α is confused with a + b/√N in 73% and a + b N^−α + c ln K with L2 in 46%. On the current grid, forms with a free exponent are indistinguishable from 1/√N.
+- **Trained** (margin): only K matters. a + c ln K (without N = 2: AICc weight 0.75); adding ln N gives a coefficient of −0.0006. This confirms fact 1 of the theory with the continuous measure.
 
 ---
 
-## 4. Leis L1–L4 para a fração binária e previsões
+## 3. Probit link and all-or-nothing per speaker
 
-### 4.1 Métodos
+### 3.1 Does Φ(mean/SD) predict the binary fraction?
 
-- Resposta: q por treino (fração não copiada). Leis com 3 parâmetros (4 vozes, com K) ou 2 (38 vozes, só N):
-  - L1: a + A/N + B/(NK) (coeficientes ≥ 0, NNLS); L1n: a + A/N.
+For each training run × group (45 plain + wide cases):
+
+| Predictor of p | mean bias | RMSE | correlation | max. deviation |
+|---|---|---|---|---|
+| global Φ(m̄/s) (single normal) | +0.030 | 0.050 | 0.984 | 0.103 |
+| per-speaker mixture: mean_s Φ(m̄_s/s_w), s_w = within-speaker SD | +0.003 | **0.018** | 0.996 | 0.062 |
+
+The global probit overestimates copying, especially for the trained voices (bias +0.05): the distribution of the margin is a mixture of speakers, not a normal. With the per-speaker mixture the fit is within sampling error (the median |z| of the global probit is already 0.28 bootstrap SEs). **The binary fraction is, to a good approximation, a deterministic function of the per-speaker mean margins and of a within-speaker SD (~0.034).** This justifies using the margin as the primary measure and converting to "% copied" only at the end.
+
+### 3.2 All-or-nothing
+
+| Group | speakers with copying ≤10% or ≥90% (observed) | expected under a homogeneous binomial | latent ICC (probit, random intercept, ML with Gauss-Hermite quadrature) | ICC of the margin |
+|---|---|---|---|---|
+| unseen (4) | median 50–75% | ~0–3% | median 0.87 (0.62–1.00) | 0.91 |
+| trained (8) | 69–75% | ~0–30% | 0.93 | 0.92 |
+| external (38, wide) | 66% (25, 24, 28 of 38) | 0–8% | 0.83–0.91 | 0.82–0.89 |
+
+Overdispersion chi-square of the per-speaker fraction: 584–687 with 37 d.f. for the external voices (p ≈ 0). Histogram of the 38 external voices (≤10% | … | ≥90%): N = 8: 10 | 4 | 3 | 1 | 5 | 15; N = 32: 4 | 3 | 4 | 5 | 2 | 20; N = 128: 4 | 1 | 3 | 2 | 4 | 24. The difficulty belongs to the voice: rank correlation of the per-speaker rate between N = 8–32, 32–128, 8–128: 0.75 / 0.74 / 0.59 (binary) and 0.78 / 0.84 / 0.72 (margin). **Consequence:** the effective sampling unit is the speaker, not the sample; 25 utterances per voice are far more than needed (the utterance has SD 0.007), while 4 voices are far too few.
+
+---
+
+## 4. Laws L1–L4 for the binary fraction and predictions
+
+### 4.1 Methods
+
+- Response: q per training run (fraction not copied). Laws with 3 parameters (4 voices, with K) or 2 (38 voices, N only):
+  - L1: a + A/N + B/(NK) (coefficients ≥ 0, NNLS); L1n: a + A/N.
   - L2: a + A/√N + C/√K (≥ 0); L2n: a + A/√N.
-  - L3: c N^−α K^−β (grade α ∈ [0,01; 1,5], β ∈ [−0,5; 1,5], c por MQ); L3n: c N^−α.
-  - L4: q = Φ(a + b ln N + c ln K), MQ não linear em q ("probit direto").
-  - L4m: probit **da margem**: ajusta-se a margem média μ(N, K) = a + b ln N + c ln K (ou a + b/√N + c/√K, L4m′) e converte-se q = média_s Φ(−(μ + u_s)/σ), com u_s = efeito fixo de cada locutor de avaliação e σ² = variância dentro de treino×locutor + interação treino × locutor (seção 3.1). Os nuisances u_s, σ são estimados com todos os treinos (vazamento mínimo na CV).
-- CV LOCO por configuração. AICc/BIC.
-- Bootstrap B = 500: (A) "avaliação" — reamostra frases; os 4 locutores ficam **fixos** (com 4 locutores, reamostrar locutores gera conjuntos degenerados; a métrica de 4 vozes é, por definição, daqueles 4); nas 38 externas reamostra locutores e frases, pareados entre treinos. (B) "avaliação + semente" — soma N(0; s²) por treino, s = 0,077 (DP total de semente da fração, 4 vozes) ou 0,054 (efeito principal de semente, usado para as 38 vozes, onde a semente não foi medida). (B) é conservador (a semente observada já está nos dados).
+  - L3: c N^−α K^−β (grid α ∈ [0.01, 1.5], β ∈ [−0.5, 1.5], c by LS); L3n: c N^−α.
+  - L4: q = Φ(a + b ln N + c ln K), nonlinear LS on q ("direct probit").
+  - L4m: probit **of the margin**: the mean margin μ(N, K) = a + b ln N + c ln K (or a + b/√N + c/√K, L4m′) is fitted and converted as q = mean_s Φ(−(μ + u_s)/σ), with u_s = fixed effect of each evaluation speaker and σ² = variance within training run×speaker + training run × speaker interaction (section 3.1). The nuisances u_s, σ are estimated with all training runs (minimal leakage in the CV).
+- LOCO CV by configuration. AICc/BIC.
+- Bootstrap B = 500: (A) "evaluation" — resamples utterances; the 4 speakers stay **fixed** (with 4 speakers, resampling speakers produces degenerate sets; the 4-voice metric is, by definition, about those 4); for the 38 external voices it resamples speakers and utterances, paired across training runs. (B) "evaluation + seed" — adds N(0, s²) per training run, s = 0.077 (total seed SD of the fraction, 4 voices) or 0.054 (seed main effect, used for the 38 voices, where the seed was not measured). (B) is conservative (the observed seed effect is already in the data).
 
-### 4.2 Métrica de 4 vozes novas (16 treinos plain)
+### 4.2 Metric on 4 unseen voices (16 plain training runs)
 
-| Lei | RMSE | CV-RMSE | ΔAICc | Cópia prevista 247×32 | 1000×32 | 2456×32 | 128×128 |
+| Law | RMSE | CV-RMSE | ΔAICc | Predicted copying 247×32 | 1000×32 | 2456×32 | 128×128 |
 |---|---|---|---|---|---|---|---|
-| L1 | 0,060 | 0,103 | 2,2 | 0,60 | 0,61 | 0,61 | 0,60 |
-| L2 | 0,056 | **0,075** | **0** | 0,67 | 0,70 | 0,71 | 0,68 |
-| L3 (α = 0,25, β = 0,04) | 0,078 | 0,136 | 10,5 | 0,72 | 0,80 | 0,84 | 0,69 |
-| L4 direto | 0,099 | 0,146 | 18,3 | 0,74 | 0,87 | 0,92 | 0,71 |
-| L4m (margem ln) | 0,103 | 0,147 | 19,4 | 0,75 | 0,87 | 0,93 | 0,71 |
-| L4m′ (margem √) | 0,070 | 0,079 | 7,1 | 0,68 | 0,71 | 0,72 | 0,69 |
+| L1 | 0.060 | 0.103 | 2.2 | 0.60 | 0.61 | 0.61 | 0.60 |
+| L2 | 0.056 | **0.075** | **0** | 0.67 | 0.70 | 0.71 | 0.68 |
+| L3 (α = 0.25, β = 0.04) | 0.078 | 0.136 | 10.5 | 0.72 | 0.80 | 0.84 | 0.69 |
+| L4 direct | 0.099 | 0.146 | 18.3 | 0.74 | 0.87 | 0.92 | 0.71 |
+| L4m (ln margin) | 0.103 | 0.147 | 19.4 | 0.75 | 0.87 | 0.93 | 0.71 |
+| L4m′ (√ margin) | 0.070 | 0.079 | 7.1 | 0.68 | 0.71 | 0.72 | 0.69 |
 
-Intervalos 95% (bootstrap avaliação + semente) das previsões: L1 1000×32: 0,61 [0,55; 0,66]; L2: 0,70 [0,63; 0,77]; L3: 0,80 [0,73; 0,85]; L4: 0,87 [0,78; 0,93]; 2456×32: L1 0,61 [0,55; 0,66], L2 0,71 [0,64; 0,78], L3 0,84 [0,78; 0,89], L4 0,92 [0,84; 0,96]; 128×128: 0,60–0,71 em todas as leis (L2 0,68 [0,61; 0,76]). Esses intervalos são **condicionais à lei**; a incerteza entre leis (0,61 a 0,93 em N = 2.456) é muito maior que a de cada uma.
+95% intervals (evaluation + seed bootstrap) for the predictions: L1 1000×32: 0.61 [0.55, 0.66]; L2: 0.70 [0.63, 0.77]; L3: 0.80 [0.73, 0.85]; L4: 0.87 [0.78, 0.93]; 2456×32: L1 0.61 [0.55, 0.66], L2 0.71 [0.64, 0.78], L3 0.84 [0.78, 0.89], L4 0.92 [0.84, 0.96]; 128×128: 0.60–0.71 for all laws (L2 0.68 [0.61, 0.76]). These intervals are **conditional on the law**; the uncertainty between laws (0.61 to 0.93 at N = 2,456) is much larger than that of each one.
 
-Bootstrap das diferenças de CV-RMSE em relação a L2 (avaliação + semente): L1 +0,041 [−0,02; +0,18] (P pior 0,84); L3 +0,044 [0,000; +0,076] (0,97); L4 +0,052 [+0,013; +0,079] (0,996); L4m +0,056 [+0,009; +0,11] (0,99); L4m′ +0,0005 [−0,026; +0,029]. Mas **isso é inteiramente o ponto N = 2** (q ≈ 0,97), que as leis com ln N não conseguem acompanhar. Sem N = 2 (14 treinos): CV-RMSE 0,114 (L1), 0,058 (L2), 0,066 (L3), 0,064 (L4), 0,074 (L4m), 0,059 (L4m′); ΔAICc ≤ 1,3 entre L2, L3, L4, L4m, L4m′; diferenças de CV em relação a L2 com IC contendo 0 para todas menos L1 (+0,053 [+0,015; +0,098] só no bootstrap de avaliação; com semente, [−0,025; +0,17]). L3 sem N = 2 dá α = 0,17, β = 0,08.
+Bootstrap of the CV-RMSE differences relative to L2 (evaluation + seed): L1 +0.041 [−0.02, +0.18] (P worse 0.84); L3 +0.044 [0.000, +0.076] (0.97); L4 +0.052 [+0.013, +0.079] (0.996); L4m +0.056 [+0.009, +0.11] (0.99); L4m′ +0.0005 [−0.026, +0.029]. But **this is entirely the N = 2 point** (q ≈ 0.97), which the laws with ln N cannot follow. Without N = 2 (14 training runs): CV-RMSE 0.114 (L1), 0.058 (L2), 0.066 (L3), 0.064 (L4), 0.074 (L4m), 0.059 (L4m′); ΔAICc ≤ 1.3 among L2, L3, L4, L4m, L4m′; CV differences relative to L2 with CIs containing 0 for all except L1 (+0.053 [+0.015, +0.098] in the evaluation bootstrap only; with seed, [−0.025, +0.17]). L3 without N = 2 gives α = 0.17, β = 0.08.
 
-**Identificabilidade** (dados gerados de cada lei ajustada + N(0; 0,077²) por treino, B = 200): escolhendo por AICc, a lei certa é recuperada em 62–80% para L1–L4, mas L4m (lei na margem) é tomada por L4 em 73% (são quase a mesma função) e L4m′ por L2 em 47%. Por CV LOCO a recuperação cai para 28–59%. **Os dados da grade não distinguem as leis fora de N = 2; distinguem só "com N = 2 dentro, formas com piso/raiz se ajustam melhor que log-probit".**
+**Identifiability** (data generated from each fitted law + N(0, 0.077²) per training run, B = 200): choosing by AICc, the correct law is recovered in 62–80% of cases for L1–L4, but L4m (law on the margin) is taken for L4 in 73% (they are almost the same function) and L4m′ for L2 in 47%. By LOCO CV recovery drops to 28–59%. **The grid data do not distinguish the laws outside N = 2; they only distinguish "with N = 2 included, forms with a floor/square root fit better than log-probit".**
 
-### 4.3 Métrica de 38 vozes externas (3 treinos `-wide`, K = 32, **uma semente**)
+### 4.3 Metric on 38 external voices (3 `-wide` training runs, K = 32, **one seed**)
 
-Atenção: são 3 pontos e 2 parâmetros por lei (1 g.l. de resíduo); não existe K para variar; a semente não foi replicada nessa avaliação. AICc com 3 pontos não é informativo (L3n passa exatamente pelos 3 pontos: q = 0,744 N^−0,26, porque as razões 0,302/0,434 = 0,696 e 0,211/0,302 = 0,698 são praticamente iguais).
+Caution: these are 3 points and 2 parameters per law (1 residual d.f.); there is no K to vary; the seed was not replicated in this evaluation. AICc with 3 points is not informative (L3n passes exactly through the 3 points: q = 0.744 N^−0.26, because the ratios 0.302/0.434 = 0.696 and 0.211/0.302 = 0.698 are practically equal).
 
-| Lei | RMSE | CV (deixa 1 de 3) | 247 | 1000 | 2456 | IC 95% em 2456 (avaliação) | IC 95% em 2456 (avaliação + semente 0,054) |
+| Law | RMSE | CV (leave 1 of 3 out) | 247 | 1000 | 2456 | 95% CI at 2456 (evaluation) | 95% CI at 2456 (evaluation + seed 0.054) |
 |---|---|---|---|---|---|---|---|
-| L1n a + A/N | 0,021 | 0,142 | 0,77 | 0,78 | 0,78 | [0,66; 0,88] | [0,62; 0,92] |
-| L2n a + A/√N | 0,008 | 0,035 | 0,80 | 0,83 | 0,84 | [0,71; 0,95] | [0,66; 0,98] |
-| L3n c N^−α (α = 0,26) | 0,000 | 0,000 | 0,82 | 0,88 | 0,90 | [0,79; 0,97] | [0,72; 0,98] |
-| L4n Φ(a + b ln N) | 0,005 | 0,019 | 0,84 | 0,90 | 0,93 | [0,82; 0,99] | [0,71; 1,00] |
-| L4mn (margem ln N) | 0,043 | 0,040 | 0,84 | 0,92 | 0,95 | [0,89; 0,99] | [0,85; 1,00] |
-| L4mn′ (margem 1/√N) | 0,046 | 0,064 | 0,79 | 0,82 | 0,83 | [0,74; 0,91] | [0,72; 0,94] |
+| L1n a + A/N | 0.021 | 0.142 | 0.77 | 0.78 | 0.78 | [0.66, 0.88] | [0.62, 0.92] |
+| L2n a + A/√N | 0.008 | 0.035 | 0.80 | 0.83 | 0.84 | [0.71, 0.95] | [0.66, 0.98] |
+| L3n c N^−α (α = 0.26) | 0.000 | 0.000 | 0.82 | 0.88 | 0.90 | [0.79, 0.97] | [0.72, 0.98] |
+| L4n Φ(a + b ln N) | 0.005 | 0.019 | 0.84 | 0.90 | 0.93 | [0.82, 0.99] | [0.71, 1.00] |
+| L4mn (margin ln N) | 0.043 | 0.040 | 0.84 | 0.92 | 0.95 | [0.89, 0.99] | [0.85, 1.00] |
+| L4mn′ (margin 1/√N) | 0.046 | 0.064 | 0.79 | 0.82 | 0.83 | [0.74, 0.91] | [0.72, 0.94] |
 
-Bootstrap de locutores (38) das diferenças de CV em relação a L2n: todas as diferenças têm IC contendo 0 (ex.: L1n +0,10 [−0,06; +0,22], P pior 0,83; L3n −0,008 [−0,05; +0,04]). Probabilidade de cada lei ser a melhor: 0,10–0,25 para todas. **Com 3 pontos de uma semente não há como distinguir as leis.** Previsão honesta para N = 2.456, K = 32 nas 38 vozes: entre ~0,78 (piso em 1/N) e ~0,95 (probit em ln N), com cada lei tendo ainda ±0,1–0,15 de incerteza própria. A extrapolação "88% com 1.000 locutores" da proposta é a da lei L3n, uma de seis igualmente compatíveis.
+Speaker bootstrap (38) of the CV differences relative to L2n: all differences have CIs containing 0 (e.g., L1n +0.10 [−0.06, +0.22], P worse 0.83; L3n −0.008 [−0.05, +0.04]). Probability of each law being the best: 0.10–0.25 for all of them. **With 3 points from one seed there is no way to distinguish the laws.** Honest prediction for N = 2,456, K = 32 on the 38 voices: between ~0.78 (floor in 1/N) and ~0.95 (probit in ln N), with each law still carrying ±0.1–0.15 of its own uncertainty. The proposal's extrapolation "88% with 1,000 speakers" is that of law L3n, one of six equally compatible laws.
 
-Os níveis das duas métricas não se comparam: as 4 vozes novas são mais difíceis (36–75% contra 57–79% copiadas no mesmo checkpoint).
+The levels of the two metrics are not comparable: the 4 unseen voices are harder (36–75% against 57–79% copied on the same checkpoint).
 
 ---
 
-## 5. Colapso dos dados: x = N^a K^b
+## 5. Data collapse: x = N^a K^b
 
-### 5.1 Métodos
+### 5.1 Methods
 
-Só a razão b/a é identificável num colapso não paramétrico (f(N^a K^b) = g(N^{ca} K^{cb})). Por isso estimei a e b de quatro formas:
-- (i) potência na fração não copiada: q = c N^−a K^−b (grade a ∈ [−0,5; 1,5], b ∈ [−0,5; 2], passo 0,01);
-- (ii) probit: Φ⁻¹(1 − q) = c₀ + a ln N + b ln K (MQ);
-- (iii) margem média: m̄ = c₀ + a ln N + b ln K (MQ);
-- (iv) colapso não paramétrico: direção θ no plano (ln N, ln K) que minimiza o SSE de uma regressão isotônica crescente de y em x = cos θ ln N + sin θ ln K; b/a = tan θ.
+Only the ratio b/a is identifiable in a nonparametric collapse (f(N^a K^b) = g(N^{ca} K^{cb})). For this reason I estimated a and b in four ways:
+- (i) power law on the fraction not copied: q = c N^−a K^−b (grid a ∈ [−0.5, 1.5], b ∈ [−0.5, 2], step 0.01);
+- (ii) probit: Φ⁻¹(1 − q) = c₀ + a ln N + b ln K (LS);
+- (iii) mean margin: m̄ = c₀ + a ln N + b ln K (LS);
+- (iv) nonparametric collapse: direction θ in the (ln N, ln K) plane that minimizes the SSE of an increasing isotonic regression of y on x = cos θ ln N + sin θ ln K; b/a = tan θ.
 
-Intervalos 95%: bootstrap (B = 400) de frases com locutores fixos + ruído de semente N(0; s²) por treino (s = DP total de semente medido: 0,077/0,015 para fração/margem nas novas; 0,039/0,0125 nas treinadas); e a mesma coisa reamostrando também os locutores (4 novas, 8 treinadas). Treinadas: sem N = 2 (outras referências).
+95% intervals: bootstrap (B = 400) of utterances with fixed speakers + seed noise N(0, s²) per training run (s = total measured seed SD: 0.077/0.015 for fraction/margin on the unseen voices; 0.039/0.0125 on the trained ones); and the same also resampling the speakers (4 unseen, 8 trained). Trained: without N = 2 (different references).
 
-### 5.2 Resultados
+### 5.2 Results
 
-| Grupo | Estimador | a (expoente de N) | b (expoente de K) | b/a |
+| Group | Estimator | a (exponent of N) | b (exponent of K) | b/a |
 |---|---|---|---|---|
-| novas, com N = 2 | (i) potência | 0,25 [0,19; 0,31] (loc.: [0,07; 1,18]) | 0,04 [−0,03; 0,10] | 0,16 |
-| | (ii) probit | 0,41 [0,29; 0,51] | 0,01 [−0,09; 0,12] | 0,03 |
-| | (iii) margem | 0,032 [0,026; 0,037] | 0,007 [0,000; 0,013] | 0,22 |
-| | (iv) isotônico | — | — | ≈0 (θ = 0,5°) |
-| novas, sem N = 2 | (i) potência | 0,17 [0,08; 0,25] (loc.: [0,00; 0,68]) | 0,08 [0,01; 0,16] (loc.: [−0,02; 0,33]) | 0,47 |
-| | (ii) probit | 0,21 [0,12; 0,33] | 0,12 [0,02; 0,22] | 0,54 |
-| | (iii) margem | 0,022 [0,015; 0,028] | 0,012 [0,006; 0,019] | 0,55 |
-| | (iv) isotônico | — | — | 0,51 [0,01; 1,33] (θ = 27° [0,5°; 53°]) |
-| treinadas, sem N = 2 | (i) potência | 0,01 [−0,06; 0,07] (loc.: [−0,11; 0,15]) | 0,46 [0,38; 0,56] (loc.: [0,20; 0,99]) | ≈ 46 |
-| | (ii) probit | −0,015 [−0,09; 0,05] | 0,42 [0,35; 0,53] | — |
-| | (iii) margem | −0,001 [−0,006; 0,006] | 0,050 [0,044; 0,056] | — |
-| | (iv) isotônico | — | — | 2,36 (θ = 67°; o bootstrap não varia: ver abaixo) |
+| unseen, with N = 2 | (i) power | 0.25 [0.19, 0.31] (spk.: [0.07, 1.18]) | 0.04 [−0.03, 0.10] | 0.16 |
+| | (ii) probit | 0.41 [0.29, 0.51] | 0.01 [−0.09, 0.12] | 0.03 |
+| | (iii) margin | 0.032 [0.026, 0.037] | 0.007 [0.000, 0.013] | 0.22 |
+| | (iv) isotonic | — | — | ≈0 (θ = 0.5°) |
+| unseen, without N = 2 | (i) power | 0.17 [0.08, 0.25] (spk.: [0.00, 0.68]) | 0.08 [0.01, 0.16] (spk.: [−0.02, 0.33]) | 0.47 |
+| | (ii) probit | 0.21 [0.12, 0.33] | 0.12 [0.02, 0.22] | 0.54 |
+| | (iii) margin | 0.022 [0.015, 0.028] | 0.012 [0.006, 0.019] | 0.55 |
+| | (iv) isotonic | — | — | 0.51 [0.01, 1.33] (θ = 27° [0.5°, 53°]) |
+| trained, without N = 2 | (i) power | 0.01 [−0.06, 0.07] (spk.: [−0.11, 0.15]) | 0.46 [0.38, 0.56] (spk.: [0.20, 0.99]) | ≈ 46 |
+| | (ii) probit | −0.015 [−0.09, 0.05] | 0.42 [0.35, 0.53] | — |
+| | (iii) margin | −0.001 [−0.006, 0.006] | 0.050 [0.044, 0.056] | — |
+| | (iv) isotonic | — | — | 2.36 (θ = 67°; the bootstrap does not vary: see below) |
 
-Leitura:
-- **Treinadas: x ≈ K^0,46 (N^0)**, robusto em todas as formas. O expoente de N tem IC centrado em 0 com largura ±0,07.
-- **Novas: o colapso depende de N = 2.** Com N = 2, o ponto extremo (q ≈ 0,97) força x ≈ N^0,25 e K quase não entra (b/a ≈ 0–0,2). Sem N = 2, os três estimadores paramétricos concordam em **b/a ≈ 0,5** (x ≈ N K^0,5, ou N^0,17 K^0,08 na potência), com b > 0 significativo quando os locutores ficam fixos e não significativo quando também se reamostram os 4 locutores. Isso quer dizer que, entre N = 8 e 200, K ajuda as vozes novas com cerca de metade do peso de N (em log) — coerente com o termo C/√K de L2 e com o 128 × 32 > 128 × 8.
-- Com reamostragem de locutores os ICs de a, b nas novas cobrem de 0 a ~0,7: com 4 vozes, o colapso é descritivo.
-- O colapso isotônico é frágil com 14–16 pontos: o SSE é constante numa faixa larga de θ (várias direções produzem a mesma ordenação), e o argmin pega a borda da faixa; daí ICs degenerados (treinadas) ou enormes (novas). Não deve ser usado como estimativa.
-- As 38 vozes não entram aqui (só K = 32).
+Interpretation:
+- **Trained: x ≈ K^0.46 (N^0)**, robust across all forms. The exponent of N has a CI centered on 0 with width ±0.07.
+- **Unseen: the collapse depends on N = 2.** With N = 2, the extreme point (q ≈ 0.97) forces x ≈ N^0.25 and K barely enters (b/a ≈ 0–0.2). Without N = 2, the three parametric estimators agree on **b/a ≈ 0.5** (x ≈ N K^0.5, or N^0.17 K^0.08 in the power form), with b > 0 significant when the speakers are kept fixed and not significant when the 4 speakers are also resampled. This means that, between N = 8 and 200, K helps the unseen voices with about half the weight of N (in log) — consistent with the C/√K term of L2 and with 128 × 32 > 128 × 8.
+- With speaker resampling the CIs for a, b on the unseen voices cover 0 to ~0.7: with 4 voices, the collapse is descriptive.
+- The isotonic collapse is fragile with 14–16 points: the SSE is constant over a wide range of θ (several directions produce the same ordering), and the argmin picks the edge of the range; hence the degenerate (trained) or huge (unseen) CIs. It should not be used as an estimate.
+- The 38 voices do not enter here (K = 32 only).
 
 ---
 
-## 6. Artefato da medida ou efeito real (38 vozes externas)
+## 6. Measurement artifact or real effect (38 external voices)
 
-### 6.1 Proximidade da referência à voz padrão
+### 6.1 Proximity of the reference to the default voice
 
-A quantidade ideal seria c_s = semelhança entre a saída na voz padrão (força 0) e a referência. Ela só existe para as 4 vozes novas (treinos `-spk` a força 0, onde `sim_default` = 0,905): c_s = 0,600 / 0,610 / 0,603 / 0,690. Tentei estimá-la sem força 0, regredindo `sim_ref` em `sim_default` dentro do locutor e extrapolando a `sim_default` = 0,905; **a validação nas 4 vozes falhou** (estimativas 0,66–0,73 contra 0,60–0,69, inclinações instáveis), então essa estimativa foi descartada. Restam dois proxies, como pedido:
+The ideal quantity would be c_s = similarity between the output in the default voice (strength 0) and the reference. It exists only for the 4 unseen voices (`-spk` training runs at strength 0, where `sim_default` = 0.905): c_s = 0.600 / 0.610 / 0.603 / 0.690. I tried to estimate it without strength 0, by regressing `sim_ref` on `sim_default` within speaker and extrapolating to `sim_default` = 0.905; **validation on the 4 voices failed** (estimates 0.66–0.73 against 0.60–0.69, unstable slopes), so this estimate was discarded. Two proxies remain, as requested:
 
-- f0 da referência (exógeno; a voz padrão é feminina);
-- nível de `sim_default` do locutor (média dos 3 treinos): quanto a saída dessa voz fica parecida com a voz padrão. É **endógeno** (medido na saída e parte da própria margem), logo dá um limite superior do que "atração pela voz padrão" explica.
+- f0 of the reference (exogenous; the default voice is female);
+- the speaker's `sim_default` level (mean over the 3 training runs): how similar the output for that voice is to the default voice. It is **endogenous** (measured on the output and part of the margin itself), so it gives an upper bound on what "attraction toward the default voice" explains.
 
-Correlação de postos entre os dois proxies: 0,69.
+Rank correlation between the two proxies: 0.69.
 
-### 6.2 Quanto da falha por locutor cada coisa explica
+### 6.2 How much of the per-speaker failure each thing explains
 
-Decomposição da soma de quadrados nas 38 vozes × 3 N (médias por locutor e N):
+Sum-of-squares decomposition over the 38 voices × 3 N (means per speaker and N):
 
-| Medida | N | locutor | resto (locutor × N + ruído) | do efeito de locutor: R² por f0 | por sim_default | ambos |
+| Measure | N | speaker | remainder (speaker × N + noise) | of the speaker effect: R² by f0 | by sim_default | both |
 |---|---|---|---|---|---|---|
-| q (binário) | 0,06 | 0,74 | 0,21 | 0,28 | 0,55 | 0,55 |
-| margem m | 0,13 | 0,72 | 0,16 | 0,30 | 0,59 | 0,59 |
-| sim_ref | 0,08 | 0,72 | 0,20 | 0,03 | 0,09 | 0,09 |
-| sim_spk | 0,06 | 0,72 | 0,22 | 0,02 | 0,06 | 0,06 |
+| q (binary) | 0.06 | 0.74 | 0.21 | 0.28 | 0.55 | 0.55 |
+| margin m | 0.13 | 0.72 | 0.16 | 0.30 | 0.59 | 0.59 |
+| sim_ref | 0.08 | 0.72 | 0.20 | 0.03 | 0.09 | 0.09 |
+| sim_spk | 0.06 | 0.72 | 0.22 | 0.02 | 0.06 | 0.06 |
 
-Regressão logística amostra a amostra (McFadden pseudo-R²): ln N sozinho 0,031; f0 0,117; sim_default do locutor 0,234; ln N + f0 0,154; ln N + sim_default 0,278; teto com o locutor como fator (+ ln N) 0,540.
+Sample-by-sample logistic regression (McFadden pseudo-R²): ln N alone 0.031; f0 0.117; speaker's sim_default 0.234; ln N + f0 0.154; ln N + sim_default 0.278; ceiling with speaker as a factor (+ ln N) 0.540.
 
-Leitura:
-- **A identidade da voz explica ~12 vezes mais que N** (74% contra 6% da variação de q nesta faixa de N).
-- Na métrica que subtrai a voz padrão (q, m), cerca de 30% do efeito de locutor vem com o f0 e ~55–59% com o nível de `sim_default`. Nas métricas que **não** usam a voz padrão (`sim_ref`, `sim_spk`), f0 e `sim_default` explicam quase nada (2–9%). Portanto a parte da dificuldade ligada a vozes agudas/próximas da padrão é, em grande medida, **construída pelo critério** `sim_ref > sim_default`, enquanto a dificuldade medida só pela semelhança com a referência é outra (e não tem preditor simples aqui).
-- Correlações por N: cópia × f0: −0,53, −0,52, −0,37; cópia × sim_default: −0,64, −0,67, −0,61; `sim_ref` × f0: +0,14, +0,30, −0,01. Vozes agudas não são reproduzidas pior pela semelhança à referência; elas perdem no critério binário porque a saída também fica parecida com a padrão.
+Interpretation:
+- **Voice identity explains ~12 times more than N** (74% against 6% of the variation of q in this range of N).
+- On the metric that subtracts the default voice (q, m), about 30% of the speaker effect comes with f0 and ~55–59% with the `sim_default` level. On the metrics that do **not** use the default voice (`sim_ref`, `sim_spk`), f0 and `sim_default` explain almost nothing (2–9%). Therefore the part of the difficulty tied to high-pitched voices / voices close to the default is, to a large extent, **constructed by the criterion** `sim_ref > sim_default`, whereas the difficulty measured only by similarity to the reference is something else (and has no simple predictor here).
+- Correlations per N: copying × f0: −0.53, −0.52, −0.37; copying × sim_default: −0.64, −0.67, −0.61; `sim_ref` × f0: +0.14, +0.30, −0.01. High-pitched voices are not reproduced worse in terms of similarity to the reference; they lose on the binary criterion because the output also ends up similar to the default.
 
-### 6.3 A curva em N com medidas independentes da voz padrão
+### 6.3 The curve in N with measures independent of the default voice
 
-Observação de método: como os mesmos 38 locutores entram nos 3 treinos, **qualquer correção aditiva por locutor (por exemplo `sim_ref − c_s`) cancela nas diferenças entre N**; a forma da curva só muda com medidas não lineares (limiar) ou que dependam de outra coisa (`sim_default` muda com N). Usei o expoente pela razão de ganhos, livre de piso: α_g = log₄[(y₃₂ − y₈)/(y₁₂₈ − y₃₂)] (válido para y = y_∞ − A N^−α); IC por bootstrap dos 38 locutores (pareado entre N, B = 2.000). Para o binário, também α₀ = −log₁₆(q₁₂₈/q₈) (potência sem piso).
+Methodological note: since the same 38 speakers enter all 3 training runs, **any additive per-speaker correction (for example `sim_ref − c_s`) cancels in the differences between N**; the shape of the curve only changes with nonlinear measures (threshold) or measures that depend on something else (`sim_default` changes with N). I used the exponent from the ratio of gains, which is free of the floor: α_g = log₄[(y₃₂ − y₈)/(y₁₂₈ − y₃₂)] (valid for y = y_∞ − A N^−α); CI by bootstrap of the 38 speakers (paired across N, B = 2,000). For the binary measure, also α₀ = −log₁₆(q₁₂₈/q₈) (power law without a floor).
 
-| Medida (média nas 38) | N=8 | 32 | 128 | ganho 8→32 | 32→128 | α_g (IC 95%) | P(α_g > 0,5) |
+| Measure (mean over the 38) | N=8 | 32 | 128 | gain 8→32 | 32→128 | α_g (95% CI) | P(α_g > 0.5) |
 |---|---|---|---|---|---|---|---|
-| cópia (sim_ref > sim_default) | 0,566 | 0,698 | 0,789 | 0,132 | 0,092 | 0,26 (−0,73; 1,57); α₀ = 0,26 | 0,31 |
-| margem m | −0,004 | 0,048 | 0,078 | 0,052 | 0,030 | 0,39 (−0,09; 0,95) | 0,32 |
-| margem por locutor ms | 0,026 | 0,071 | 0,101 | 0,045 | 0,029 | 0,31 (−0,22; 0,81) | 0,22 |
-| cópia por sim_spk > sim_default | 0,661 | 0,805 | 0,878 | 0,144 | 0,073 | 0,50 (−0,30; 1,80); α₀ = 0,37 | 0,50 |
-| **sim_ref** (sem voz padrão) | 0,648 | 0,677 | 0,690 | 0,029 | 0,014 | 0,55 (−0,17; 1,88) | 0,56 |
-| **sim_spk** (sem voz padrão) | 0,678 | 0,700 | 0,713 | 0,022 | 0,013 | 0,41 (−0,59; 2,00) | 0,42 |
-| −sim_default | −0,651 | −0,629 | −0,612 | 0,022 | 0,017 | 0,21 (−0,95; 1,54) | 0,27 |
+| copying (sim_ref > sim_default) | 0.566 | 0.698 | 0.789 | 0.132 | 0.092 | 0.26 (−0.73, 1.57); α₀ = 0.26 | 0.31 |
+| margin m | −0.004 | 0.048 | 0.078 | 0.052 | 0.030 | 0.39 (−0.09, 0.95) | 0.32 |
+| per-speaker margin ms | 0.026 | 0.071 | 0.101 | 0.045 | 0.029 | 0.31 (−0.22, 0.81) | 0.22 |
+| copying by sim_spk > sim_default | 0.661 | 0.805 | 0.878 | 0.144 | 0.073 | 0.50 (−0.30, 1.80); α₀ = 0.37 | 0.50 |
+| **sim_ref** (no default voice) | 0.648 | 0.677 | 0.690 | 0.029 | 0.014 | 0.55 (−0.17, 1.88) | 0.56 |
+| **sim_spk** (no default voice) | 0.678 | 0.700 | 0.713 | 0.022 | 0.013 | 0.41 (−0.59, 2.00) | 0.42 |
+| −sim_default | −0.651 | −0.629 | −0.612 | 0.022 | 0.017 | 0.21 (−0.95, 1.54) | 0.27 |
 
-Somando ruído de semente aos 3 pontos (efeito principal medido nas 4 vozes: 0,054 na fração, 0,0127 na margem), o IC de α_g da cópia vai para (−1,9; 2,3) e o da margem para (−0,9; 2,0); P(α_g < 0) = 0,42 e 0,28.
+Adding seed noise to the 3 points (main effect measured on the 4 voices: 0.054 on the fraction, 0.0127 on the margin), the CI of α_g for copying becomes (−1.9, 2.3) and that for the margin (−0.9, 2.0); P(α_g < 0) = 0.42 and 0.28.
 
-Subgrupos (19 + 19 locutores):
+Subgroups (19 + 19 speakers):
 
-| Subgrupo | cópia 8 → 32 → 128 | sim_ref 8 → 32 → 128 |
+| Subgroup | copying 8 → 32 → 128 | sim_ref 8 → 32 → 128 |
 |---|---|---|
-| f0 abaixo da mediana (graves) | 0,76 → 0,83 → 0,88 | 0,635 → 0,649 → 0,680 (ganho acelera) |
-| f0 acima da mediana (agudas) | 0,37 → 0,57 → 0,70 | 0,661 → 0,704 → 0,700 (para em 32) |
-| saída longe da padrão | 0,81 → 0,92 → 0,91 (teto) | 0,637 → 0,654 → 0,689 (acelera) |
-| saída perto da padrão | 0,32 → 0,48 → 0,67 (ganho acelera) | 0,659 → 0,699 → 0,692 (para) |
+| f0 below the median (low-pitched) | 0.76 → 0.83 → 0.88 | 0.635 → 0.649 → 0.680 (gain accelerates) |
+| f0 above the median (high-pitched) | 0.37 → 0.57 → 0.70 | 0.661 → 0.704 → 0.700 (stops at 32) |
+| output far from the default | 0.81 → 0.92 → 0.91 (ceiling) | 0.637 → 0.654 → 0.689 (accelerates) |
+| output close to the default | 0.32 → 0.48 → 0.67 (gain accelerates) | 0.659 → 0.699 → 0.692 (stops) |
 
-**Conclusão da tarefa 6.** (i) "Desacelera com N" sobrevive como sinal de ponto: em todas as medidas, inclusive nas que não usam a voz padrão (`sim_ref`, `sim_spk`), o ganho de 32→128 é menor que o de 8→32, e os pontos de α_g ficam entre 0,2 e 0,55. (ii) **O valor 0,26 não sobrevive como número**: a medida sem voz padrão dá 0,41–0,55; e mesmo sem semente nenhum IC exclui 0 ou 1. (iii) A curva agregada do binário é a soma de dois comportamentos opostos: vozes graves/longe da padrão batem no teto do binário já em N = 32 enquanto a semelhança contínua continua subindo; vozes agudas/perto da padrão ainda estão cruzando o limiar. A forma "potência lenta sem piso" do binário depende, portanto, da composição do conjunto de vozes relativo à voz padrão — é em parte artefato do critério. Ressalva: o subgrupo por `sim_default` é endógeno (regressão à média possível); o por f0 é exógeno e mostra o mesmo padrão.
+**Conclusion of task 6.** (i) "Slows down with N" survives as a point signal: on every measure, including those that do not use the default voice (`sim_ref`, `sim_spk`), the gain from 32→128 is smaller than that from 8→32, and the point estimates of α_g lie between 0.2 and 0.55. (ii) **The value 0.26 does not survive as a number**: the measure without the default voice gives 0.41–0.55; and even without seed noise no CI excludes 0 or 1. (iii) The aggregate curve of the binary measure is the sum of two opposite behaviors: low-pitched voices / voices far from the default hit the ceiling of the binary measure already at N = 32 while the continuous similarity keeps rising; high-pitched voices / voices close to the default are still crossing the threshold. The "slow power law without a floor" shape of the binary measure therefore depends on the composition of the voice set relative to the default voice — it is partly an artifact of the criterion. Caveat: the `sim_default` subgroup is endogenous (regression to the mean is possible); the f0 subgroup is exogenous and shows the same pattern.
 
 ---
 
-## 7. Efeito de R (média dos códigos de 4/16 referências)
+## 7. Effect of R (mean of the codes of 4/16 references)
 
-Pareado por amostra (mesmo treino, locutor e frase; R = 1 versus R). Diferença média sobre treinos e locutores; IC 95% por bootstrap dos locutores (os mesmos em todos os treinos do conjunto); Wilcoxon sobre as médias por locutor (só com ≥ 5 locutores não empatados). Treinos com R = 4: os 4 plain com N ≥ 128 e os 3 `-wide`; R = 16: 128×8 e 128×32 s1.
+Paired by sample (same training run, speaker and utterance; R = 1 versus R). Mean difference over training runs and speakers; 95% CI by bootstrap of the speakers (the same in all training runs of the set); Wilcoxon on the per-speaker means (only with ≥ 5 non-tied speakers). Training runs with R = 4: the 4 plain ones with N ≥ 128 and the 3 `-wide`; R = 16: 128×8 and 128×32 s1.
 
-| Grupo (treinos) | n loc | Δ cópia (sim_ref) | Δ cópia por locutor (sim_spk) | Δ margem m | Δ ms | Δ sim_spk | Δ sim_default | Δ WER |
+| Group (training runs) | n spk | Δ copying (sim_ref) | Δ per-speaker copying (sim_spk) | Δ margin m | Δ ms | Δ sim_spk | Δ sim_default | Δ WER |
 |---|---|---|---|---|---|---|---|---|
-| externas, wide (3), R=4 | 38 | −0,097 [−0,169; −0,035], p=0,006 | −0,025 [−0,064; +0,008], 14↑ 18↓ | −0,020 [−0,033; −0,009] | −0,002 [−0,010; +0,006] | +0,005 [−0,002; +0,012] | +0,007 [−0,003; +0,017] | **−0,018 [−0,028; −0,009]**, p=0,009 |
-| externas, plain (4), R=4 | 4 | −0,24 [−0,73; +0,02] | +0,105 [−0,02; +0,32] | −0,042 | +0,009 | +0,029 [+0,003; +0,071] | +0,020 | −0,033 [−0,071; +0,005] |
-| novas, plain (4), R=4 | 4 | −0,28 [−0,58; +0,03] | **+0,13 [+0,01; +0,35]** (3↑ 0↓) | −0,041 | +0,024 [−0,003; +0,052] | +0,030 | +0,005 | +0,002 |
-| novas, wide (3), R=4 | 4 | −0,24 [−0,49; −0,08] | +0,04 [−0,03; +0,14] | −0,034 | +0,008 | +0,030 [+0,005; +0,061] | +0,023 | −0,000 |
-| treinadas, plain (4), R=4 | 8 | −0,14 [−0,31; −0,01] | −0,065 [−0,27; +0,08] | −0,033 [−0,062; −0,005] | −0,016 | +0,003 | +0,018 | −0,016 [−0,036; +0,003] |
-| treinadas, wide (3), R=4 | 8 | −0,13 [−0,34; +0,03] | −0,07 [−0,20; +0,02] | −0,032 | −0,011 | +0,006 | +0,017 | −0,016 |
-| novas, R=16 (2) | 4 | −0,38 [−0,70; −0,05] | +0,09 [−0,08; +0,33] | −0,068 | +0,017 | +0,028 | +0,011 | +0,016 |
-| externas plain, R=16 (2) | 4 | −0,17 | +0,085 [−0,075; +0,30] | −0,047 | +0,008 | +0,040 [+0,007; +0,074] | +0,033 [+0,016; +0,049] | −0,049 [−0,112; −0,008] |
+| external, wide (3), R=4 | 38 | −0.097 [−0.169, −0.035], p=0.006 | −0.025 [−0.064, +0.008], 14↑ 18↓ | −0.020 [−0.033, −0.009] | −0.002 [−0.010, +0.006] | +0.005 [−0.002, +0.012] | +0.007 [−0.003, +0.017] | **−0.018 [−0.028, −0.009]**, p=0.009 |
+| external, plain (4), R=4 | 4 | −0.24 [−0.73, +0.02] | +0.105 [−0.02, +0.32] | −0.042 | +0.009 | +0.029 [+0.003, +0.071] | +0.020 | −0.033 [−0.071, +0.005] |
+| unseen, plain (4), R=4 | 4 | −0.28 [−0.58, +0.03] | **+0.13 [+0.01, +0.35]** (3↑ 0↓) | −0.041 | +0.024 [−0.003, +0.052] | +0.030 | +0.005 | +0.002 |
+| unseen, wide (3), R=4 | 4 | −0.24 [−0.49, −0.08] | +0.04 [−0.03, +0.14] | −0.034 | +0.008 | +0.030 [+0.005, +0.061] | +0.023 | −0.000 |
+| trained, plain (4), R=4 | 8 | −0.14 [−0.31, −0.01] | −0.065 [−0.27, +0.08] | −0.033 [−0.062, −0.005] | −0.016 | +0.003 | +0.018 | −0.016 [−0.036, +0.003] |
+| trained, wide (3), R=4 | 8 | −0.13 [−0.34, +0.03] | −0.07 [−0.20, +0.02] | −0.032 | −0.011 | +0.006 | +0.017 | −0.016 |
+| unseen, R=16 (2) | 4 | −0.38 [−0.70, −0.05] | +0.09 [−0.08, +0.33] | −0.068 | +0.017 | +0.028 | +0.011 | +0.016 |
+| external plain, R=16 (2) | 4 | −0.17 | +0.085 [−0.075, +0.30] | −0.047 | +0.008 | +0.040 [+0.007, +0.074] | +0.033 [+0.016, +0.049] | −0.049 [−0.112, −0.008] |
 
-Leitura:
-- Pela medida por frase (`sim_ref`), R > 1 sempre baixa a cópia — esperado, o código deixa de ser o daquela frase; essa medida não serve para avaliar R.
-- Pela medida por locutor, o único ganho com IC acima de 0 é o das **4 vozes novas** nos 4 treinos plain (+13 pontos, IC [+1; +35], 3 locutores sobem, 0 descem). Nas **38 externas o efeito é nulo ou negativo** (−2,5 pontos, IC [−6,4; +0,8]; 14 sobem, 18 descem). Nas treinadas, negativo sem significância.
-- `sim_spk` sobe ~+0,03 nas 4 novas/externas plain, mas `sim_default` sobe junto (+0,02): o código médio vai para o centro, e a margem por locutor `ms` quase não muda (+0,002 a +0,024).
-- O efeito consistente é **WER menor** nas externas: −1,8 pontos com 38 vozes (IC [−2,8; −0,9]; p = 0,009 por locutor); nos outros grupos o IC contém 0.
-- Conclusão: com 38 vozes, R = 4 é um estabilizador de inteligibilidade, não uma melhoria de cópia; o ganho nas 4 novas é compatível com acaso de 4 locutores (IC inferior +0,01).
+Interpretation:
+- By the per-utterance measure (`sim_ref`), R > 1 always lowers copying — as expected, since the code is no longer that of that particular utterance; this measure is not suitable for evaluating R.
+- By the per-speaker measure, the only gain with a CI above 0 is that of the **4 unseen voices** in the 4 plain training runs (+13 points, CI [+1, +35], 3 speakers go up, 0 go down). On the **38 external voices the effect is null or negative** (−2.5 points, CI [−6.4, +0.8]; 14 go up, 18 go down). On the trained voices, negative without significance.
+- `sim_spk` rises by ~+0.03 on the 4 unseen/external plain voices, but `sim_default` rises with it (+0.02): the mean code moves toward the center, and the per-speaker margin `ms` barely changes (+0.002 to +0.024).
+- The consistent effect is **lower WER** on the external voices: −1.8 points with 38 voices (CI [−2.8, −0.9]; p = 0.009 per speaker); in the other groups the CI contains 0.
+- Conclusion: with 38 voices, R = 4 is an intelligibility stabilizer, not an improvement in copying; the gain on the 4 unseen voices is compatible with chance over 4 speakers (lower CI bound +0.01).
 
 ---
 
-## 8. Poder por simulação e desenho recomendado
+## 8. Power by simulation and recommended design
 
-### 8.1 Métodos
+### 8.1 Methods
 
-Modelo gerador por amostra na escala da margem (componentes medidos nas seções 2.2 e 2.2-sementes):
+Per-sample generative model on the margin scale (components measured in sections 2.2 and 2.2-seeds):
 
-m = μ(N) + u_s + v_{treino,s} + w_{treino,frase} + z_frase + x_{s,frase} + ε + δ_semente; copiado = m > 0,
+m = μ(N) + u_s + v_{training,s} + w_{training,utterance} + z_utterance + x_{s,utterance} + ε + δ_seed; copied = m > 0,
 
-com DP: locutor 0,0764, locutor × frase 0,0143, frase 0,0092, treino × frase 0,0062, residual 0,0314 (ANOVA das 38 externas), efeito principal de semente 0,0127 (pares de sementes), treino × locutor 0,046 ("conservador": inclui a interação locutor × N real das 38 externas, tratada como ruído independente por treino) ou 0,0148 ("só semente": a interação semente × locutor medida). μ(N) é calibrado para que a fração não copiada da população siga cada hipótese, todas ajustadas aos 3 pontos medidos nas 38 vozes:
+with SDs: speaker 0.0764, speaker × utterance 0.0143, utterance 0.0092, training run × utterance 0.0062, residual 0.0314 (ANOVA of the 38 external voices), seed main effect 0.0127 (seed pairs), training run × speaker 0.046 ("conservative": includes the real speaker × N interaction of the 38 external voices, treated as independent noise per training run) or 0.0148 ("seed only": the measured seed × speaker interaction). μ(N) is calibrated so that the population fraction not copied follows each hypothesis, all fitted to the 3 points measured on the 38 voices:
 
-| Hipótese | q(8) | q(32) | q(128) | q(512) | q(2048) |
+| Hypothesis | q(8) | q(32) | q(128) | q(512) | q(2048) |
 |---|---|---|---|---|---|
-| H0,26: 0,744 N^−0,26 (sem piso) | 0,433 | 0,302 | 0,211 | 0,147 | 0,102 |
-| H0,5: 0,145 + 0,828/√N | 0,437 | 0,291 | 0,218 | 0,181 | 0,163 |
-| Hpiso: 0,219 + 1,762/N | 0,439 | 0,274 | 0,233 | 0,223 | 0,220 |
+| H0.26: 0.744 N^−0.26 (no floor) | 0.433 | 0.302 | 0.211 | 0.147 | 0.102 |
+| H0.5: 0.145 + 0.828/√N | 0.437 | 0.291 | 0.218 | 0.181 | 0.163 |
+| Hfloor: 0.219 + 1.762/N | 0.439 | 0.274 | 0.233 | 0.223 | 0.220 |
 
-Em cada experimento simulado as vozes de avaliação são as mesmas em todos os N (pareamento, como na avaliação `-wide`). Análise: q̂ por N (média das sementes); ajuste das três formas de 2 parâmetros (c N^−α com α livre, a + A/√N, a + A/N); escolhe-se a de menor SSE. Também: dispersão de α̂ (forma c N^−α) e teste de "ainda há ganho de 512 para 2.048" (diferença pareada por locutor, IC 95% = bootstrap de locutores + variância de semente suposta conhecida). 400 simulações por célula (200 com 200 vozes); "P certa" = probabilidade de escolher a hipótese verdadeira (acaso = 0,33). A estimativa por mistura probit da margem (seção 3.1) deu os mesmos resultados que a fração binária (±0,03) e não está repetida.
+In each simulated experiment the evaluation voices are the same at every N (pairing, as in the `-wide` evaluation). Analysis: q̂ per N (mean over seeds); fit of the three 2-parameter forms (c N^−α with free α, a + A/√N, a + A/N); the one with the lowest SSE is chosen. Also: spread of α̂ (form c N^−α) and a test of "there is still a gain from 512 to 2,048" (paired difference per speaker, 95% CI = speaker bootstrap + seed variance assumed known). 400 simulations per cell (200 with 200 voices); "P correct" = probability of choosing the true hypothesis (chance = 0.33). The estimate by the probit mixture of the margin (section 3.1) gave the same results as the binary fraction (±0.03) and is not repeated.
 
-### 8.2 Resultados (cenário conservador; "só semente" dá números iguais ±0,05)
+### 8.2 Results (conservative scenario; "seed only" gives the same numbers ±0.05)
 
-| Vozes × frases | Sementes por N | Grade de N | Treinos | P certa: H0,26 / H0,5 / Hpiso | α̂ sob H0,26 (2,5–97,5%) | P(detectar ganho 512→2048) sob H0,26 / Hpiso |
+| Voices × utterances | Seeds per N | N grid | Training runs | P correct: H0.26 / H0.5 / Hfloor | α̂ under H0.26 (2.5–97.5%) | P(detect gain 512→2048) under H0.26 / Hfloor |
 |---|---|---|---|---|---|---|
-| 38 × 25 (**atual**) | 1 | 8, 32, 128 | 3 | 0,44 / 0,16 / 0,62 | 0,06–0,53 | — |
-| 4 × 25 | 1 | 8 … 2048 (5) | 5 | 0,18 / 0,40 / 0,58 | 0,04–1,18 | 0,03 / 0,04 |
-| 4 × 25 | 3 | 5 pontos | 15 | 0,35 / 0,33 / 0,64 | 0,08–1,00 | 0,08 / 0,04 |
-| 38 × 25 | 1 | 5 pontos | 5 | 0,57 / 0,37 / 0,62 | 0,17–0,47 | 0,12 / 0,03 |
-| 38 × 25 | 2 | 5 pontos | 10 | 0,67 / 0,50 / 0,70 | 0,17–0,40 | 0,19 / 0,02 |
-| 38 × 25 | 3 | 5 pontos | 15 | 0,74 / 0,57 / 0,72 | 0,18–0,37 | 0,29 / 0,04 |
-| 38 × 25 | 5 | 5 pontos | 25 | 0,81 / 0,70 / 0,78 | 0,19–0,36 | 0,46 / 0,04 |
-| 100 × 10 | 1 | 5 pontos | 5 | 0,63 / 0,41 / 0,68 | 0,18–0,41 | 0,16 / 0,04 |
-| 100 × 25 | 1 | 5 pontos | 5 | 0,63 / 0,41 / 0,67 | 0,17–0,39 | 0,17 / 0,03 |
-| 100 × 25 | 3 | 5 pontos | 15 | 0,78 / 0,63 / 0,80 | 0,20–0,34 | 0,38 / 0,03 |
-| 100 × 25 | 5 | 5 pontos | 25 | 0,80 / 0,78 / 0,84 | 0,21–0,33 | 0,57 / 0,03 |
-| 200 × 10 | 2 | 5 pontos | 10 | 0,73 / 0,55 / 0,78 | 0,20–0,32 | 0,31 / 0,03 |
-| 200 × 25 | 3 | 5 pontos | 15 | 0,78 / 0,62 / 0,77 | 0,21–0,33 | 0,51 / 0,04 |
-| 100 × 25 | 1 | 9 pontos (8, 16, …, 2048) | 9 | 0,67 / 0,53 / 0,70 | 0,18–0,36 | 0,19 / 0,04 |
-| 100 × 25 | 2 | 9 pontos | 18 | 0,78 / 0,67 / 0,75 | 0,20–0,35 | 0,27 / 0,03 |
-| 100 × 25 | 3 | 9 pontos | 27 | 0,78 / 0,74 / 0,84 | 0,21–0,34 | 0,39 / 0,02 |
+| 38 × 25 (**current**) | 1 | 8, 32, 128 | 3 | 0.44 / 0.16 / 0.62 | 0.06–0.53 | — |
+| 4 × 25 | 1 | 8 … 2048 (5) | 5 | 0.18 / 0.40 / 0.58 | 0.04–1.18 | 0.03 / 0.04 |
+| 4 × 25 | 3 | 5 points | 15 | 0.35 / 0.33 / 0.64 | 0.08–1.00 | 0.08 / 0.04 |
+| 38 × 25 | 1 | 5 points | 5 | 0.57 / 0.37 / 0.62 | 0.17–0.47 | 0.12 / 0.03 |
+| 38 × 25 | 2 | 5 points | 10 | 0.67 / 0.50 / 0.70 | 0.17–0.40 | 0.19 / 0.02 |
+| 38 × 25 | 3 | 5 points | 15 | 0.74 / 0.57 / 0.72 | 0.18–0.37 | 0.29 / 0.04 |
+| 38 × 25 | 5 | 5 points | 25 | 0.81 / 0.70 / 0.78 | 0.19–0.36 | 0.46 / 0.04 |
+| 100 × 10 | 1 | 5 points | 5 | 0.63 / 0.41 / 0.68 | 0.18–0.41 | 0.16 / 0.04 |
+| 100 × 25 | 1 | 5 points | 5 | 0.63 / 0.41 / 0.67 | 0.17–0.39 | 0.17 / 0.03 |
+| 100 × 25 | 3 | 5 points | 15 | 0.78 / 0.63 / 0.80 | 0.20–0.34 | 0.38 / 0.03 |
+| 100 × 25 | 5 | 5 points | 25 | 0.80 / 0.78 / 0.84 | 0.21–0.33 | 0.57 / 0.03 |
+| 200 × 10 | 2 | 5 points | 10 | 0.73 / 0.55 / 0.78 | 0.20–0.32 | 0.31 / 0.03 |
+| 200 × 25 | 3 | 5 points | 15 | 0.78 / 0.62 / 0.77 | 0.21–0.33 | 0.51 / 0.04 |
+| 100 × 25 | 1 | 9 points (8, 16, …, 2048) | 9 | 0.67 / 0.53 / 0.70 | 0.18–0.36 | 0.19 / 0.04 |
+| 100 × 25 | 2 | 9 points | 18 | 0.78 / 0.67 / 0.75 | 0.20–0.35 | 0.27 / 0.03 |
+| 100 × 25 | 3 | 9 points | 27 | 0.78 / 0.74 / 0.84 | 0.21–0.34 | 0.39 / 0.02 |
 
-Leitura:
-- **O desenho atual (38 vozes, 1 semente, N ≤ 128) está perto do acaso** para escolher a lei (0,16–0,62), e α̂ varia de 0,06 a 0,53 mesmo quando a verdade é 0,26: o 0,26 observado é compatível com qualquer das três hipóteses.
-- **4 vozes não servem** para isto, nem com 3 sementes e N até 2.048.
-- **Depois de ~40–100 vozes, o gargalo é a semente.** De 38 para 200 vozes (3 sementes) a taxa certa sobe 0,74 → 0,78 em H0,26; de 1 para 5 sementes (38 vozes) sobe 0,57 → 0,81. 10 frases por voz bastam (100 × 10 ≈ 100 × 25), como previsto pelo DP de frase quase nulo.
-- **Distinguir 0,26 de 0,5 (H0,26 contra H0,5) é o mais difícil**: as duas diferem em 3,4 pontos em N = 512 e 6 pontos em N = 2.048. Com 5 sementes por N e 38–100 vozes chega-se a 70–80% de acerto; abaixo de 3 sementes, não.
-- **Testar piso** pela diferença 512 → 2.048 tem poder baixo (12–57%) mesmo com 5 sementes, com erro tipo I correto (2–5%); ajustar a curva inteira é mais informativo que esse teste.
-- Uma grade densa (9 valores de N, 1 semente) rende o mesmo que 5 valores com 2 sementes, pelo mesmo número de treinos: **o que conta é o total de treinos**, desde que N vá até ~2.000.
+Interpretation:
+- **The current design (38 voices, 1 seed, N ≤ 128) is close to chance** for choosing the law (0.16–0.62), and α̂ ranges from 0.06 to 0.53 even when the truth is 0.26: the observed 0.26 is compatible with any of the three hypotheses.
+- **4 voices are useless** for this, even with 3 seeds and N up to 2,048.
+- **Beyond ~40–100 voices, the bottleneck is the seed.** From 38 to 200 voices (3 seeds) the correct-choice rate rises 0.74 → 0.78 under H0.26; from 1 to 5 seeds (38 voices) it rises 0.57 → 0.81. 10 utterances per voice are enough (100 × 10 ≈ 100 × 25), as predicted by the near-zero utterance SD.
+- **Distinguishing 0.26 from 0.5 (H0.26 against H0.5) is the hardest part**: the two differ by 3.4 points at N = 512 and 6 points at N = 2,048. With 5 seeds per N and 38–100 voices one reaches 70–80% accuracy; with fewer than 3 seeds, no.
+- **Testing for a floor** through the 512 → 2,048 difference has low power (12–57%) even with 5 seeds, with correct type I error (2–5%); fitting the whole curve is more informative than this test.
+- A dense grid (9 values of N, 1 seed) yields the same as 5 values with 2 seeds, for the same number of training runs: **what counts is the total number of training runs**, as long as N goes up to ~2,000.
 
-### 8.3 Desenho recomendado para as próximas rodadas na GPU
+### 8.3 Recommended design for the next GPU rounds
 
-1. **Conjunto de avaliação fixo e pareado**: 60–100 vozes nunca vistas (LibriTTS test-clean + dev-clean/other), **10 frases** cada, as mesmas em todos os treinos; estratificadas por f0 e por distância à voz padrão. Avaliar custa pouco perto de treinar.
-2. **Sementes**: ≥ 3 por valor de N, idealmente 5 (é o que mais rende). Grade N ∈ {8, 32, 128, 512, 2048} com K fixo (32); 15–25 treinos. Se o orçamento for de ~10 treinos, preferir 5 N × 2 sementes ou 9 N × 1 semente a menos N com mais vozes.
-3. **Re-sintetizar 2× cada checkpoint** (barato) para separar ruído de síntese de ruído de treino (hoje ~40% da variância "de semente" do binário é síntese).
-4. **Salvar a força 0 para cada voz de avaliação** (uma vez por voz, com qualquer checkpoint): dá c_s = semelhança entre a voz padrão e a referência, e permite medidas que não dependem do limiar `sim_ref > sim_default` (tarefa 6).
-5. **Medida primária contínua** (`sim_ref` / `sim_spk` e margem por locutor), com a fração binária derivada via mistura probit; relatar ambas. Para K, um segundo eixo pequeno (K ∈ {8, 128} em N = 128 e 512, 2 sementes) basta para checar b/a ≈ 0,5.
-6. **Registrar antes** a regra de decisão: ajuste das três formas, critério por SSE/AICc e CV deixando um N de fora, com bootstrap de vozes + sementes; e declarar como "indistinguível" qualquer resultado em que a hipótese vencedora tenha < 80% de recuperação na simulação correspondente.
+1. **Fixed, paired evaluation set**: 60–100 never-seen voices (LibriTTS test-clean + dev-clean/other), **10 utterances** each, the same in all training runs; stratified by f0 and by distance to the default voice. Evaluation is cheap compared with training.
+2. **Seeds**: ≥ 3 per value of N, ideally 5 (this is what pays off most). Grid N ∈ {8, 32, 128, 512, 2048} with fixed K (32); 15–25 training runs. If the budget is ~10 training runs, prefer 5 N × 2 seeds or 9 N × 1 seed over fewer N with more voices.
+3. **Re-synthesize each checkpoint 2×** (cheap) to separate synthesis noise from training noise (today ~40% of the "seed" variance of the binary measure is synthesis).
+4. **Save strength 0 for each evaluation voice** (once per voice, with any checkpoint): it gives c_s = similarity between the default voice and the reference, and enables measures that do not depend on the `sim_ref > sim_default` threshold (task 6).
+5. **Continuous primary measure** (`sim_ref` / `sim_spk` and per-speaker margin), with the binary fraction derived through the probit mixture; report both. For K, a small second axis (K ∈ {8, 128} at N = 128 and 512, 2 seeds) is enough to check b/a ≈ 0.5.
+6. **Pre-register** the decision rule: fit of the three forms, criterion by SSE/AICc and CV leaving one N out, with bootstrap over voices + seeds; and declare as "indistinguishable" any result in which the winning hypothesis has < 80% recovery in the corresponding simulation.
 
 ---
 
-## O que os dados sustentam e o que não sustentam
+## What the data support and what they do not
 
-**Sustentam (com a força indicada):**
-1. **Vozes treinadas dependem de K, não de N** — na margem contínua, a + c ln K explica tudo; o coeficiente de ln N é ≈ 0. Forte.
-2. **Vozes novas dependem de N** — margem média: só-K e constante são piores com certeza (bootstrap P ≥ 0,99); a margem sobe de −0,11 (N = 2) a +0,03–0,06 (N = 128–200). Forte, mas a maior parte da evidência vem de N = 2 versus o resto.
-3. **Nas 38 vozes externas, mais locutores ajudam de 8 a 128** (cópia 57 → 70 → 79%; margem −0,004 → 0,048 → 0,078), e o ganho de 32 → 128 é menor que o de 8 → 32 em todas as medidas, inclusive nas que não usam a voz padrão. Moderado: uma semente; o DP de semente da fração (~0,05) é da ordem do ganho 32 → 128 (0,09).
-4. **A cópia é quase tudo-ou-nada por voz** (ICC latente 0,83–0,94; 2/3 das vozes externas em ≤ 10% ou ≥ 90%), e a dificuldade é estável entre treinos (ρ ≈ 0,75). Forte.
-5. **A fração binária é uma função das margens por locutor** (mistura probit, RMSE 0,018). Forte. A margem é ~1,3–2× mais precisa que o binário entre sementes, e muito mais estável à re-síntese; não é uma solução para o ruído de locutor e de semente.
-6. **A frase importa pouco** (DP 0,007 na margem); locutor e semente dominam.
-7. **R = 4 não melhora a cópia nas 38 vozes**, mas reduz o WER em ~1,8 pontos.
-8. **Colapso**: para as treinadas, x ≈ K^0,46 com expoente de N ≈ 0 (±0,07); para as novas entre N = 8 e 200, K entra com cerca de metade do peso de N (b/a ≈ 0,5, ICs largos; depende de excluir N = 2).
-9. **O gargalo de precisão é a semente**, não o número de vozes, a partir de ~40 vozes: a simulação mostra que separar 0,26 de 0,5 exige ≥ 3–5 sementes por N com N até ~2.000.
+**They support (with the indicated strength):**
+1. **Trained voices depend on K, not on N** — on the continuous margin, a + c ln K explains everything; the coefficient of ln N is ≈ 0. Strong.
+2. **Unseen voices depend on N** — mean margin: K-only and constant are worse with certainty (bootstrap P ≥ 0.99); the margin rises from −0.11 (N = 2) to +0.03–0.06 (N = 128–200). Strong, but most of the evidence comes from N = 2 versus the rest.
+3. **On the 38 external voices, more speakers help from 8 to 128** (copying 57 → 70 → 79%; margin −0.004 → 0.048 → 0.078), and the gain from 32 → 128 is smaller than that from 8 → 32 on all measures, including those that do not use the default voice. Moderate: one seed; the seed SD of the fraction (~0.05) is of the order of the 32 → 128 gain (0.09).
+4. **Copying is nearly all-or-nothing per voice** (latent ICC 0.83–0.94; 2/3 of the external voices at ≤ 10% or ≥ 90%), and the difficulty is stable across training runs (ρ ≈ 0.75). Strong.
+5. **The binary fraction is a function of the per-speaker margins** (probit mixture, RMSE 0.018). Strong. The margin is ~1.3–2× more precise than the binary measure across seeds, and much more stable to re-synthesis; it is not a solution to speaker and seed noise.
+6. **The utterance matters little** (SD 0.007 on the margin); speaker and seed dominate.
+7. **R = 4 does not improve copying on the 38 voices**, but it reduces WER by ~1.8 points.
+8. **Collapse**: for the trained voices, x ≈ K^0.46 with an N exponent ≈ 0 (±0.07); for the unseen voices between N = 8 and 200, K enters with about half the weight of N (b/a ≈ 0.5, wide CIs; depends on excluding N = 2).
+9. **The precision bottleneck is the seed**, not the number of voices, from ~40 voices on: the simulation shows that separating 0.26 from 0.5 requires ≥ 3–5 seeds per N with N up to ~2,000.
 
-**Não sustentam:**
-1. **O expoente 0,26.** Ele é exatamente o que dois parâmetros fazem passar por três pontos de uma semente. A razão de ganhos tem IC (−0,7; 1,6) só com reamostragem de locutores e (−1,9; 2,3) com semente; medidas sem a voz padrão dão 0,41–0,55. Afirmar "≈ 0,26, d ≈ 4" ou extrapolar "82% com 247 / 88% com 1.000 locutores" não tem apoio estatístico.
-2. **Qualquer escolha entre L1 (piso em 1/N), L2 (raízes), L3 (potência) e L4 (probit em ln N).** Na grade de 4 vozes, a preferência por L2 vem do ponto N = 2; sem ele, todas (menos L1, marginalmente) empatam. Nas 38 vozes, 3 pontos e 1 g.l. Para N = 2.456 as leis preveem de 61% a 93% (4 vozes) e de 78% a 95% (38 vozes).
-3. **A existência ou ausência de piso.** Não identificável com N ≤ 200.
-4. **"Não há teto" ou "mais locutores rendem cada vez menos" como afirmação quantitativa.** Ambas as leituras cabem no ruído.
-5. **Efeitos das variantes** (`-swap`, `-contrast`, `-spk`, `-spkdrop`, `-aug`): uma semente cada; todas dentro de ~2 DP de semente da linha de base.
-6. **Que as vozes externas sejam "mais fáceis de imitar"** que as novas da grade: a diferença de nível vem em boa parte da distância à voz padrão, que o critério binário premia.
-7. **A interpretação da falha de vozes agudas como dificuldade do decodificador**: pela semelhança com a referência (`sim_ref`, `sim_spk`), vozes agudas não são reproduzidas pior; elas perdem no critério binário porque a saída também se parece com a voz padrão feminina.
+**They do not support:**
+1. **The exponent 0.26.** It is exactly what two parameters produce when passed through three points from one seed. The ratio of gains has CI (−0.7, 1.6) with speaker resampling alone and (−1.9, 2.3) with seed; measures without the default voice give 0.41–0.55. Claiming "≈ 0.26, d ≈ 4" or extrapolating "82% with 247 / 88% with 1,000 speakers" has no statistical support.
+2. **Any choice between L1 (floor in 1/N), L2 (square roots), L3 (power law) and L4 (probit in ln N).** On the 4-voice grid, the preference for L2 comes from the N = 2 point; without it, all of them (except L1, marginally) tie. On the 38 voices, 3 points and 1 d.f. For N = 2,456 the laws predict from 61% to 93% (4 voices) and from 78% to 95% (38 voices).
+3. **The existence or absence of a floor.** Not identifiable with N ≤ 200.
+4. **"There is no ceiling" or "more speakers yield less and less" as a quantitative claim.** Both readings fit within the noise.
+5. **Effects of the variants** (`-swap`, `-contrast`, `-spk`, `-spkdrop`, `-aug`): one seed each; all within ~2 seed SDs of the baseline.
+6. **That the external voices are "easier to imitate"** than the unseen voices of the grid: the difference in level comes largely from the distance to the default voice, which the binary criterion rewards.
+7. **Interpreting the failure on high-pitched voices as a difficulty of the decoder**: in terms of similarity to the reference (`sim_ref`, `sim_spk`), high-pitched voices are not reproduced worse; they lose on the binary criterion because the output also resembles the female default voice.

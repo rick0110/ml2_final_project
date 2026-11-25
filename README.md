@@ -1,100 +1,100 @@
-# Tacotron2-VAE — síntese de fala em português com estilo copiado de um áudio de referência
+# Tacotron2-VAE — Portuguese speech synthesis with the style copied from a reference audio clip
 
-**Projeto final de ML2 (IMPA Tech)** · [Página do projeto](https://rick0110.github.io/ml2_final_project) · [Relatório (PDF)](reports/relatorio_final.pdf) · [Proposta de pesquisa (PDF)](reports/proposta/proposta.pdf)
+**ML2 final project (IMPA Tech)** · [Project page](https://rick0110.github.io/ml2_final_project) · [Report (PDF)](reports/final_report.pdf) · [Research proposal (PDF)](reports/proposal/proposal.pdf)
 
-> **Pesquisa em andamento:** a organização da pesquisa (pergunta, resultados um a um e caminhos em exploração) está em [`research/`](research/README.md). Para trabalhar no projeto, leia antes o [`AGENTS.md`](AGENTS.md).
+> **Research in progress:** the organization of the research (question, results one by one, and paths under exploration) is in [`research/`](research/README.md). To work on the project, read [`AGENTS.md`](AGENTS.md) first.
 
-Sistema de síntese de fala (*Text-to-Speech*) baseado no **Tacotron 2** com um **VAE** que resume um áudio de referência em um vetor de estilo. O texto diz *o que* falar; o áudio de referência diz *como* (tom, velocidade, voz, emoção).
+A speech synthesis (*Text-to-Speech*) system based on **Tacotron 2** with a **VAE** that summarizes a reference audio clip into a style vector. The text says *what* to say; the reference audio says *how* (pitch, speed, voice, emotion).
 
-> **Revisão de novembro de 2026.** A versão anterior deste projeto descrevia uma "atenção espectral interpretável". Esse resultado **não era válido**: vinha de um erro de código (seção 2). O código foi corrigido, os modelos foram retreinados e todos os áudios passaram a ser conferidos por reconhecimento de fala. Este README, o relatório e a página descrevem só os resultados novos.
+> **November 2026 revision.** The previous version of this project described an "interpretable spectral attention". That result **was not valid**: it came from a code bug (section 2). The code was fixed, the models were retrained, and every audio clip is now checked with speech recognition. This README, the report and the page describe only the new results.
 
-## 1. Resultados
+## 1. Results
 
-Cada áudio gerado é transcrito pelo Whisper e comparado com o texto pedido. A medida é a taxa de palavras erradas (WER): 0% significa que tudo foi entendido.
+Each generated audio clip is transcribed by Whisper and compared with the requested text. The measure is the word error rate (WER): 0% means everything was understood.
 
-| Modelo | Dados de treino | Palavras erradas | Termina a frase sozinho |
+| Model | Training data | Wrong words | Finishes the sentence on its own |
 |---|---|---|---|
-| Inglês, versão antiga | LJSpeech | 68% (26 áudios) | nem sempre |
-| Português, versão antiga | VERBO (98 falas) | 100% (ininteligível) | — |
-| **Inglês, retreinado** | LJSpeech, 2.500 passos | **2,2%** (18 áudios) | 100% |
-| **Português, retreinado** | TTS-Portuguese Corpus, 4.000 passos | **10,5%** (18 áudios) | 100% |
-| Emoção: português → só VERBO | VERBO, 1.500 passos | 52% (60 áudios) | 100% |
-| Emoção: português + VERBO | os dois juntos, 1.500 passos | 41% (60 áudios) | 100% |
-| **Emoção: português + VERBO, estilo a 60%** | idem | **9%** (42 áudios) | 100% |
+| English, old version | LJSpeech | 68% (26 clips) | not always |
+| Portuguese, old version | VERBO (98 utterances) | 100% (unintelligible) | — |
+| **English, retrained** | LJSpeech, 2,500 steps | **2.2%** (18 clips) | 100% |
+| **Portuguese, retrained** | TTS-Portuguese Corpus, 4,000 steps | **10.5%** (18 clips) | 100% |
+| Emotion: Portuguese → VERBO only | VERBO, 1,500 steps | 52% (60 clips) | 100% |
+| Emotion: Portuguese + VERBO | both together, 1,500 steps | 41% (60 clips) | 100% |
+| **Emotion: Portuguese + VERBO, style at 60%** | same | **9%** (42 clips) | 100% |
 
-O que os números mostram:
+What the numbers show:
 
-- **Inteligibilidade.** Partir do Tacotron 2 pré-treinado da NVIDIA, em vez de treinar do zero, resolveu o problema principal. O português foi obtido ajustando o modelo em inglês em 3,8 h de fala.
-- **Velocidade copiada da referência (português).** Com referências lenta, média e rápida (9, 13 e 16 caracteres por segundo), a fala gerada saiu com cerca de 9, 12 e 13.
-- **Voz e tom copiados (VERBO).** Com referências de emoção, o tom médio da fala gerada acompanha o da referência (correlação 0,97 em 10 referências), inclusive trocando voz feminina por masculina.
-- **Emoção forte custa inteligibilidade.** O VERBO tem só 14 frases: com o estilo inteiro da referência o modelo fala com uma voz que quase não conhece, e erra 41% das palavras. Multiplicando o código de estilo por 0,6 (`--style-strength` no `synth_check.py`), o erro cai para 9%; sobra da emoção principalmente o ritmo.
-- **No inglês o estilo quase não muda.** O LJSpeech é uma locutora lendo sempre do mesmo jeito; há pouca variação para o VAE aprender.
+- **Intelligibility.** Starting from NVIDIA's pretrained Tacotron 2, instead of training from scratch, solved the main problem. Portuguese was obtained by fine-tuning the English model on 3.8 h of speech.
+- **Speed copied from the reference (Portuguese).** With slow, medium and fast references (9, 13 and 16 characters per second), the generated speech came out at about 9, 12 and 13.
+- **Voice and pitch copied (VERBO).** With emotion references, the mean pitch of the generated speech follows that of the reference (correlation 0.97 over 10 references), including switching from a female to a male voice.
+- **Strong emotion costs intelligibility.** VERBO has only 14 sentences: with the full style of the reference, the model speaks in a voice it barely knows and gets 41% of the words wrong. Multiplying the style code by 0.6 (`--style-strength` in `synth_check.py`), the error drops to 9%; what remains of the emotion is mainly the rhythm.
+- **In English the style barely changes.** LJSpeech is a single female speaker always reading the same way; there is little variation for the VAE to learn.
 
-Limitações conhecidas: sobram trocas de palavras no português ("carrega" → "cariga"); a avaliação usa 6 frases por referência, uma amostra pequena; a naturalidade não foi medida por ouvintes, só a inteligibilidade por reconhecimento automático.
+Known limitations: some word substitutions remain in Portuguese ("carrega" → "cariga"); the evaluation uses 6 sentences per reference, a small sample; naturalness was not measured by listeners, only intelligibility by automatic recognition.
 
-Áudios e figuras: [rick0110.github.io/ml2_final_project](https://rick0110.github.io/ml2_final_project).
+Audio and figures: [rick0110.github.io/ml2_final_project](https://rick0110.github.io/ml2_final_project).
 
-## 2. O que estava errado e foi corrigido
+## 2. What was wrong and was fixed
 
-| Problema | Efeito | Correção |
+| Problem | Effect | Fix |
 |---|---|---|
-| O *reference encoder* reorganizava o mel `(B, 80, T)` com `.view(B, 1, -1, 80)` sem transpor os eixos | Tempo e frequência ficavam misturados, e o resultado mudava com o *padding* do lote. As "bandas do espectro" da atenção eram consequência disso | `transpose(1, 2)` antes das convoluções (`src/models/tacotron2_vae/modules.py`). A GRU percorre blocos de **tempo** de ~0,74 s |
-| O resumo da referência incluía os blocos de *padding* | O vetor de estilo de uma mesma fala mudava com o tamanho do lote | A atenção dá peso zero ao *padding* |
-| Uma `LayerNorm` extra na atenção do decoder, que não existe no Tacotron 2 | Os pesos pré-treinados não funcionavam: a síntese nunca chegava ao fim da frase | Removida |
-| Treino do zero, com poucos dados | Alinhamento texto–áudio ruim; no VERBO (5 min), fala ininteligível | Treino a partir do Tacotron 2 pré-treinado, em etapas: inglês → português → emoção |
-| Ajuste só no VERBO (14 frases) | O modelo aprende as emoções mas desaprende a ler texto novo (52% de erro) | Treino com o corpus de português e o VERBO juntos, e controle de intensidade do estilo |
-| Vocoder WaveGlow treinado só em voz inglesa | Artefatos em outras vozes | HiFi-GAN universal pré-treinado (`src/models/hifigan.py`) |
-| Comparação com o *baseline* com treinos de tamanhos diferentes (11,2 mil vs. 35,5 mil iterações) | A conclusão "a atenção evita o colapso do latente" não se sustentava | Comparação retirada |
+| The *reference encoder* reshaped the mel `(B, 80, T)` with `.view(B, 1, -1, 80)` without transposing the axes | Time and frequency were mixed, and the result changed with the batch *padding*. The attention's "spectral bands" were a consequence of this | `transpose(1, 2)` before the convolutions (`src/models/tacotron2_vae/modules.py`). The GRU runs over **time** blocks of ~0.74 s |
+| The reference summary included the *padding* blocks | The style vector of the same utterance changed with the batch size | The attention gives zero weight to the *padding* |
+| An extra `LayerNorm` in the decoder attention, which does not exist in Tacotron 2 | The pretrained weights did not work: synthesis never reached the end of the sentence | Removed |
+| Training from scratch, with little data | Poor text–audio alignment; on VERBO (5 min), unintelligible speech | Training from the pretrained Tacotron 2, in stages: English → Portuguese → emotion |
+| Fine-tuning on VERBO only (14 sentences) | The model learns the emotions but unlearns how to read new text (52% error) | Training on the Portuguese corpus and VERBO together, plus a style strength control |
+| WaveGlow vocoder trained only on English speech | Artifacts on other voices | Pretrained universal HiFi-GAN (`src/models/hifigan.py`) |
+| Comparison with the *baseline* using trainings of different lengths (11.2 thousand vs. 35.5 thousand iterations) | The conclusion "the attention prevents latent collapse" did not hold | Comparison removed |
 
-O *pooling* por atenção sobre os blocos de tempo foi mantido, agora correto. Não refizemos a comparação com o *baseline* (último estado da GRU), então **não afirmamos** que ele é melhor.
+The attention *pooling* over the time blocks was kept, now correct. We did not redo the comparison with the *baseline* (last GRU state), so we **do not claim** that it is better.
 
-## 3. Arquitetura
-
-```
-Texto ──► Encoder (embedding + 3×Conv1d + BiLSTM) ──►(+)──► Atenção ──► Decoder ──► Postnet ──► HiFi-GAN ──► áudio
-                                                      ▲    location-    autoregressivo
-Mel de referência ──► Reference encoder (VAE) ──► e ──┘    sensitive    + gate de parada
-                      6×Conv2d (1ª CoordConv) + GRU
-                      + pooling por atenção → μ, σ → z
-```
-
-- **Encoder de texto:** embedding de símbolos → 3 convoluções 1D → BiLSTM. Inglês usa caracteres; português usa fonemas IPA (`gruut`). Os dois conjuntos convivem na mesma tabela de 199 símbolos, o que permite ajustar o modelo em inglês para o português.
-- **Reference encoder:** 6 convoluções 2D de *stride* 2 reduzem o mel 80×T; uma GRU percorre T/64 blocos de tempo; um *pooling* por atenção resume os estados; o resultado vira (μ, log σ²), de onde se amostra `z` (32 dimensões). `z` é convertido no vetor de estilo `e`, somado a todas as posições da saída do encoder de texto.
-- **Decoder:** atenção *location-sensitive*, prenet, 2 LSTMs, projeção para o quadro mel e para o sinal de parada; postnet de 5 convoluções.
-- **Vocoder:** HiFi-GAN UNIVERSAL_V1 pré-treinado, congelado.
-
-## 4. Perdas de treinamento
+## 3. Architecture
 
 ```
-L = L_mel + L_gate + β(passo)·L_KL + λ·L_GA
+Text  ──► Encoder (embedding + 3×Conv1d + BiLSTM) ──►(+)──► Attention ──► Decoder ──► Postnet ──► HiFi-GAN ──► audio
+                                                      ▲    location-      autoregressive
+Reference mel ──────► Reference encoder (VAE) ──► e ──┘    sensitive      + stop gate
+                      6×Conv2d (1st CoordConv) + GRU
+                      + attention pooling → μ, σ → z
 ```
 
-| Perda | Descrição |
+- **Text encoder:** symbol embedding → 3 1D convolutions → BiLSTM. English uses characters; Portuguese uses IPA phonemes (`gruut`). The two sets live in the same table of 199 symbols, which makes it possible to fine-tune the English model for Portuguese.
+- **Reference encoder:** 6 2D convolutions with *stride* 2 reduce the 80×T mel; a GRU runs over T/64 time blocks; an attention *pooling* summarizes the states; the result becomes (μ, log σ²), from which `z` (32 dimensions) is sampled. `z` is converted into the style vector `e`, added to every position of the text encoder output.
+- **Decoder:** *location-sensitive* attention, prenet, 2 LSTMs, projection to the mel frame and to the stop signal; postnet of 5 convolutions.
+- **Vocoder:** pretrained HiFi-GAN UNIVERSAL_V1, frozen.
+
+## 4. Training losses
+
+```
+L = L_mel + L_gate + β(step)·L_KL + λ·L_GA
+```
+
+| Loss | Description |
 |---|---|
-| `L_mel` | Erro quadrático do mel (decoder + postnet), mascarado no *padding* |
-| `L_gate` | Entropia cruzada do sinal de parada |
-| `L_KL` | Divergência KL com *free bits* de 0,5 nats por dimensão |
-| `β(passo)` | *Annealing* cíclico: rampa de 0 a 0,2 em 4.000 passos, após 2.000 de espera |
-| `L_GA` | Atenção guiada (Tachibana et al. 2017): penaliza atenção longe da diagonal |
+| `L_mel` | Mean squared error of the mel (decoder + postnet), masked on the *padding* |
+| `L_gate` | Cross-entropy of the stop signal |
+| `L_KL` | KL divergence with *free bits* of 0.5 nats per dimension |
+| `β(step)` | Cyclical *annealing*: ramp from 0 to 0.2 over 4,000 steps, after a 2,000-step wait |
+| `L_GA` | Guided attention (Tachibana et al. 2017): penalizes attention far from the diagonal |
 
-## 5. Dados
+## 5. Data
 
-| Corpus | Falas usadas | Duração | Papel |
+| Corpus | Utterances used | Duration | Role |
 |---|---|---|---|
-| LJSpeech 1.1 | 13.100 | 23,7 h | Inglês, uma locutora |
-| TTS-Portuguese Corpus | 2.245 (até 11 s) | 3,8 h | Português, um locutor |
-| VERBO | 1.167 | minutos | Português, 12 locutores, 7 emoções, 14 frases |
+| LJSpeech 1.1 | 13,100 | 23.7 h | English, one female speaker |
+| TTS-Portuguese Corpus | 2,245 (up to 11 s) | 3.8 h | Portuguese, one male speaker |
+| VERBO | 1,167 | minutes | Portuguese, 12 speakers, 7 emotions, 14 sentences |
 
-Áudio: 22.050 Hz, 80 canais mel, FFT 1024, *hop* 256, f_max 8 kHz.
+Audio: 22,050 Hz, 80 mel channels, FFT 1024, *hop* 256, f_max 8 kHz.
 
-## 6. Como reproduzir
+## 6. How to reproduce
 
 ```bash
-# 1. Manifesto do corpus (áudio reamostrado + CSV)
+# 1. Corpus manifest (resampled audio + CSV)
 python scripts/preprocess/make_manifest.py --corpus ljspeech \
   --input-dir data/raw/LJSpeech-1.1 --out-dir data/processed/LJSpeech
 
-# 2. Treino em inglês a partir do Tacotron 2 pré-treinado da NVIDIA
+# 2. English training starting from NVIDIA's pretrained Tacotron 2
 python src/training/training-tacotron2-vae/train.py \
   --artifacts-dir data/processed/LJSpeech --text-cleaner english_cleaners \
   --pretrained-tacotron2 ckpt/tacotron2_nvidia.pt \
@@ -102,39 +102,39 @@ python src/training/training-tacotron2-vae/train.py \
   --guided-attention-weight 2.0 --guided-attention-sigma 0.4 \
   --experiment-name en_vae_v1
 
-# 3. Conferência por reconhecimento de fala (gera .wav, figuras e results.csv)
+# 3. Check with speech recognition (generates .wav files, figures and results.csv)
 python scripts/eval/synth_check.py --checkpoint experiments/tacotron2-vae/en_vae_v1/checkpoints/epoch_2500 \
   --hifigan ckpt/hifigan_universal_v1.pt --data-dir data/processed/LJSpeech \
   --text-cleaner english_cleaners --language en --out-dir exports/eval/en_vae_v1
 ```
 
-As etapas seguintes trocam o corpus e partem do modelo anterior com `--checkpoint-path`. A receita completa de cada etapa (downloads, parâmetros) está em `scripts/cloud/stage_setup.sh` e `scripts/cloud/train_job.sh`, que foram os scripts usados no Google Cloud (uma GPU L4 *spot*).
+The following stages switch the corpus and start from the previous model with `--checkpoint-path`. The full recipe for each stage (downloads, parameters) is in `scripts/cloud/stage_setup.sh` and `scripts/cloud/train_job.sh`, which were the scripts used on Google Cloud (one L4 *spot* GPU).
 
-O treino grava `metrics.jsonl` e figuras em `experiments/tacotron2-vae/<experimento>/`: perdas, dimensões ativas do latente, nitidez do alinhamento na síntese livre e normas de gradiente por módulo. Também há logs para o TensorBoard em `logs/`.
+Training writes `metrics.jsonl` and figures to `experiments/tacotron2-vae/<experiment>/`: losses, active latent dimensions, alignment sharpness in free-running synthesis, and gradient norms per module. There are also TensorBoard logs in `logs/`.
 
-## 7. Estrutura do repositório
+## 7. Repository structure
 
 ```text
 ml2_final_project/
 ├── src/
-│   ├── data/loader_vae_tacotron/      # Dataset e DataLoader (calcula e guarda o mel)
-│   ├── models/tacotron2_vae/          # Encoder, decoder, atenção, VAE, hparams
-│   ├── models/hifigan.py              # Vocoder (pré-treinado, congelado)
-│   └── training/training-tacotron2-vae/  # train.py, perdas, laço de treino, métricas
+│   ├── data/loader_vae_tacotron/      # Dataset and DataLoader (computes and stores the mel)
+│   ├── models/tacotron2_vae/          # Encoder, decoder, attention, VAE, hparams
+│   ├── models/hifigan.py              # Vocoder (pretrained, frozen)
+│   └── training/training-tacotron2-vae/  # train.py, losses, training loop, metrics
 ├── scripts/
-│   ├── preprocess/make_manifest.py    # Manifesto de LJSpeech, TTS-Portuguese e VERBO
-│   ├── preprocess/cache_mels.py       # Pré-calcula os mels em paralelo
-│   ├── eval/synth_check.py            # Síntese + conferência por reconhecimento de fala
-│   ├── cloud/                         # Jobs de treino e avaliação no Google Cloud
-│   └── site_assets/make_figures.py    # Figuras do relatório e da página
-├── docs/                              # Página do projeto (GitHub Pages)
-├── reports/                           # Relatório (LaTeX + PDF)
-└── notebooks/                         # Notebooks da versão anterior (ver aviso abaixo)
+│   ├── preprocess/make_manifest.py    # Manifest for LJSpeech, TTS-Portuguese and VERBO
+│   ├── preprocess/cache_mels.py       # Precomputes the mels in parallel
+│   ├── eval/synth_check.py            # Synthesis + check with speech recognition
+│   ├── cloud/                         # Training and evaluation jobs on Google Cloud
+│   └── site_assets/make_figures.py    # Figures for the report and the page
+├── docs/                              # Project page (GitHub Pages)
+├── reports/                           # Report (LaTeX + PDF)
+└── notebooks/                         # Notebooks from the previous version (see note below)
 ```
 
-Os notebooks de análise da atenção (`attention_analysis`, `attention_deep_analysis`, `style_transfer_demo`) e os scripts antigos em `scripts/site_assets/` (`generate_assets.py`, `plot_all.py`) foram escritos para a versão com o erro e não foram refeitos.
+The attention analysis notebooks (`attention_analysis`, `attention_deep_analysis`, `style_transfer_demo`) and the old scripts in `scripts/site_assets/` (`generate_assets.py`, `plot_all.py`) were written for the version with the bug and have not been redone.
 
-## 8. Instalação
+## 8. Installation
 
 ```bash
 git clone https://github.com/rick0110/ml2_final_project.git
@@ -143,15 +143,15 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Requisitos: Python 3.10+, GPU CUDA para treino. Modelos pré-treinados usados: [Tacotron 2 da NVIDIA](https://catalog.ngc.nvidia.com/orgs/nvidia/models/tacotron2_pyt_ckpt_amp) e [HiFi-GAN UNIVERSAL_V1](https://github.com/jik876/hifi-gan).
+Requirements: Python 3.10+, a CUDA GPU for training. Pretrained models used: [NVIDIA's Tacotron 2](https://catalog.ngc.nvidia.com/orgs/nvidia/models/tacotron2_pyt_ckpt_amp) and [HiFi-GAN UNIVERSAL_V1](https://github.com/jik876/hifi-gan).
 
-## 9. Experimento: quanta cobertura de dados o estilo precisa
+## 9. Experiment: how much data coverage the style needs
 
-Pergunta: quando um estilo (aqui, uma voz) aparece no treino com poucas frases, o modelo consegue falar um texto novo com ele? E como isso muda com o número de estilos e com o número de frases por estilo?
+Question: when a style (here, a voice) appears in training with only a few sentences, can the model speak new text with it? And how does this change with the number of styles and the number of sentences per style?
 
-Montagem: 2.000 frases do LJSpeech (a voz padrão, com muito texto) mais N locutores do LibriTTS com K frases cada, partindo do modelo em inglês, 2.500 passos por treino. Em cada treino sintetizamos 25 frases fora do treino com 8 referências de vozes treinadas e 4 de vozes nunca vistas. "Voz copiada" é a parcela das amostras cujo áudio fica mais parecido com a referência do que com a voz padrão, segundo um codificador de locutor externo (Resemblyzer). Onde há dois números, são duas sementes.
+Setup: 2,000 LJSpeech sentences (the default voice, with plenty of text) plus N LibriTTS speakers with K sentences each, starting from the English model, 2,500 steps per training run. In each run we synthesize 25 held-out sentences with 8 references from trained voices and 4 from never-seen voices. "Voice copied" is the share of samples whose audio is closer to the reference than to the default voice, according to an external speaker encoder (Resemblyzer). Where there are two numbers, they are two seeds.
 
-| Locutores (N) | Frases por locutor (K) | Palavras erradas: treinadas | Palavras erradas: novas | Voz copiada: treinadas | Voz copiada: novas |
+| Speakers (N) | Sentences per speaker (K) | Wrong words: trained | Wrong words: new | Voice copied: trained | Voice copied: new |
 |---|---|---|---|---|---|
 | 2 | 128 | 13% / 11% | 8% / 5% | 70% / 74% | 4% / 2% |
 | 8 | 8 | 21% / 26% | 14% / 24% | 45% / 44% | 26% / 39% |
@@ -161,101 +161,101 @@ Montagem: 2.000 frases do LJSpeech (a voz padrão, com muito texto) mais N locut
 | 32 | 32 | 13% | 8% | 80% | 52% |
 | 32 | 128 | 12% / 10% | 5% / 5% | 86% / 86% | 61% / 57% |
 
-![Voz copiada em função das frases por locutor e do número de locutores](reports/figures/fig_cobertura.png)
+![Voice copied as a function of sentences per speaker and number of speakers](reports/figures/fig_coverage.png)
 
-O que os números mostram:
+What the numbers show:
 
-- **Frases por locutor decidem as vozes treinadas.** Com 8 locutores, a cópia da voz vai de 45% (8 frases) a 74% (32) e 90% (128).
-- **Número de locutores decide as vozes novas.** Com 128 frases por locutor, a cópia de vozes nunca vistas vai de 3% (2 locutores) a 44% (8) e 59% (32).
-- **Muitos locutores compensam poucas frases.** 32 locutores com 8 frases (256 frases) copiam vozes novas tanto quanto 8 locutores com 128 (1.024 frases).
-- **O latente explica o erro.** Em 144 referências, quanto mais longe da voz padrão está o código de estilo, mais a voz é copiada (correlação de postos 0,83) e mais palavras saem erradas (0,45). Cerca de 80% da variância do latente é diferença entre locutores.
-- **Estilo a 60%** reduz o erro de palavras para 4–9% em todos os treinos, mas a cópia da voz cai junto; só o treino 32 × 128 ainda copia cerca de 45% das vozes novas.
+- **Sentences per speaker decide the trained voices.** With 8 speakers, voice copying goes from 45% (8 sentences) to 74% (32) and 90% (128).
+- **The number of speakers decides the new voices.** With 128 sentences per speaker, copying of never-seen voices goes from 3% (2 speakers) to 44% (8) and 59% (32).
+- **Many speakers make up for few sentences.** 32 speakers with 8 sentences (256 sentences) copy new voices as well as 8 speakers with 128 (1,024 sentences).
+- **The latent explains the error.** Over 144 references, the farther the style code is from the default voice, the more the voice is copied (rank correlation 0.83) and the more words come out wrong (0.45). About 80% of the latent variance is difference between speakers.
+- **Style at 60%** reduces the word error to 4–9% in all runs, but voice copying drops with it; only the 32 × 128 run still copies about 45% of the new voices.
 
-**Duas perdas que não ajudaram (resultado negativo).** Para testar se o problema é o código de estilo carregar o conteúdo da frase, três treinos foram repetidos de duas formas: tirando o estilo de outra frase do mesmo locutor (`--swap-reference`) e, além disso, com uma perda contrastiva que aproxima os códigos de duas frases do mesmo locutor e afasta os de locutores diferentes (`--contrastive-weight 0.5`). Em 2.500 passos, com estilo na força 1,0, nada mudou além da variação entre sementes:
+**Two losses that did not help (negative result).** To test whether the problem is the style code carrying the content of the sentence, three runs were repeated in two ways: taking the style from another sentence by the same speaker (`--swap-reference`) and, in addition, with a contrastive loss that pulls together the codes of two sentences by the same speaker and pushes apart those of different speakers (`--contrastive-weight 0.5`). At 2,500 steps, with style at strength 1.0, nothing changed beyond the variation between seeds:
 
-| N × K | Variante | WER treinadas | WER novas | Voz copiada treinadas | Voz copiada novas |
+| N × K | Variant | WER trained | WER new | Voice copied trained | Voice copied new |
 |---|---|---|---|---|---|
 | 8 × 8 | normal | 21% / 26% | 14% / 24% | 45% / 44% | 26% / 39% |
-| 8 × 8 | troca | 23% / 25% | 21% / 24% | 52% / 48% | 27% / 32% |
-| 8 × 8 | troca + contrastiva | 27% / 23% | 20% / 21% | 42% / 48% | 27% / 31% |
-| 8 × 128 | normal (semente 1) | 11% | 8% | 91% | 51% |
-| 8 × 128 | troca (semente 1) | 12% | 8% | 87% | 38% |
-| 8 × 128 | troca + contrastiva (semente 1) | 14% | 10% | 85% | 39% |
+| 8 × 8 | swap | 23% / 25% | 21% / 24% | 52% / 48% | 27% / 32% |
+| 8 × 8 | swap + contrastive | 27% / 23% | 20% / 21% | 42% / 48% | 27% / 31% |
+| 8 × 128 | normal (seed 1) | 11% | 8% | 91% | 51% |
+| 8 × 128 | swap (seed 1) | 12% | 8% | 87% | 38% |
+| 8 × 128 | swap + contrastive (seed 1) | 14% | 10% | 85% | 39% |
 
-Com estilo a 60% a contrastiva muda o compromisso, sem melhorá-lo: no 8 × 128 as vozes treinadas copiadas sobem de 48% para 70% e as novas de 22% para 29%, mas o WER sobe de 5–7% para 7–9%; no 8 × 8 a cópia sai de 0% para 11–20% e o WER de 5–9% para 13–15%. Ou seja, impedir o latente de carregar a frase não reduz a quantidade de dados necessária; o gargalo parece estar em quantas vozes e frases o decodificador viu. O peso e a temperatura da contrastiva não foram ajustados.
+With style at 60% the contrastive loss changes the trade-off without improving it: in 8 × 128 the copied trained voices rise from 48% to 70% and the new ones from 22% to 29%, but the WER rises from 5–7% to 7–9%; in 8 × 8 copying goes from 0% to 11–20% and the WER from 5–9% to 13–15%. In other words, preventing the latent from carrying the sentence does not reduce the amount of data needed; the bottleneck seems to be how many voices and sentences the decoder has seen. The weight and temperature of the contrastive loss were not tuned.
 
-**Vetor de locutor pré-treinado: ignorado pelo treino (resultado negativo).** Três treinos (8 × 8, 8 × 128, 2 × 128) receberam uma segunda entrada de estilo: o vetor de um codificador de locutor congelado (ECAPA-TDNN, `--speaker-embeddings`), somado ao texto codificado ao lado do vetor do VAE. Em 2.500 passos o modelo não usa essa entrada: com o VAE zerado (força 0,0) e só o vetor de locutor, nenhuma voz é copiada (0% nos três treinos) e a fala sai na voz padrão. Com o VAE ligado, os números ficam iguais aos dos treinos normais:
+**Pretrained speaker vector: ignored by training (negative result).** Three runs (8 × 8, 8 × 128, 2 × 128) received a second style input: the vector from a frozen speaker encoder (ECAPA-TDNN, `--speaker-embeddings`), added to the encoded text alongside the VAE vector. At 2,500 steps the model does not use this input: with the VAE zeroed (strength 0.0) and only the speaker vector, no voice is copied (0% in all three runs) and the speech comes out in the default voice. With the VAE on, the numbers are the same as in the normal runs:
 
-| N × K (semente 1) | Variante | WER treinadas | WER novas | Voz copiada treinadas | Voz copiada novas |
+| N × K (seed 1) | Variant | WER trained | WER new | Voice copied trained | Voice copied new |
 |---|---|---|---|---|---|
 | 8 × 8 | normal | 21% | 14% | 45% | 26% |
-| 8 × 8 | com vetor de locutor | 18% | 14% | 43% | 30% |
+| 8 × 8 | with speaker vector | 18% | 14% | 43% | 30% |
 | 8 × 128 | normal | 11% | 8% | 91% | 51% |
-| 8 × 128 | com vetor de locutor | 13% | 8% | 88% | 46% |
+| 8 × 128 | with speaker vector | 13% | 8% | 88% | 46% |
 | 2 × 128 | normal | 13% | 8% | 70% | 4% |
-| 2 × 128 | com vetor de locutor | 14% | 8% | 70% | 4% |
+| 2 × 128 | with speaker vector | 14% | 8% | 70% | 4% |
 
-A leitura provável: o VAE vê o áudio alvo e já entrega a voz, então o treino não tem motivo para usar a entrada nova.
+The likely reading: the VAE sees the target audio and already delivers the voice, so training has no reason to use the new input.
 
-**Dropout de estilo: o vetor passa a ser usado, mas não reduz a necessidade de locutores.** Zerando o vetor do VAE em metade dos itens de treino (`--style-dropout 0.5`), a voz tem de passar pelo vetor de locutor. Três treinos, uma semente, 2.500 passos; "só vetor" é a força 0,0 (VAE zerado), "vetor + VAE" é a força 1,0:
+**Style dropout: the vector starts being used, but it does not reduce the need for speakers.** By zeroing the VAE vector in half of the training items (`--style-dropout 0.5`), the voice has to go through the speaker vector. Three runs, one seed, 2,500 steps; "vector only" is strength 0.0 (VAE zeroed), "vector + VAE" is strength 1.0:
 
-| N × K | Variante | WER treinadas | WER novas | Voz copiada treinadas | Voz copiada novas |
+| N × K | Variant | WER trained | WER new | Voice copied trained | Voice copied new |
 |---|---|---|---|---|---|
 | 8 × 128 | normal | 11% | 8% | 91% | 51% |
-| 8 × 128 | dropout, só vetor | 9% | 6% | 71% | 5% |
-| 8 × 128 | dropout, vetor + VAE | 14% | 8% | 88% | 37% |
-| 32 × 8 | normal (2 sementes) | 17% / 17% | 13% / 9% | 58% / 51% | 47% / 47% |
-| 32 × 8 | dropout, só vetor | 11% | 7% | 9% | 1% |
-| 32 × 8 | dropout, vetor + VAE | 22% | 15% | 57% | 60% |
-| 32 × 128 | normal (2 sementes) | 12% / 10% | 5% / 5% | 86% / 86% | 61% / 57% |
-| 32 × 128 | dropout, só vetor | 9% | 6% | 64% | 47% |
-| 32 × 128 | dropout, vetor + VAE | 12% | 6% | 83% | 62% |
+| 8 × 128 | dropout, vector only | 9% | 6% | 71% | 5% |
+| 8 × 128 | dropout, vector + VAE | 14% | 8% | 88% | 37% |
+| 32 × 8 | normal (2 seeds) | 17% / 17% | 13% / 9% | 58% / 51% | 47% / 47% |
+| 32 × 8 | dropout, vector only | 11% | 7% | 9% | 1% |
+| 32 × 8 | dropout, vector + VAE | 22% | 15% | 57% | 60% |
+| 32 × 128 | normal (2 seeds) | 12% / 10% | 5% / 5% | 86% / 86% | 61% / 57% |
+| 32 × 128 | dropout, vector only | 9% | 6% | 64% | 47% |
+| 32 × 128 | dropout, vector + VAE | 12% | 6% | 83% | 62% |
 
-Com 8 locutores, o vetor sozinho copia as vozes treinadas (71%) e quase nenhuma nova (5%): a projeção decora os locutores do treino. Com 32 locutores e 128 frases ele já copia 47% das vozes novas sozinho, mas o conjunto vetor + VAE fica igual ao treino normal (62% contra 61% / 57%). Com 8 frases por locutor o vetor quase não é aprendido. Ou seja, um codificador de locutor treinado em milhares de vozes não dispensa o decodificador de ver muitos locutores: o que limita a cópia de vozes novas é quantas vozes o decodificador ouviu, seja qual for o caminho por onde a voz chega. As diferenças de até 13 pontos em vozes novas (32 × 8) estão dentro da variação entre sementes.
+With 8 speakers, the vector alone copies the trained voices (71%) and almost none of the new ones (5%): the projection memorizes the training speakers. With 32 speakers and 128 sentences it already copies 47% of the new voices on its own, but the vector + VAE combination is the same as normal training (62% against 61% / 57%). With 8 sentences per speaker the vector is barely learned. In other words, a speaker encoder trained on thousands of voices does not spare the decoder from seeing many speakers: what limits the copying of new voices is how many voices the decoder has heard, whatever path the voice arrives through. The differences of up to 13 points on new voices (32 × 8) are within the variation between seeds.
 
-**Tratativa teórica e teste da solução derivada (negativo).** [`reports/teoria_cobertura.md`](reports/teoria_cobertura.md) organiza estes resultados numa lei de amostragem em dois níveis (vozes novas não copiadas ≈ a + A/N + B/(N·K); treinadas ≈ a' + C/K + A'/N), que ajusta os 12 treinos até o nível do ruído entre sementes (`scripts/coverage/fit_law.py`) e explica por que as quatro mudanças acima não ajudaram: nenhuma acrescenta vozes ao treino do decodificador. A solução derivada foi criar pseudo-locutores alterando a velocidade das gravações (`scripts/coverage/augment_voices.py`, variante `-aug`), com as previsões registradas antes do resultado. Ela não funcionou: as pseudo-vozes não contam como locutores.
+**Theoretical treatment and test of the derived solution (negative).** [`reports/theory/coverage_theory.md`](reports/theory/coverage_theory.md) organizes these results into a two-level sampling law (new voices not copied ≈ a + A/N + B/(N·K); trained ≈ a' + C/K + A'/N), which fits the 12 runs down to the level of the noise between seeds (`scripts/coverage/fit_law.py`) and explains why the four changes above did not help: none of them adds voices to the decoder's training. The derived solution was to create pseudo-speakers by changing the speed of the recordings (`scripts/coverage/augment_voices.py`, variant `-aug`), with the predictions registered before the result. It did not work: the pseudo-voices do not count as speakers.
 
-| Treino (passo 2.500, estilo inteiro) | Vozes treinadas copiadas | Vozes novas copiadas | WER vozes novas |
+| Run (step 2,500, full style) | Trained voices copied | New voices copied | WER new voices |
 |---|---|---|---|
-| 8 × 8 normal (2 sementes) | 45% / 44% | 26% / 39% | 14% / 24% |
-| 8 × 8 com pseudo-locutores | 50% | 28% (previsto ~31% se não contam, ~50% se contam) | 14% |
-| 8 × 128 normal (2 sementes) | 91% / 88% | 51% / 37% | 8% / 9% |
-| 8 × 128 com pseudo-locutores | 84% | 42% (previsto ~44% / ~55%) | 8% |
+| 8 × 8 normal (2 seeds) | 45% / 44% | 26% / 39% | 14% / 24% |
+| 8 × 8 with pseudo-speakers | 50% | 28% (predicted ~31% if they do not count, ~50% if they count) | 14% |
+| 8 × 128 normal (2 seeds) | 91% / 88% | 51% / 37% | 8% / 9% |
+| 8 × 128 with pseudo-speakers | 84% | 42% (predicted ~44% / ~55%) | 8% |
 
-A lei previu os dois números com N = 8 locutores reais. O que conta é a variedade real de vozes; os caminhos que sobram são separar a leitura do texto da troca de voz (conversão de voz treinada sem transcrição em muitos locutores) e usar várias referências por voz.
+The law predicted both numbers with N = 8 real speakers. What counts is the real variety of voices; the remaining paths are to separate reading the text from changing the voice (voice conversion trained without transcripts on many speakers) and to use several references per voice.
 
-**128 locutores e várias referências por voz.** Previsões registradas antes (seção 8 da nota teórica). Com 128 locutores × 8 frases a lei acertou (55% das vozes novas copiadas, previsto 56%; treinadas 52%, previsto 52%). Com 128 × 32 ela errou para cima: 74% das vozes novas copiadas com 8% de WER (previsto 57%), o melhor resultado do projeto. Uma réplica com outra semente deu 56% (média das duas: 65%), e um treino com 200 locutores deu 64%: os 74% eram em boa parte sorte da semente, e de 128 para 200 locutores não há ganho mensurável. As duas leis candidatas (queda em 1/N ou em 1/√N) ajustam os 16 treinos igualmente bem; o ruído entre sementes (até 18 pontos, com 4 vozes novas por avaliação) é maior que a diferença entre elas. Usar a média do código de estilo de 4 ou 16 frases do mesmo locutor (`--n-refs` em `scripts/eval/synth_check.py`) sobe a cópia das vozes novas de 47% para 67% no treino 128 × 8 e, com 4 frases, sobe também nos outros três treinos (128 × 32: 74% → 78% e 59% → 69%; 200 × 32: 57% → 75%), enquanto a das vozes treinadas cai até 13 pontos; o WER das vozes de outro corpus cai de 16% para 9%. As referências passam a incluir 4 locutores do LibriTTS test-clean ("externos"). Os scripts de conversão de voz (`vc_cascade.py`, `vc_voices.py`) estão prontos mas não foram executados.
+**128 speakers and several references per voice.** Predictions registered beforehand (section 8 of the theory note). With 128 speakers × 8 sentences the law was right (55% of new voices copied, predicted 56%; trained 52%, predicted 52%). With 128 × 32 it erred on the low side: 74% of new voices copied with 8% WER (predicted 57%), the best result of the project. A replica with another seed gave 56% (mean of the two: 65%), and a run with 200 speakers gave 64%: the 74% was largely seed luck, and from 128 to 200 speakers there is no measurable gain. The two candidate laws (decay as 1/N or as 1/√N) fit the 16 runs equally well; the noise between seeds (up to 18 points, with 4 new voices per evaluation) is larger than the difference between them. Using the mean of the style code over 4 or 16 sentences by the same speaker (`--n-refs` in `scripts/eval/synth_check.py`) raises the copying of new voices from 47% to 67% in the 128 × 8 run and, with 4 sentences, also raises it in the other three runs (128 × 32: 74% → 78% and 59% → 69%; 200 × 32: 57% → 75%), while copying of trained voices drops by up to 13 points; the WER of voices from another corpus drops from 16% to 9%. The references now include 4 speakers from LibriTTS test-clean ("external"). The voice conversion scripts (`vc_cascade.py`, `vc_voices.py`) are ready but have not been run.
 
-| Treino (passo 2.500) | Treinadas copiadas | Novas copiadas | Externas copiadas | WER novas |
+| Run (step 2,500) | Trained copied | New copied | External copied | WER new |
 |---|---|---|---|---|
 | 128 × 8 | 52% | 55% | 86% | 8% |
-| 128 × 32 (2 sementes) | 76% / 66% | 74% / 56% | 86% / 86% | 8% / 8% |
+| 128 × 32 (2 seeds) | 76% / 66% | 74% / 56% | 86% / 86% | 8% / 8% |
 | 200 × 32 | 66% | 64% | 91% | 7% |
 
-**Avaliação em 38 vozes nunca ouvidas.** Como 4 vozes novas dão uma medida ruidosa, três treinos com 32 frases por locutor foram avaliados em 38 locutores do LibriTTS test-clean (950 amostras cada; intervalos por reamostragem dos locutores). Previsões na seção 8.7 da nota teórica, resultado na 8.8:
+**Evaluation on 38 never-heard voices.** Since 4 new voices give a noisy measure, three runs with 32 sentences per speaker were evaluated on 38 speakers from LibriTTS test-clean (950 samples each; intervals by resampling the speakers). Predictions in section 8.7 of the theory note, result in 8.8:
 
-| Treino | Externas copiadas (IC 95%) | WER externas |
+| Run | External copied (95% CI) | WER external |
 |---|---|---|
 | 8 × 32 | 57% (43–70) | 13% |
 | 32 × 32 | 70% (58–81) | 12% |
 | 128 × 32 | 79% (68–89) | 12% |
 
-O ganho de 32 para 128 locutores é de 9 pontos (IC 95% de 1,5 a 17), quase tanto quanto de 8 para 32 (13 pontos), sem piorar o WER, o que desfaz a impressão, vinda das 4 vozes, de que acima de 128 locutores não há ganho. A forma da curva não está estabelecida: uma revisão estatística (seção 8.10 da nota teórica, [`reports/teoria/04_dados.md`](reports/teoria/04_dados.md)) mostra que três pontos de uma semente não distinguem as leis candidatas nem fixam o expoente, e que parte da dificuldade das vozes vem da própria medida, que compara com a voz padrão. Nessa avaliação a média de 4 referências não melhora a cópia (cai 2 a 4 pontos) e só reduz o WER em 1 a 3 pontos; o ganho que ela mostrava era das 4 vozes da grade.
+The gain from 32 to 128 speakers is 9 points (95% CI from 1.5 to 17), almost as much as from 8 to 32 (13 points), without worsening the WER, which undoes the impression, coming from the 4 voices, that above 128 speakers there is no gain. The shape of the curve is not established: a statistical review (section 8.10 of the theory note, [`reports/theory/04_data.md`](reports/theory/04_data.md)) shows that three points from one seed do not distinguish the candidate laws nor pin down the exponent, and that part of the difficulty of the voices comes from the measure itself, which compares against the default voice. In this evaluation the mean of 4 references does not improve copying (it drops 2 to 4 points) and only reduces the WER by 1 to 3 points; the gain it showed came from the 4 voices of the grid.
 
-Limites: duas configurações têm uma semente só; cada treino usa 4 vozes novas e 8 treinadas; entre sementes, a cópia de vozes novas varia até 18 pontos; a medida de voz copiada depende de um único codificador de locutor.
+Limits: two configurations have only one seed; each run uses 4 new voices and 8 trained ones; between seeds, copying of new voices varies by up to 18 points; the voice-copied measure depends on a single speaker encoder.
 
-Reprodução: `scripts/coverage/colab_job.sh` (treino e avaliação), `scripts/coverage/summarize.py` (tabela e figura). Resultados por amostra em `reports/coverage/results/`.
+Reproduction: `scripts/coverage/colab_job.sh` (training and evaluation), `scripts/coverage/summarize.py` (table and figure). Per-sample results in `reports/coverage/results/`.
 
-**Teoria da informação: o gargalo é o decodificador.** Medindo nos áudios gerados quanta informação sobre a voz da referência atravessa o sistema (identificação entre as 38 vozes externas; teto de 5,25 bits), a referência e o latente carregam 4 a 5 bits, mas a saída só 0,3 bit com 8 locutores e cerca de 1 bit com 128 (cota de Fano). O ganho com mais locutores vem de o decodificador alcançar mais vozes diferentes, com o mesmo ruído por voz, à razão de cerca de 0,3 bit por duplicação. Detalhes na seção 8.11 da [nota teórica](reports/teoria_cobertura.md) e na seção 8 da [proposta](reports/proposta/proposta.pdf).
+**Information theory: the bottleneck is the decoder.** Measuring on the generated audio how much information about the reference voice passes through the system (identification among the 38 external voices; ceiling of 5.25 bits), the reference and the latent carry 4 to 5 bits, but the output only 0.3 bit with 8 speakers and about 1 bit with 128 (Fano bound). The gain from more speakers comes from the decoder reaching more distinct voices, with the same noise per voice, at a rate of about 0.3 bit per doubling. Details in section 8.11 of the [theory note](reports/theory/coverage_theory.md) and in section 8 of the [proposal](reports/proposal/proposal.pdf).
 
-**Experimentos prontos para a próxima GPU.** Variantes novas em `scripts/coverage/colab_job.sh`: `-film` (estilo modulando cada passo do decodificador), `-z8` / `-z2` (latente menor) e `-lj1000` (metade das frases da voz padrão). Cada avaliação calcula também os bits de voz que chegam à saída (`scripts/coverage/voice_bits.py`). Previsões registradas na seção 8.12 da nota teórica.
+**Experiments ready for the next GPU.** New variants in `scripts/coverage/colab_job.sh`: `-film` (style modulating each decoder step), `-z8` / `-z2` (smaller latent) and `-lj1000` (half of the default voice's sentences). Each evaluation also computes the voice bits that reach the output (`scripts/coverage/voice_bits.py`). Predictions registered in section 8.12 of the theory note.
 
-## 10. Próximo passo: dublagem
+## 10. Next step: dubbing
 
-O objetivo seguinte é dublar filmes: texto traduzido + áudio do ator original como referência de estilo. O que este projeto já entrega para isso é a síntese em português com tom e velocidade vindos de uma referência. O que falta: controlar a duração de cada fala para caber na cena, usar o vídeo (movimento da boca) como entrada, e sincronia labial.
+The next goal is to dub films: translated text + the original actor's audio as the style reference. What this project already delivers toward that is Portuguese synthesis with pitch and speed taken from a reference. What is missing: controlling the duration of each line so it fits the scene, using the video (mouth movement) as input, and lip sync.
 
-## Créditos
+## Credits
 
-**Discentes:** Beatriz Nunes, Herivelton Siqueira, Richard Viana · **Professores:** Francisco Ganacim, Daniel Silveira Yukimura Lopez · **IMPA Tech**.
+**Students:** Beatriz Nunes, Herivelton Siqueira, Richard Viana · **Professors:** Francisco Ganacim, Daniel Silveira Yukimura Lopez · **IMPA Tech**.
 
-**Referências principais:** Zhang et al. 2019 (VAE-TTS) · Hsu et al. 2019 · Shen et al. 2018 (Tacotron 2) · Skerry-Ryan et al. 2018 (*reference encoder*) · Kong et al. 2020 (HiFi-GAN) · Tachibana et al. 2017 (atenção guiada) · Casanova et al. 2022 (TTS-Portuguese Corpus) · Torres Neto et al. 2018 (VERBO) · Radford et al. 2023 (Whisper).
+**Main references:** Zhang et al. 2019 (VAE-TTS) · Hsu et al. 2019 · Shen et al. 2018 (Tacotron 2) · Skerry-Ryan et al. 2018 (*reference encoder*) · Kong et al. 2020 (HiFi-GAN) · Tachibana et al. 2017 (guided attention) · Casanova et al. 2022 (TTS-Portuguese Corpus) · Torres Neto et al. 2018 (VERBO) · Radford et al. 2023 (Whisper).

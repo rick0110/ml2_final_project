@@ -1,266 +1,266 @@
-# Levantamento de literatura: lei de escala N/K para cópia de voz zero-shot
+# Literature survey: N/K scaling law for zero-shot voice copying
 
-Data do levantamento: 16/11/2026. Método: buscas na web com consultas genéricas, mais leitura do texto
-integral de cinco PDFs baixados do arXiv (indicados abaixo).
+Survey date: 16 November 2026. Method: web searches with generic queries, plus reading the full text
+of five PDFs downloaded from arXiv (indicated below).
 
-**Legenda de verificação** (vale para todas as entradas):
+**Verification legend** (applies to all entries):
 
-- **[LIDO]** — abri o PDF e li a tabela/trecho citado; os números foram copiados do texto.
-- **[RESUMO]** — só vi o resumo (abstract) ou o trecho devolvido pela busca; fórmulas e números vêm
-  desse resumo e **não** foram conferidos no texto integral.
-- **[MEMÓRIA]** — afirmação que conheço de memória e que a busca **não** confirmou; conferir antes de citar.
-- **[CÁLCULO MEU]** — conta feita por mim sobre números de terceiros; não é afirmação dos autores.
-
----
-
-## (a) Trabalhos por tópico
-
-### 1. TTS multi-locutor / clonagem de voz: similaridade vs. número de locutores de treino
-
-Resultado geral da busca: **não encontrei nenhum trabalho que enuncie uma lei de escala explícita
-(forma funcional + expoente) da similaridade de locutor zero-shot em função do número de locutores N**,
-nem que varie N e K (frases por locutor) de forma fatorial. O que existe são ablações qualitativas,
-quase sempre confundidas com mudança de corpus ou com horas totais.
-
-| Trabalho | Link | O que mostra | Status |
-|---|---|---|---|
-| Transfer learning de verificação de locutor para TTS multi-locutor (Tacotron 2 + d-vector, NeurIPS 2018) | https://arxiv.org/abs/1806.04558 | Trabalho mais próximo do nosso em arquitetura. Afirma: "zero-shot transfer requires training on thousands of speakers". Tabela 5 varia o conjunto de treino do **speaker encoder** (sintetizador fixo em 1,2K locutores): 1,2K locutores → SV-EER 16,60% / 15,32%, similaridade MOS 2,23 / 2,27; 2,4K → 11,95%, 2,43; 8,4K → 10,14%, 2,54; 18K (interno) → 5,08%, 3,03. Sem ajuste de curva, sem expoente; os pontos misturam corpora e dimensões de embedding (64 vs 256). | [LIDO] |
-| idem — expoente implícito | — | De 1,2K a 8,4K locutores (7x) o EER cai de 15,3–16,6% para 10,1%: expoente aparente ≈ 0,21–0,25. Incluindo o ponto de 18K (corpus interno diferente) o expoente sobe para ≈ 0,41. **É coincidência sugestiva com o nosso 0,26, mas totalmente confundida** (corpus, arquitetura, e é N do encoder, não do sintetizador). | [CÁLCULO MEU] |
-| SC-GlowTTS | https://arxiv.org/abs/2104.05557 | Zero-shot com apenas 11 locutores de treino (VCTK), alegando similaridade estado-da-arte para locutores novos; aponta a lacuna visto/não-visto como problema aberto. Não varia N. | [RESUMO] |
-| YourTTS | https://arxiv.org/abs/2112.02418 | Argumenta qualitativamente que limitar número/variedade de locutores prejudica a generalização para vozes não vistas. Sem curva. | [RESUMO] |
-| Glow-WaveGAN 2 | https://arxiv.org/abs/2207.01832 | Lacuna visto/não-visto maior em VCTK que em LibriTTS, atribuída ao menor número de locutores; encoder pré-treinado reduz a lacuna. Comparação entre corpora, não varredura. | [RESUMO] |
-| Common Voice para TTS multi-locutor (GlowTTS) | https://arxiv.org/abs/2210.06370 | Subconjuntos filtrados por qualidade com números de locutores diferentes (ex.: 633 → 537 → ...). Conclui que "more training speakers are key for modelling speaker variability", mas N está confundido com o limiar de qualidade; a similaridade para não vistos é não monotônica. | [LIDO parcialmente: tabela 1 e discussão] |
-| Estratégias de pré-treino para TTS multi-locutor end-to-end | https://arxiv.org/abs/2011.04839 | Incluir mais locutores (LibriTTS) no treino inicial reduz overfitting aos locutores vistos. Qualitativo. | [RESUMO] |
-| TTS zero-shot com embeddings neurais de locutor estado-da-arte | https://arxiv.org/abs/1910.10838 | Compara tipos de embedding (x-vector, LDE) para locutores não vistos; não varia N. | [RESUMO] |
-| TTS multi-locutor cross-lingual para locutores não vistos | https://arxiv.org/abs/1911.11601 | Tem uma tabela do efeito de aumentar locutores de treino no EER de verificação; **não vi os números**. | [RESUMO] |
-| ECAPA vs x-vector em YourTTS (2025) | https://arxiv.org/abs/2506.20190 | Afirma que o encoder e o número de locutores distintos são determinantes da similaridade; sem lei. | [RESUMO] |
-| VALL-E | https://arxiv.org/abs/2301.02111 | Escala para 60K horas / ~7K locutores e mostra ganho grande em similaridade zero-shot; reconhece degradação para não vistos em sistemas anteriores. Não isola N. | [RESUMO] |
-| VALL-E 2 | https://arxiv.org/abs/2406.05370 | Treino em Libriheavy (50K h, ~7000 locutores — conferido no texto). A busca resume que SIM melhora com mais dados; **não localizei a ablação de tamanho de dados no texto**. | [LIDO parcialmente] |
-| MegaTTS 3 | https://arxiv.org/abs/2502.18924 | Curva de dados mais clara que achei: SIM-O 0,52 (2K h) → 0,65 (200K h) → 0,66 (600K h). Varia **horas**, não locutores; satura no topo. | [RESUMO] |
-| CLaM-TTS, DiTTo-TTS, Mega-TTS, WavTTS | https://arxiv.org/abs/2404.02781 · https://arxiv.org/abs/2406.11427 · https://arxiv.org/abs/2306.03509 · https://arxiv.org/abs/2606.03455 | Todos reportam que mais dados melhoram similaridade; nenhum separa número de locutores de horas totais nem ajusta forma funcional. | [RESUMO] |
-| MimicLM (2026) | https://arxiv.org/abs/2604.11552 | A busca devolveu a frase de que os ganhos de similaridade "seguem padrões típicos de lei de escala com retornos decrescentes" sem saturar. O abstract não diz isso; **não conferi no texto**. É sobre volume de dados, não N. | [RESUMO, não confirmado] |
-| Modelagem generativa hierárquica para síntese controlável (GMVAE-Tacotron, ICLR 2019) | https://arxiv.org/abs/1810.07217 | Mesma família do nosso modelo (Tacotron 2 + latentes VAE). Mostra inferência one-shot de atributos de locutor para locutores não vistos. Não estuda dependência em N ou K. | [RESUMO] |
-| Speaker Generation (TacoSpawn) | https://arxiv.org/abs/2111.05095 | Ajusta um prior paramétrico sobre embeddings de locutor e amostra locutores novos — evidência de que o "espaço de locutores" é modelável como distribuição de baixa complexidade. | [RESUMO] |
-
-**Leis de escala em fala fora de TTS** (para contraste): leis de potência de WER vs. dados/parâmetros em
-rescoring de ASR (https://arxiv.org/abs/2306.15815), em modelos fundacionais multilíngues OWLS
-(https://arxiv.org/abs/2502.10373) e em ASR baseado em LLM vs. FLOPs (https://arxiv.org/abs/2508.04096)
-— todos [RESUMO]. Ou seja, "lei de escala em fala" existe para ASR/horas, não para N locutores em TTS.
-
-### 2. Verificação de locutor / embeddings: generalização vs. número de locutores
-
-Também aqui **não achei lei de potência ajustada de EER vs. número de locutores**.
-
-| Trabalho | Link | O que mostra | Status |
-|---|---|---|---|
-| Treino de reconhecimento de locutor com dados limitados (subconjuntos "tiny" do VoxCeleb2) | https://arxiv.org/abs/2203.14688 | Orçamento fixo de ~50K enunciados, três desenhos: poucos locutores (100 loc., ~51 sessões cada), muitos locutores/poucas sessões (5994 loc., 1 sessão), muitos locutores/muitas sessões (5994 loc., ~8 sessões, 1 enunciado por sessão). EER (dev, vox1-o) X-vector / ECAPA / wav2vec2: 12,9 / 12,2 / 7,5% · 21,7 / 16,0 / 15,7% · 9,8 / 6,0 / 3,6%; VoxCeleb2 completo: 6,3 / 2,9 / 2,4%. Conclusão dos autores: muitos locutores **sem** variabilidade de sessão é o pior caso; a hipótese inicial "maximizar locutores é primordial" não se sustenta sozinha. É o análogo mais direto do nosso trade-off N×K, mas com 3 pontos e sem forma funcional. | [LIDO] |
-| VoxBlink2 (100K+ locutores) | https://arxiv.org/abs/2407.11510 | Subconjuntos aleatórios de 5K, 10K, 30K e 110K locutores. Em fine-tuning misto, EER 0,527 / 0,505 / 0,505 / 0,674% — "não melhora consistentemente"; no pré-treino, a Figura 3 mostra que mais locutores melhora (não li os valores da figura). Sem ajuste. | [LIDO parcialmente] |
-| Estudo empírico do GE2E | https://arxiv.org/abs/2011.04896 | Efeito do número de enunciados de cadastro por locutor: decisivo para valores baixos, satura depois (compatível com um termo tipo 1/K). | [RESUMO] |
-| Design de dataset base em few-shot de imagens (ECCV 2020) | https://arxiv.org/abs/2007.08872 | Análogo fora de fala: com orçamento fixo de anotação, o trade-off classes × imagens por classe tem grande efeito; o ótimo usa muitas classes e poucas imagens por classe. Empírico, sem lei. | [RESUMO] |
-| Geração de classes novas para metric learning | https://arxiv.org/abs/2201.01008 | Com total de amostras fixo, Recall@1 em classes não vistas cresce com o número de classes de treino. Empírico. | [RESUMO] |
-
-### 3. Teoria de leis de escala neurais e expoentes a partir da dimensão intrínseca
-
-| Trabalho | Link | O que mostra | Status |
-|---|---|---|---|
-| A Neural Scaling Law from the Dimension of the Data Manifold | https://arxiv.org/abs/2004.10802 | Perda ∝ (nº de parâmetros)^(-α) com **α ≈ 4/d**, d = dimensão intrínseca da variedade de dados; testado em teacher/student, CNNs e GPT (para GPT: 4/α ≈ 53 vs. d ≥ 90, ou seja, só a desigualdade vale). Atenção: a lei é em **parâmetros**, não em número de amostras. | [RESUMO] |
-| Explaining Neural Scaling Laws (PNAS 2024) | https://arxiv.org/abs/2102.06701 | Quatro regimes: limitado por variância (expoente universal, vem da existência de um limite bem-comportado) e limitado por resolução (expoente depende do espectro do kernel / da variedade de dados), nos eixos de dados e de largura; dualidade entre os dois expoentes. Em redes reais os expoentes são menos nítidos que em teacher-student. | [RESUMO] |
-| Curvas de aprendizado assintóticas de métodos de kernel | https://arxiv.org/abs/1905.10843 | Teacher-student gaussiano: erro ∝ n^(-β), β fixado pela suavidade e pela dimensão (β = (α_T − d)/d quando o student não limita); via kernel-PCA estima β ≈ 0,36 (MNIST) e ≈ 0,07 (CIFAR10), em acordo com o observado. Menciona o baseline β = 1/d para funções Lipschitz. Refinamento exato: https://arxiv.org/abs/2006.09754. | [RESUMO] |
-| Curvas de aprendizado dependentes do espectro em regressão de kernel | https://arxiv.org/abs/2002.02561 | Expressões analíticas do erro de generalização em função do autoespectro do kernel e do alinhamento do alvo. | [RESUMO] |
-| Learning Curve Theory | https://arxiv.org/abs/2102.04074 | Modelo de brinquedo que produz n^(-β) para qualquer β > 0; o expoente depende da distribuição dos dados (cauda tipo Zipf), não é universal. | [RESUMO] |
-| The Quantization Model of Neural Scaling (NeurIPS 2023) | https://arxiv.org/abs/2303.13506 | Lei de potência da perda emerge se "quanta" de habilidade têm frequências em lei de potência e são aprendidos em ordem de frequência. Alternativa à explicação por dimensão. | [RESUMO] |
-| Deep Learning Scaling is Predictable, Empirically | https://arxiv.org/abs/1712.00409 | Curvas de aprendizado em lei de potência em tradução, LM, imagens e **fala**; expoentes medidos, não derivados; melhorias de modelo deslocam a curva sem mudar o expoente. | [RESUMO] |
-| A Constructive Prediction of the Generalization Error Across Scales (ICLR 2020) | https://arxiv.org/abs/1909.12673 | Forma funcional conjunta em tamanho de modelo e de dados que extrapola de escalas pequenas para grandes. Padrão metodológico para "prever e depois testar". | [RESUMO] |
-| DNNs adaptam-se à dimensão intrínseca | https://arxiv.org/abs/1907.02177 | Taxa O(n^(-2β/(2β+d))) com d = dimensão intrínseca (de Minkowski) do suporte, sem exigir estrutura de variedade. | [RESUMO] |
-| Regressão não paramétrica em variedades com ReLU profundas | https://arxiv.org/abs/1908.01842 | Erro quadrático n^(-2(s+α)/(2(s+α)+d)) log³n para alvo Hölder em variedade riemanniana d-dimensional. Extensão sem hipótese de variedade: https://arxiv.org/abs/2306.14859. | [RESUMO] |
-| k-NN adapta-se à dimensão intrínseca local (NeurIPS 2011) | https://arxiv.org/abs/1110.4300 | Taxa quase-minimax Õ(n^(-2/(2+d))) com d local e desconhecido. | [RESUMO] |
-| Taxas de convergência de medidas empíricas em distância de Wasserstein (Bernoulli 2019) | https://arxiv.org/abs/1707.00087 | E[W_p(μ̂_n, μ)] ~ n^(-1/d), com d uma dimensão **intrínseca** da medida; comportamento multi-escala (taxas diferentes em faixas diferentes de n). | [RESUMO] |
-| Generalização via dimensão do embedding e convergência distribucional (ICML 2026) | https://arxiv.org/abs/2601.22756 | Cota do gap de generalização = (taxa de Wasserstein fixada pela dimensão intrínseca dos embeddings) × (constante de Lipschitz do mapa embedding→predição). **É o argumento mais próximo do que queremos fazer**, mas em classificação i.i.d., não em generalização a grupos novos. | [RESUMO] |
-| Dimensão intrínseca de imagens e impacto no aprendizado (ICLR 2021) | https://arxiv.org/abs/2104.08894 | Mede a dimensão intrínseca de datasets de imagens (baixa) e mostra, controlando-a com GANs, que ela — e não a dimensão ambiente — governa a complexidade amostral. Modelo de experimento para nós. | [RESUMO] |
-| Taxa minimax n^(-2p/(2p+d)) (regressão não paramétrica, 1982) | — | Resultado clássico; **a busca não devolveu a fonte**. | [MEMÓRIA] |
-
-### 4. Teoria de generalização para grupos/tarefas novos
-
-| Trabalho | Link | O que mostra | Status |
-|---|---|---|---|
-| Modelo de aprendizado de viés indutivo (2000) | citado em https://arxiv.org/abs/1505.06279 | Formaliza "ambiente de tarefas": tarefas sorteadas i.i.d. de uma distribuição; análise de erro por números de cobertura em nº de tarefas e amostras por tarefa. É a moldura conceitual exata (locutor = tarefa). | [RESUMO, via citação] |
-| The Benefit of Multitask Representation Learning (JMLR 2016) | https://arxiv.org/abs/1505.06279 | Cotas de convergência uniforme para learning-to-learn da ordem **O(1/√T) + O(1/√m)** (T tarefas, m amostras por tarefa); o termo 1/√T não pode ser melhorado nesse arcabouço. Corresponde à nossa forma a + A/√N + C/√K. A forma exata do teorema **não foi lida**; a ordem 1/√T + 1/√m veio da descrição feita no artigo do item seguinte. | [RESUMO] |
-| On the Theory of Transfer Learning: The Importance of Task Diversity (NeurIPS 2020) | https://arxiv.org/abs/2006.11650 | Com tarefas "diversas": complexidade amostral para aprender a representação escala como C(H) + t·C(F); tarefa nova custa só C(F); a taxa decai com **todas** as amostras (n·t). Introduz um parâmetro de diversidade ν. | [RESUMO] |
-| Few-Shot Learning via Learning the Representation, Provably (ICLR 2021) | https://arxiv.org/abs/2002.09434 | Representação linear de dimensão k em dimensão ambiente d: risco na tarefa-alvo **O(dk/(n₁T) + k/n₂)**; contorna a barreira Ω(1/T) do cenário de tarefas i.i.d. graças a uma hipótese de cobertura/diversidade. O primeiro termo é exatamente o nosso B/(NK). | [RESUMO] |
-| Representações lineares compartilhadas, com cotas inferiores | https://arxiv.org/abs/2002.11684 | Taxas em T e amostras por tarefa com cotas inferiores quase ótimas. Detalhes não lidos. | [RESUMO] |
-| A Distribution-Dependent Analysis of Meta-Learning (ICML 2021) | https://arxiv.org/abs/2011.00344 | Regressão linear gaussiana com distribuição gaussiana de tarefas (= modelo de efeitos aleatórios): cotas inferiores dependentes do problema para o risco de transferência e estimador que as atinge a menos de constante. **É o teorema mais próximo da forma a + A/N + B/(NK)**; a expressão exata não foi lida. | [RESUMO] |
-| Cotas teóricas de erro de estimação em meta-aprendizado | https://arxiv.org/abs/2010.07140 | Modelo bayesiano de dois níveis para regressão linear; cotas minimax inferiores e superior (MAP) para tarefa nova. | [RESUMO] |
-| Generalizing from Several Related Classification Tasks to a New Unlabeled Sample (NeurIPS 2011) | https://proceedings.neurips.cc/paper/2011/hash/b571ecea16a9824023ee1af16897a582-Abstract.html | Formaliza generalização de domínio: N domínios de treino sorteados de uma meta-distribuição; análise de erro e consistência universal via kernels sobre distribuições. A taxa em N não apareceu nos trechos. | [RESUMO] |
-| Domain Generalization by Marginal Transfer Learning (JMLR 2021) | https://arxiv.org/abs/1711.07910 | Versão estendida; cota em N domínios e n amostras por domínio (Rademacher). Forma exata não vista. | [RESUMO] |
-| How Many Domains Suffice for Domain Generalization? (NeurIPS 2025) | https://arxiv.org/abs/2506.16704 | Define "complexidade amostral em domínios" e uma dimensão de estilhaçamento de domínios; cotas superior e inferior casadas a menos de polilog. Responde formalmente a "quantos domínios (locutores) bastam", mas em PAC de classificação. | [RESUMO] |
-| Análise teórica de aprendizado contrastivo não supervisionado (ICML 2019) | https://arxiv.org/abs/1902.09229 | Arcabouço de "classes latentes"; garantias para tarefas a jusante formadas pelas **mesmas** classes latentes — não cobre classes realmente novas. | [RESUMO] |
-| Amostragem por conglomerados em dois estágios | (textos de amostragem; a busca devolveu só páginas didáticas) | A variância do estimador da média com N grupos e K unidades por grupo decompõe-se em componente entre-grupos (∝ 1/N) e intra-grupos (∝ 1/(NK)); efeito de desenho 1 + (K−1)ρ. É a origem estatística elementar da forma a + A/N + B/(NK). A fórmula explícita **não** apareceu em fonte primária na busca. | [MEMÓRIA + páginas didáticas] |
-
-### 5. Medidas de teoria da informação
-
-| Trabalho | Link | O que mostra | Status |
-|---|---|---|---|
-| Fixing a Broken ELBO (ICML 2018) | https://arxiv.org/abs/1711.00464 | Plano taxa-distorção para VAEs: cotas variacionais inferior e superior da informação mútua I(x;z); modelos com o mesmo ELBO podem ter taxas muito diferentes; decodificadores potentes ignoram o latente. A nossa medida "bits por enunciado = KL" é a **taxa R** deste arcabouço (cota superior de I). | [RESUMO] |
-| Capacidade do embedding variacional em TTS expressivo (Capacitron) | https://arxiv.org/abs/1906.03402 | Em Tacotron com encoder de referência variacional: define capacidade = informação mútua embedding↔dados, limitada superiormente pelo KL; controla-se a capacidade restringindo o KL (em bits/nats); mais capacidade → mais precisão de transferência, menos generalidade. **Antecedente direto da nossa medida de 65–73 bits**; não decompõe a capacidade em bits "de locutor" nem relaciona com N. | [RESUMO] |
-| Unicidade da representação i-vector da voz | https://arxiv.org/abs/2008.11985 | Estima a informação biométrica da voz: 43–52 (ou 43–70) bits em condição restrita com amostras de 5 s; cai para **13–20 bits** em condições menos restritas; dobrar a duração acrescenta ~20 bits. Estimativas anteriores citadas vão de 14 a 120+ bits. Os nossos 10–20 bits de identidade caem na faixa "irrestrita". | [RESUMO] |
-| Divulgação de privacidade em fala medida em bits (2025) | https://arxiv.org/abs/2508.05250 | Mede em bits quanto cada tipo de característica revela sobre a identidade; divulgações de características independentes são aditivas; embeddings de reconhecimento de locutor são os mais informativos. Não vi os valores numéricos. | [RESUMO] |
-| Interpretação das dimensões do espaço de embeddings de locutor (2025) | https://warwick.ac.uk/fac/soc/al/research/baap2026/ladefoged/interpreting-the-dimensions-of-speaker-embedding-space.pdf | Preservação de vizinhança (UMAP) satura após ~6 dimensões; 9 parâmetros acústicos interpretáveis explicam o mesmo que 7 componentes principais (>50% da variância). Indício — não estimativa formal — de dimensão efetiva baixa (~6–10). | [RESUMO] |
-| M-Vec: embeddings de locutor "Matryoshka" | https://arxiv.org/abs/2409.15782 | Embeddings de locutor com dimensão flexível; pela proposta, dimensões bem menores que 192–512 retêm boa parte do desempenho (não vi os números). | [RESUMO] |
-| Eigenvoices (adaptação rápida de locutor, ~2000) | https://eurecom.fr/publication/200/download/mm-nguypa-990301b.pdf | Locutores vivem num subespaço linear de baixa dimensão; adaptar = estimar poucos coeficientes. Precedente clássico de "espaço de locutores de baixa dimensão". | [RESUMO] |
-| How much do language models memorize? (2025) | https://arxiv.org/abs/2505.24832 | Capacidade de memorização de modelos GPT ≈ 3,6 bits por parâmetro (3,5–4); quando a capacidade enche, a memorização não intencional cai e começa a generalização; deriva leis de escala para inferência de pertinência. Modelo de "capacidade prevista e depois testada". | [RESUMO] |
-
-**Não encontrei**: estimativa formal (TwoNN, MLE etc.) da dimensão intrínseca de x-vectors/d-vectors;
-nem medida de "bits de identidade de locutor" dentro de um latente de estilo de TTS em função de N.
-
-### 6. "Modelo mínimo" / saturação de capacidade prevista e testada
-
-| Trabalho | Link | O que mostra | Status |
-|---|---|---|---|
-| Don't Blame the ELBO! (NeurIPS 2019) | https://arxiv.org/abs/1911.02469 | VAE linear recupera pPCA; o número de dimensões latentes ativas é determinado pelo ruído de observação vs. autovalores; a análise linear prevê o comportamento de VAEs não lineares. Base para prever o "tamanho mínimo do latente". | [RESUMO] |
-| Dependência do tamanho do dataset da curva taxa-distorção e do limiar de colapso em VAE linear | https://arxiv.org/abs/2309.07663 | Forma fechada relacionando β, tamanho do dataset, colapso posterior e curva taxa-distorção em VAE linear no limite de alta dimensão. **Único trabalho encontrado que liga R(D) do VAE ao tamanho do dataset** — mas i.i.d., sem estrutura de grupos. | [RESUMO] |
-| Preprint 2026 sobre limiares de colapso em β-VAE | https://arxiv.org/abs/2605.22691 | No caso gaussiano linear, limiares de colapso, reduções de distorção e autovalores normalizados de PCA coincidem; alerta que "β dá N dimensões ativas" não é intrínseco sem normalização. Visto só por agregador. | [RESUMO, não revisado por pares] |
-| Capacitron | https://arxiv.org/abs/1906.03402 | (ver item 5) Varia a capacidade-alvo e observa o trade-off precisão/generalidade — teste empírico de capacidade em TTS, sem previsão teórica do mínimo. | [RESUMO] |
-| How much do language models memorize? | https://arxiv.org/abs/2505.24832 | (ver item 5) Previsão de saturação de capacidade confirmada em centenas de transformers. | [RESUMO] |
-
-Não encontrei resultado de *information bottleneck* (transições de fase / representação mínima suficiente)
-na busca; se for usado, precisa de busca dedicada.
+- **[READ]** — I opened the PDF and read the cited table/passage; the numbers were copied from the text.
+- **[ABSTRACT]** — I only saw the abstract or the snippet returned by the search; formulas and numbers come
+  from that summary and were **not** checked against the full text.
+- **[MEMORY]** — a claim I know from memory that the search did **not** confirm; check before citing.
+- **[MY CALCULATION]** — a calculation I made on third-party numbers; not a claim by the authors.
 
 ---
 
-## (b) O que já existe e o que seria novo
+## (a) Works by topic
 
-### O que já existe (com segurança razoável)
+### 1. Multi-speaker TTS / voice cloning: similarity vs. number of training speakers
 
-1. **Fato qualitativo**: mais locutores de treino melhora a cópia zero-shot; "milhares de locutores são
-   necessários" (2018). Bem estabelecido e repetido em quase todo artigo de TTS zero-shot.
-2. **Trade-off N×K com orçamento fixo**, em verificação de locutor (subconjuntos tiny do VoxCeleb2) e em
-   few-shot de imagens — empírico, com 3–4 pontos, sem forma funcional.
-3. **Formas a + A/N + B/(NK) e a + A/√N + C/√K** são, respectivamente, a forma de efeitos aleatórios /
-   amostragem em dois estágios e a forma das cotas de convergência uniforme de learning-to-learn.
-   Como *formas*, não são novas.
-4. **Expoente a partir da dimensão intrínseca** (≈4/d em parâmetros; n^(-2s/(2s+d)) e n^(-1/d) em amostras)
-   é ideia estabelecida para aprendizado i.i.d., e em 2026 já há cota "dimensão do embedding × Wasserstein".
-5. **KL do latente de estilo como capacidade em bits** em Tacotron variacional (Capacitron), e **bits de
-   identidade na voz** (13–70 bits, i-vectors).
+Overall search result: **I found no work that states an explicit scaling law
+(functional form + exponent) for zero-shot speaker similarity as a function of the number of speakers N**,
+nor one that varies N and K (sentences per speaker) factorially. What exists are qualitative ablations,
+almost always confounded with a change of corpus or with total hours.
 
-### O que parece novo (até onde a busca alcançou)
-
-- **Uma lei quantitativa conjunta em N e K para cópia de voz zero-shot**, com separação limpa
-  "visto depende de K, não visto depende de N", em desenho fatorial. Não achei nada equivalente em TTS
-  nem em verificação de locutor.
-- **Amarrar o expoente em N à dimensão intrínseca do espaço de locutores** (tratando locutores, e não
-  enunciados, como as amostras da variedade). A teoria existente trata amostras i.i.d.; a transposição
-  para "amostras = grupos" com K observações ruidosas por grupo não apareceu.
-- **Decomposição do KL do latente em bits de identidade vs. resto, crescendo como log N**, e um
-  **tamanho mínimo de latente previsto e testado**. Não achei análogo.
-
-### Trabalho anterior mais próximo
-
-- Empírico: https://arxiv.org/abs/1806.04558 (Tabela 5) e https://arxiv.org/abs/2203.14688.
-- Teórico: https://arxiv.org/abs/2011.00344 e https://arxiv.org/abs/2002.09434 (forma em N e NK);
-  https://arxiv.org/abs/2004.10802, https://arxiv.org/abs/2102.06701 e https://arxiv.org/abs/2601.22756
-  (expoente pela dimensão).
-- Informacional: https://arxiv.org/abs/1906.03402 e https://arxiv.org/abs/2008.11985.
-
-### Ressalvas honestas sobre a novidade
-
-1. **Ausência de evidência não é evidência de ausência.** Foram ~35 buscas genéricas; Interspeech/ICASSP
-   e teses são mal indexados. Um revisor de fala pode conhecer uma ablação de N que não achei. Antes de
-   alegar "primeiro", fazer busca dedicada em ISCA Archive e IEEE Xplore.
-2. **As duas formas candidatas contradizem o expoente observado.** A forma hierárquica prevê decaimento
-   1/N; as cotas de convergência uniforme, 1/√N. O dado empírico é N^(-0,26) sem piso. Um expoente tão
-   pequeno é assinatura de regime **não paramétrico / limitado por resolução**, não de efeitos aleatórios
-   de dimensão finita. Isso é ao mesmo tempo a parte mais interessante e a mais frágil: com 16 execuções,
-   as duas formas ajustam "igualmente bem" justamente porque o piso *a* absorve a diferença.
-3. **Três valores de N (8, 32, 128) não distinguem lei de potência de decaimento logarítmico** nem de
-   potência com piso. 43→30→21% dá razão 0,70 nos dois passos (limpo), mas são só dois intervalos.
-4. **O expoente não identifica a dimensão sem hipótese adicional.** [CÁLCULO MEU] 0,26 corresponde a
-   d ≈ 4 se a taxa for N^(-1/d); d ≈ 6 se for N^(-2/(2+d)); d ≈ 8 se N^(-2/d); d ≈ 15 se N^(-4/d).
-   A previsão só é falseável se d for medido **independentemente** (ex.: TwoNN/MLE nos embeddings do
-   speaker encoder) e a suavidade for fixada a priori.
-5. **A métrica é um limiar** (fração de amostras mais parecidas com a referência do que com a voz padrão),
-   não uma perda suave; taxas de erro de regressão não se transferem automaticamente a uma fração de
-   cauda. Além disso a métrica depende de um speaker encoder específico.
-6. **Escala pequena e modelo antigo.** Tacotron 2 + VAE com N ≤ 128 está muito longe do regime dos
-   sistemas atuais (milhares de locutores, dezenas de milhares de horas), que saturam (SIM-O 0,65→0,66
-   de 200K a 600K horas). "Sem piso visível" até N=128 não diz nada sobre N=10⁴.
-
-**Veredito**: a *lei empírica fatorial N×K* e a *ligação expoente ↔ dimensão do espaço de locutores* são,
-ao que tudo indica, novas como enunciado quantitativo; os *ingredientes teóricos* são todos conhecidos.
-A contribuição defensável é a transposição e o teste, não um teorema novo — a menos que se prove uma
-taxa para o cenário hierárquico não paramétrico (ver (c), lacuna).
-
----
-
-## (c) Teoremas reutilizáveis e hipóteses necessárias
-
-| Resultado | Termo que fornece | Hipóteses que teríamos de assumir | Risco |
+| Work | Link | What it shows | Status |
 |---|---|---|---|
-| Decomposição de variância em dois estágios / efeitos aleatórios | A/N + B/(NK) | Locutores i.i.d. de uma população; enunciados i.i.d. dado o locutor; estimador linear/de dimensão finita | Prevê expoente 1 em N — contradiz 0,26. Serve para o regime "visto" (C/K) e como termo de variância. |
-| Meta-aprendizado com distribuição gaussiana de tarefas (https://arxiv.org/abs/2011.00344) | Cotas inferior e superior do risco em tarefa nova | Regressão linear, design fixo, tarefas gaussianas | Linear; dá otimalidade da forma hierárquica, não o expoente pequeno. |
-| Representação compartilhada (https://arxiv.org/abs/2002.09434, https://arxiv.org/abs/2006.11650) | dk/(NK) + k/n₂ | Representação de dimensão k comum a todas as tarefas; **diversidade de tarefas** (os N locutores cobrem as k direções) | No zero-shot n₂ é um único enunciado de referência; o termo k/n₂ vira o piso *a*. A hipótese de diversidade é exatamente o que falha com N pequeno. |
-| Learning-to-learn por convergência uniforme (https://arxiv.org/abs/1505.06279) | 1/√N + 1/√K | Tarefas i.i.d.; classe de representação de complexidade finita | É cota superior de pior caso, não curva de aprendizado; não usar como "lei". |
-| Taxa de Wasserstein com dimensão intrínseca (https://arxiv.org/abs/1707.00087) | N^(-1/d) | Distribuição de locutores com dimensão intrínseca d > 2p; suporte compacto | Dá d ≈ 4 para 0,26 — plausível frente a "~6 dimensões" do item 5, mas precisa de um mapa Lipschitz do embedding até a métrica. |
-| Cota embedding × Lipschitz (https://arxiv.org/abs/2601.22756) | (taxa de Wasserstein) × L | Mapa embedding→saída Lipschitz; amostras i.i.d. | Molde pronto do argumento; teríamos de trocar "amostra" por "locutor" e lidar com o ruído de K enunciados. |
-| Regressão não paramétrica adaptativa (https://arxiv.org/abs/1907.02177, https://arxiv.org/abs/1908.01842, https://arxiv.org/abs/1110.4300) | N^(-2s/(2s+d)) | Mapa locutor→voz Hölder-s sobre suporte de dimensão d; rede atinge a taxa minimax | Dois parâmetros livres (s, d) para um expoente: não identificável sem medir d. |
-| Regimes variância/resolução (https://arxiv.org/abs/2102.06701) | Interpretação: N no regime de resolução, K no de variância | Limite bem-comportado em K; espectro em lei de potência em N | Encaixa qualitativamente no nosso achado (K → C/K; N → potência pequena). É a moldura narrativa mais natural. |
-| Taxa-distorção de VAE (https://arxiv.org/abs/1711.00464, https://arxiv.org/abs/1906.03402) | KL ≥ I(x;z); capacidade em bits | Nenhuma forte: KL é cota **superior** da informação mútua | Os "10–20 bits de identidade" exigem um estimador próprio (cota inferior por classificador); declarar qual cota é usada. |
-| Contagem informacional | Para distinguir N locutores são necessários ≥ log₂ N bits | Trivial (Fano) | Explica "cresce como log N" **dentro do treino**; não explica sozinho a generalização para não vistos. |
-| VAE linear / pPCA (https://arxiv.org/abs/1911.02469, https://arxiv.org/abs/2309.07663) | Nº de dimensões ativas = nº de autovalores acima do ruído | Linear-gaussiano | Dá previsão testável do latente mínimo se medirmos o espectro da variância entre-locutores. |
+| Transfer learning from speaker verification to multi-speaker TTS (Tacotron 2 + d-vector, NeurIPS 2018) | https://arxiv.org/abs/1806.04558 | The work closest to ours in architecture. States: "zero-shot transfer requires training on thousands of speakers". Table 5 varies the training set of the **speaker encoder** (synthesizer fixed at 1.2K speakers): 1.2K speakers → SV-EER 16.60% / 15.32%, similarity MOS 2.23 / 2.27; 2.4K → 11.95%, 2.43; 8.4K → 10.14%, 2.54; 18K (internal) → 5.08%, 3.03. No curve fit, no exponent; the points mix corpora and embedding dimensions (64 vs 256). | [READ] |
+| same — implicit exponent | — | From 1.2K to 8.4K speakers (7x) the EER drops from 15.3–16.6% to 10.1%: apparent exponent ≈ 0.21–0.25. Including the 18K point (different internal corpus) the exponent rises to ≈ 0.41. **It is a suggestive coincidence with our 0.26, but completely confounded** (corpus, architecture, and it is the encoder's N, not the synthesizer's). | [MY CALCULATION] |
+| SC-GlowTTS | https://arxiv.org/abs/2104.05557 | Zero-shot with only 11 training speakers (VCTK), claiming state-of-the-art similarity for new speakers; points to the seen/unseen gap as an open problem. Does not vary N. | [ABSTRACT] |
+| YourTTS | https://arxiv.org/abs/2112.02418 | Argues qualitatively that limiting the number/variety of speakers hurts generalization to unseen voices. No curve. | [ABSTRACT] |
+| Glow-WaveGAN 2 | https://arxiv.org/abs/2207.01832 | Seen/unseen gap larger on VCTK than on LibriTTS, attributed to the smaller number of speakers; a pre-trained encoder reduces the gap. Comparison between corpora, not a sweep. | [ABSTRACT] |
+| Common Voice for multi-speaker TTS (GlowTTS) | https://arxiv.org/abs/2210.06370 | Quality-filtered subsets with different numbers of speakers (e.g. 633 → 537 → ...). Concludes that "more training speakers are key for modelling speaker variability", but N is confounded with the quality threshold; similarity for unseen speakers is non-monotonic. | [READ partially: table 1 and discussion] |
+| Pre-training strategies for end-to-end multi-speaker TTS | https://arxiv.org/abs/2011.04839 | Including more speakers (LibriTTS) in initial training reduces overfitting to the seen speakers. Qualitative. | [ABSTRACT] |
+| Zero-shot TTS with state-of-the-art neural speaker embeddings | https://arxiv.org/abs/1910.10838 | Compares embedding types (x-vector, LDE) for unseen speakers; does not vary N. | [ABSTRACT] |
+| Cross-lingual multi-speaker TTS for unseen speakers | https://arxiv.org/abs/1911.11601 | Has a table of the effect of increasing training speakers on verification EER; **I did not see the numbers**. | [ABSTRACT] |
+| ECAPA vs x-vector in YourTTS (2025) | https://arxiv.org/abs/2506.20190 | States that the encoder and the number of distinct speakers are determinants of similarity; no law. | [ABSTRACT] |
+| VALL-E | https://arxiv.org/abs/2301.02111 | Scales to 60K hours / ~7K speakers and shows a large gain in zero-shot similarity; acknowledges degradation for unseen speakers in earlier systems. Does not isolate N. | [ABSTRACT] |
+| VALL-E 2 | https://arxiv.org/abs/2406.05370 | Trained on Libriheavy (50K h, ~7000 speakers — checked in the text). The search summarizes that SIM improves with more data; **I did not locate the data-size ablation in the text**. | [READ partially] |
+| MegaTTS 3 | https://arxiv.org/abs/2502.18924 | Clearest data curve I found: SIM-O 0.52 (2K h) → 0.65 (200K h) → 0.66 (600K h). Varies **hours**, not speakers; saturates at the top. | [ABSTRACT] |
+| CLaM-TTS, DiTTo-TTS, Mega-TTS, WavTTS | https://arxiv.org/abs/2404.02781 · https://arxiv.org/abs/2406.11427 · https://arxiv.org/abs/2306.03509 · https://arxiv.org/abs/2606.03455 | All report that more data improves similarity; none separates number of speakers from total hours or fits a functional form. | [ABSTRACT] |
+| MimicLM (2026) | https://arxiv.org/abs/2604.11552 | The search returned the sentence that similarity gains "follow typical scaling-law patterns with diminishing returns" without saturating. The abstract does not say this; **I did not check it in the text**. It is about data volume, not N. | [ABSTRACT, not confirmed] |
+| Hierarchical generative modeling for controllable speech synthesis (GMVAE-Tacotron, ICLR 2019) | https://arxiv.org/abs/1810.07217 | Same family as our model (Tacotron 2 + VAE latents). Shows one-shot inference of speaker attributes for unseen speakers. Does not study the dependence on N or K. | [ABSTRACT] |
+| Speaker Generation (TacoSpawn) | https://arxiv.org/abs/2111.05095 | Fits a parametric prior over speaker embeddings and samples new speakers — evidence that the "speaker space" can be modeled as a low-complexity distribution. | [ABSTRACT] |
 
-**Lacuna teórica (onde poderia haver teorema novo)**: nenhum resultado encontrado cobre o caso
-*hierárquico e não paramétrico* — N grupos amostrados de uma distribuição de dimensão intrínseca d, cada
-um observado por K amostras ruidosas, risco medido num grupo novo. A conjectura natural, combinando os
-ingredientes acima, é um erro da forma
+**Scaling laws in speech outside TTS** (for contrast): power laws of WER vs. data/parameters in
+ASR rescoring (https://arxiv.org/abs/2306.15815), in OWLS multilingual foundation models
+(https://arxiv.org/abs/2502.10373) and in LLM-based ASR vs. FLOPs (https://arxiv.org/abs/2508.04096)
+— all [ABSTRACT]. In other words, "scaling laws in speech" exist for ASR/hours, not for N speakers in TTS.
 
-    piso + (termo de resolução em N, expoente fixado por d e suavidade) + (termo de variância ∝ 1/(NK) ou 1/K)
+### 2. Speaker verification / embeddings: generalization vs. number of speakers
 
-Isso é **conjectura minha**, não resultado da literatura.
+Here too **I did not find a fitted power law of EER vs. number of speakers**.
+
+| Work | Link | What it shows | Status |
+|---|---|---|---|
+| Training speaker recognition with limited data ("tiny" VoxCeleb2 subsets) | https://arxiv.org/abs/2203.14688 | Fixed budget of ~50K utterances, three designs: few speakers (100 spk., ~51 sessions each), many speakers/few sessions (5994 spk., 1 session), many speakers/many sessions (5994 spk., ~8 sessions, 1 utterance per session). EER (dev, vox1-o) X-vector / ECAPA / wav2vec2: 12.9 / 12.2 / 7.5% · 21.7 / 16.0 / 15.7% · 9.8 / 6.0 / 3.6%; full VoxCeleb2: 6.3 / 2.9 / 2.4%. Authors' conclusion: many speakers **without** session variability is the worst case; the initial hypothesis "maximizing speakers is paramount" does not hold on its own. It is the most direct analogue of our N×K trade-off, but with 3 points and no functional form. | [READ] |
+| VoxBlink2 (100K+ speakers) | https://arxiv.org/abs/2407.11510 | Random subsets of 5K, 10K, 30K and 110K speakers. In mixed fine-tuning, EER 0.527 / 0.505 / 0.505 / 0.674% — "does not improve consistently"; in pre-training, Figure 3 shows that more speakers helps (I did not read the values from the figure). No fit. | [READ partially] |
+| Empirical study of GE2E | https://arxiv.org/abs/2011.04896 | Effect of the number of enrollment utterances per speaker: decisive for low values, saturates afterwards (compatible with a 1/K-type term). | [ABSTRACT] |
+| Base dataset design in few-shot image learning (ECCV 2020) | https://arxiv.org/abs/2007.08872 | Analogue outside speech: with a fixed annotation budget, the classes × images-per-class trade-off has a large effect; the optimum uses many classes and few images per class. Empirical, no law. | [ABSTRACT] |
+| Generating novel classes for metric learning | https://arxiv.org/abs/2201.01008 | With a fixed total number of samples, Recall@1 on unseen classes grows with the number of training classes. Empirical. | [ABSTRACT] |
+
+### 3. Theory of neural scaling laws and exponents from intrinsic dimension
+
+| Work | Link | What it shows | Status |
+|---|---|---|---|
+| A Neural Scaling Law from the Dimension of the Data Manifold | https://arxiv.org/abs/2004.10802 | Loss ∝ (no. of parameters)^(-α) with **α ≈ 4/d**, d = intrinsic dimension of the data manifold; tested on teacher/student, CNNs and GPT (for GPT: 4/α ≈ 53 vs. d ≥ 90, i.e., only the inequality holds). Note: the law is in **parameters**, not in number of samples. | [ABSTRACT] |
+| Explaining Neural Scaling Laws (PNAS 2024) | https://arxiv.org/abs/2102.06701 | Four regimes: variance-limited (universal exponent, coming from the existence of a well-behaved limit) and resolution-limited (exponent depends on the spectrum of the kernel / of the data manifold), along the data and width axes; duality between the two exponents. In real networks the exponents are less sharp than in teacher-student. | [ABSTRACT] |
+| Asymptotic learning curves of kernel methods | https://arxiv.org/abs/1905.10843 | Gaussian teacher-student: error ∝ n^(-β), β fixed by smoothness and dimension (β = (α_T − d)/d when the student is not limiting); via kernel-PCA estimates β ≈ 0.36 (MNIST) and ≈ 0.07 (CIFAR10), in agreement with observation. Mentions the baseline β = 1/d for Lipschitz functions. Exact refinement: https://arxiv.org/abs/2006.09754. | [ABSTRACT] |
+| Spectrum-dependent learning curves in kernel regression | https://arxiv.org/abs/2002.02561 | Analytical expressions for the generalization error as a function of the kernel eigenspectrum and the target alignment. | [ABSTRACT] |
+| Learning Curve Theory | https://arxiv.org/abs/2102.04074 | Toy model that produces n^(-β) for any β > 0; the exponent depends on the data distribution (Zipf-like tail), it is not universal. | [ABSTRACT] |
+| The Quantization Model of Neural Scaling (NeurIPS 2023) | https://arxiv.org/abs/2303.13506 | A power law of the loss emerges if skill "quanta" have power-law frequencies and are learned in order of frequency. Alternative to the dimension-based explanation. | [ABSTRACT] |
+| Deep Learning Scaling is Predictable, Empirically | https://arxiv.org/abs/1712.00409 | Power-law learning curves in translation, LM, images and **speech**; exponents measured, not derived; model improvements shift the curve without changing the exponent. | [ABSTRACT] |
+| A Constructive Prediction of the Generalization Error Across Scales (ICLR 2020) | https://arxiv.org/abs/1909.12673 | Joint functional form in model size and data size that extrapolates from small to large scales. Methodological standard for "predict and then test". | [ABSTRACT] |
+| DNNs adapt to intrinsic dimension | https://arxiv.org/abs/1907.02177 | Rate O(n^(-2β/(2β+d))) with d = intrinsic (Minkowski) dimension of the support, without requiring manifold structure. | [ABSTRACT] |
+| Nonparametric regression on manifolds with deep ReLU networks | https://arxiv.org/abs/1908.01842 | Squared error n^(-2(s+α)/(2(s+α)+d)) log³n for a Hölder target on a d-dimensional Riemannian manifold. Extension without the manifold assumption: https://arxiv.org/abs/2306.14859. | [ABSTRACT] |
+| k-NN adapts to local intrinsic dimension (NeurIPS 2011) | https://arxiv.org/abs/1110.4300 | Near-minimax rate Õ(n^(-2/(2+d))) with local and unknown d. | [ABSTRACT] |
+| Convergence rates of empirical measures in Wasserstein distance (Bernoulli 2019) | https://arxiv.org/abs/1707.00087 | E[W_p(μ̂_n, μ)] ~ n^(-1/d), with d an **intrinsic** dimension of the measure; multi-scale behavior (different rates in different ranges of n). | [ABSTRACT] |
+| Generalization via embedding dimension and distributional convergence (ICML 2026) | https://arxiv.org/abs/2601.22756 | Bound on the generalization gap = (Wasserstein rate fixed by the intrinsic dimension of the embeddings) × (Lipschitz constant of the embedding→prediction map). **It is the argument closest to what we want to make**, but in i.i.d. classification, not in generalization to new groups. | [ABSTRACT] |
+| Intrinsic dimension of images and its impact on learning (ICLR 2021) | https://arxiv.org/abs/2104.08894 | Measures the intrinsic dimension of image datasets (low) and shows, controlling it with GANs, that it — and not the ambient dimension — governs sample complexity. An experimental model for us. | [ABSTRACT] |
+| Minimax rate n^(-2p/(2p+d)) (nonparametric regression, 1982) | — | Classical result; **the search did not return the source**. | [MEMORY] |
+
+### 4. Theory of generalization to new groups/tasks
+
+| Work | Link | What it shows | Status |
+|---|---|---|---|
+| A model of inductive bias learning (2000) | cited in https://arxiv.org/abs/1505.06279 | Formalizes a "task environment": tasks drawn i.i.d. from a distribution; error analysis via covering numbers in number of tasks and samples per task. It is the exact conceptual framework (speaker = task). | [ABSTRACT, via citation] |
+| The Benefit of Multitask Representation Learning (JMLR 2016) | https://arxiv.org/abs/1505.06279 | Uniform convergence bounds for learning-to-learn of order **O(1/√T) + O(1/√m)** (T tasks, m samples per task); the 1/√T term cannot be improved in this framework. Corresponds to our form a + A/√N + C/√K. The exact form of the theorem **was not read**; the order 1/√T + 1/√m came from the description in the paper of the next item. | [ABSTRACT] |
+| On the Theory of Transfer Learning: The Importance of Task Diversity (NeurIPS 2020) | https://arxiv.org/abs/2006.11650 | With "diverse" tasks: the sample complexity for learning the representation scales as C(H) + t·C(F); a new task costs only C(F); the rate decays with **all** samples (n·t). Introduces a diversity parameter ν. | [ABSTRACT] |
+| Few-Shot Learning via Learning the Representation, Provably (ICLR 2021) | https://arxiv.org/abs/2002.09434 | Linear representation of dimension k in ambient dimension d: risk on the target task **O(dk/(n₁T) + k/n₂)**; bypasses the Ω(1/T) barrier of the i.i.d.-task setting thanks to a coverage/diversity assumption. The first term is exactly our B/(NK). | [ABSTRACT] |
+| Shared linear representations, with lower bounds | https://arxiv.org/abs/2002.11684 | Rates in T and samples per task with nearly optimal lower bounds. Details not read. | [ABSTRACT] |
+| A Distribution-Dependent Analysis of Meta-Learning (ICML 2021) | https://arxiv.org/abs/2011.00344 | Gaussian linear regression with a Gaussian task distribution (= random-effects model): problem-dependent lower bounds on the transfer risk and an estimator that attains them up to a constant. **It is the theorem closest to the form a + A/N + B/(NK)**; the exact expression was not read. | [ABSTRACT] |
+| Theoretical bounds on estimation error for meta-learning | https://arxiv.org/abs/2010.07140 | Two-level Bayesian model for linear regression; minimax lower bounds and an upper bound (MAP) for a new task. | [ABSTRACT] |
+| Generalizing from Several Related Classification Tasks to a New Unlabeled Sample (NeurIPS 2011) | https://proceedings.neurips.cc/paper/2011/hash/b571ecea16a9824023ee1af16897a582-Abstract.html | Formalizes domain generalization: N training domains drawn from a meta-distribution; error analysis and universal consistency via kernels on distributions. The rate in N did not appear in the snippets. | [ABSTRACT] |
+| Domain Generalization by Marginal Transfer Learning (JMLR 2021) | https://arxiv.org/abs/1711.07910 | Extended version; bound in N domains and n samples per domain (Rademacher). Exact form not seen. | [ABSTRACT] |
+| How Many Domains Suffice for Domain Generalization? (NeurIPS 2025) | https://arxiv.org/abs/2506.16704 | Defines "domain sample complexity" and a domain shattering dimension; matching upper and lower bounds up to polylog. Formally answers "how many domains (speakers) are enough", but in PAC classification. | [ABSTRACT] |
+| Theoretical analysis of unsupervised contrastive learning (ICML 2019) | https://arxiv.org/abs/1902.09229 | "Latent classes" framework; guarantees for downstream tasks formed by the **same** latent classes — does not cover truly new classes. | [ABSTRACT] |
+| Two-stage cluster sampling | (sampling textbooks; the search returned only tutorial pages) | The variance of the mean estimator with N groups and K units per group decomposes into a between-group component (∝ 1/N) and a within-group component (∝ 1/(NK)); design effect 1 + (K−1)ρ. It is the elementary statistical origin of the form a + A/N + B/(NK). The explicit formula did **not** appear in a primary source in the search. | [MEMORY + tutorial pages] |
+
+### 5. Information-theoretic measures
+
+| Work | Link | What it shows | Status |
+|---|---|---|---|
+| Fixing a Broken ELBO (ICML 2018) | https://arxiv.org/abs/1711.00464 | Rate-distortion plane for VAEs: variational lower and upper bounds on the mutual information I(x;z); models with the same ELBO can have very different rates; powerful decoders ignore the latent. Our measure "bits per utterance = KL" is the **rate R** of this framework (upper bound on I). | [ABSTRACT] |
+| Capacity of the variational embedding in expressive TTS (Capacitron) | https://arxiv.org/abs/1906.03402 | In Tacotron with a variational reference encoder: defines capacity = mutual information embedding↔data, upper-bounded by the KL; capacity is controlled by constraining the KL (in bits/nats); more capacity → more transfer precision, less generality. **Direct precursor of our 65–73-bit measure**; does not decompose capacity into "speaker" bits nor relate it to N. | [ABSTRACT] |
+| Uniqueness of the i-vector representation of voice | https://arxiv.org/abs/2008.11985 | Estimates the biometric information of voice: 43–52 (or 43–70) bits in a constrained condition with 5 s samples; drops to **13–20 bits** in less constrained conditions; doubling the duration adds ~20 bits. Earlier estimates cited range from 14 to 120+ bits. Our 10–20 identity bits fall in the "unconstrained" range. | [ABSTRACT] |
+| Privacy disclosure in speech measured in bits (2025) | https://arxiv.org/abs/2508.05250 | Measures in bits how much each type of feature reveals about identity; disclosures of independent features are additive; speaker recognition embeddings are the most informative. I did not see the numerical values. | [ABSTRACT] |
+| Interpreting the dimensions of speaker embedding space (2025) | https://warwick.ac.uk/fac/soc/al/research/baap2026/ladefoged/interpreting-the-dimensions-of-speaker-embedding-space.pdf | Neighborhood preservation (UMAP) saturates after ~6 dimensions; 9 interpretable acoustic parameters explain the same as 7 principal components (>50% of the variance). An indication — not a formal estimate — of low effective dimension (~6–10). | [ABSTRACT] |
+| M-Vec: "Matryoshka" speaker embeddings | https://arxiv.org/abs/2409.15782 | Speaker embeddings with flexible dimension; according to the proposal, dimensions much smaller than 192–512 retain much of the performance (I did not see the numbers). | [ABSTRACT] |
+| Eigenvoices (rapid speaker adaptation, ~2000) | https://eurecom.fr/publication/200/download/mm-nguypa-990301b.pdf | Speakers live in a low-dimensional linear subspace; adapting = estimating a few coefficients. Classical precedent for a "low-dimensional speaker space". | [ABSTRACT] |
+| How much do language models memorize? (2025) | https://arxiv.org/abs/2505.24832 | Memorization capacity of GPT models ≈ 3.6 bits per parameter (3.5–4); when capacity fills up, unintended memorization drops and generalization begins; derives scaling laws for membership inference. A model of "capacity predicted and then tested". | [ABSTRACT] |
+
+**Not found**: a formal estimate (TwoNN, MLE etc.) of the intrinsic dimension of x-vectors/d-vectors;
+nor a measure of "speaker identity bits" inside a TTS style latent as a function of N.
+
+### 6. "Minimal model" / capacity saturation predicted and tested
+
+| Work | Link | What it shows | Status |
+|---|---|---|---|
+| Don't Blame the ELBO! (NeurIPS 2019) | https://arxiv.org/abs/1911.02469 | A linear VAE recovers pPCA; the number of active latent dimensions is determined by the observation noise vs. the eigenvalues; the linear analysis predicts the behavior of nonlinear VAEs. Basis for predicting the "minimum latent size". | [ABSTRACT] |
+| Dataset-size dependence of the rate-distortion curve and of the collapse threshold in a linear VAE | https://arxiv.org/abs/2309.07663 | Closed form relating β, dataset size, posterior collapse and the rate-distortion curve in a linear VAE in the high-dimensional limit. **The only work found that links the VAE's R(D) to dataset size** — but i.i.d., without group structure. | [ABSTRACT] |
+| 2026 preprint on collapse thresholds in β-VAE | https://arxiv.org/abs/2605.22691 | In the linear Gaussian case, collapse thresholds, distortion reductions and normalized PCA eigenvalues coincide; warns that "β gives N active dimensions" is not intrinsic without normalization. Seen only via an aggregator. | [ABSTRACT, not peer-reviewed] |
+| Capacitron | https://arxiv.org/abs/1906.03402 | (see item 5) Varies the target capacity and observes the precision/generality trade-off — an empirical test of capacity in TTS, without a theoretical prediction of the minimum. | [ABSTRACT] |
+| How much do language models memorize? | https://arxiv.org/abs/2505.24832 | (see item 5) Prediction of capacity saturation confirmed across hundreds of transformers. | [ABSTRACT] |
+
+I did not find *information bottleneck* results (phase transitions / minimal sufficient representation)
+in the search; if used, it needs a dedicated search.
 
 ---
 
-## (d) O que um artigo de venue de topo precisaria conter
+## (b) What already exists and what would be new
 
-1. **Mais décadas em N.** Pelo menos 5–6 valores de N cobrindo ≥ 2 décadas (ex.: 8 → 1024+; LibriTTS tem
-   ~2,4K locutores), para distinguir potência, potência com piso e logaritmo. Mesma coisa em K.
-2. **Sementes e incerteza.** Várias sementes por célula (N, K), intervalos de confiança, e comparação
-   formal de modelos (AIC/BIC ou validação cruzada deixando células de fora). Com 16 execuções o empate
-   entre as duas formas é esperado.
-3. **Previsão fora da amostra.** Ajustar em N pequeno e **prever** N grande antes de rodar (padrão de
-   "A Constructive Prediction..."). É o que transforma ajuste de curva em lei.
-4. **Medida independente da dimensão do espaço de locutores**, com ≥ 2 estimadores (TwoNN, MLE,
-   espectro de PCA) e ≥ 2 speaker encoders, e o expoente previsto **antes** de olhar a curva.
-5. **Intervenção na dimensão.** Como no estudo de imagens com GANs: restringir a população de locutores
-   (um só gênero, faixa de pitch estreita, ou locutores sintéticos amostrados de um prior de dimensão
-   controlada) e mostrar que o expoente muda como previsto. Sem isso, "expoente ↔ dimensão" é correlação
-   de um ponto só.
-6. **Controles de confusão.** Separar N de horas totais (N·K fixo vs. K fixo); balancear gênero/sotaque;
-   locutores de teste fixos e suficientes (38 é pouco para caudas); canal/gravação (identidade de locutor
-   é correlacionada com canal).
-7. **Robustez da métrica.** Repetir com outro speaker encoder, com similaridade contínua (cosseno, EER)
-   além da fração-limiar, e com um teste subjetivo pequeno. Mostrar que o expoente não é artefato do limiar.
-8. **Generalidade de arquitetura.** Ao menos um segundo modelo (ex.: um TTS zero-shot moderno em escala
-   reduzida, ou um modelo de conversão de voz) — senão o revisor dirá que é propriedade de Tacotron 2 + VAE.
-   Idealmente um segundo domínio (ex.: verificação de locutor, ou faces) para sustentar "lei".
-9. **Parte informacional rigorosa.** Declarar cotas (KL é superior; bits de identidade por classificador
-   é inferior), mostrar a curva taxa-distorção variando β/dimensão do latente, e testar o "latente
-   mínimo": prever a dimensão/capacidade abaixo da qual a cópia degrada e verificar o joelho.
-10. **Teoria com hipóteses explícitas e um caso solúvel.** Um modelo mínimo (ex.: linear-gaussiano
-    hierárquico, ou teacher-student com locutores num toro/esfera d-dimensional) em que a lei é derivada
-    exatamente e simulada, mais a ponte para a rede real. Enunciar a convergência (em que sentido, com
-    que taxa) e o que falsearia a teoria.
-11. **Posicionamento honesto.** Reconhecer que as formas 1/N, 1/(NK), 1/√N e os expoentes por dimensão
-    são conhecidos; a novidade é o cenário hierárquico, a medida em fala e o teste. Discutir a saturação
-    observada em sistemas de grande escala e por que (ou se) a lei deixa de valer lá.
+### What already exists (with reasonable confidence)
+
+1. **Qualitative fact**: more training speakers improve zero-shot copying; "thousands of speakers are
+   needed" (2018). Well established and repeated in almost every zero-shot TTS paper.
+2. **N×K trade-off under a fixed budget**, in speaker verification (tiny VoxCeleb2 subsets) and in
+   few-shot image learning — empirical, with 3–4 points, no functional form.
+3. **The forms a + A/N + B/(NK) and a + A/√N + C/√K** are, respectively, the random-effects /
+   two-stage sampling form and the form of the uniform convergence bounds of learning-to-learn.
+   As *forms*, they are not new.
+4. **Exponent from intrinsic dimension** (≈4/d in parameters; n^(-2s/(2s+d)) and n^(-1/d) in samples)
+   is an established idea for i.i.d. learning, and in 2026 there is already an "embedding dimension × Wasserstein" bound.
+5. **KL of the style latent as capacity in bits** in variational Tacotron (Capacitron), and **identity
+   bits in voice** (13–70 bits, i-vectors).
+
+### What seems new (as far as the search reached)
+
+- **A joint quantitative law in N and K for zero-shot voice copying**, with a clean separation
+  "seen depends on K, unseen depends on N", in a factorial design. I found nothing equivalent in TTS
+  or in speaker verification.
+- **Tying the exponent in N to the intrinsic dimension of the speaker space** (treating speakers, not
+  utterances, as the samples of the manifold). Existing theory treats i.i.d. samples; the transposition
+  to "samples = groups" with K noisy observations per group did not appear.
+- **Decomposition of the latent's KL into identity bits vs. the rest, growing as log N**, and a
+  **minimum latent size predicted and tested**. I found no analogue.
+
+### Closest prior work
+
+- Empirical: https://arxiv.org/abs/1806.04558 (Table 5) and https://arxiv.org/abs/2203.14688.
+- Theoretical: https://arxiv.org/abs/2011.00344 and https://arxiv.org/abs/2002.09434 (form in N and NK);
+  https://arxiv.org/abs/2004.10802, https://arxiv.org/abs/2102.06701 and https://arxiv.org/abs/2601.22756
+  (exponent from dimension).
+- Information-theoretic: https://arxiv.org/abs/1906.03402 and https://arxiv.org/abs/2008.11985.
+
+### Honest caveats about novelty
+
+1. **Absence of evidence is not evidence of absence.** There were ~35 generic searches; Interspeech/ICASSP
+   and theses are poorly indexed. A speech reviewer may know an N ablation I did not find. Before
+   claiming "first", run a dedicated search in the ISCA Archive and IEEE Xplore.
+2. **The two candidate forms contradict the observed exponent.** The hierarchical form predicts
+   1/N decay; the uniform convergence bounds, 1/√N. The empirical data show N^(-0.26) with no floor. Such a
+   small exponent is a signature of a **nonparametric / resolution-limited** regime, not of finite-dimensional
+   random effects. This is at once the most interesting and the most fragile part: with 16 runs,
+   the two forms fit "equally well" precisely because the floor *a* absorbs the difference.
+3. **Three values of N (8, 32, 128) do not distinguish a power law from logarithmic decay** nor from
+   a power law with a floor. 43→30→21% gives a ratio of 0.70 at both steps (clean), but that is only two intervals.
+4. **The exponent does not identify the dimension without an additional assumption.** [MY CALCULATION] 0.26 corresponds to
+   d ≈ 4 if the rate is N^(-1/d); d ≈ 6 if it is N^(-2/(2+d)); d ≈ 8 if N^(-2/d); d ≈ 15 if N^(-4/d).
+   The prediction is falsifiable only if d is measured **independently** (e.g., TwoNN/MLE on the
+   speaker encoder's embeddings) and the smoothness is fixed a priori.
+5. **The metric is a threshold** (fraction of samples more similar to the reference than to the default voice),
+   not a smooth loss; regression error rates do not automatically transfer to a tail
+   fraction. In addition, the metric depends on a specific speaker encoder.
+6. **Small scale and old model.** Tacotron 2 + VAE with N ≤ 128 is very far from the regime of current
+   systems (thousands of speakers, tens of thousands of hours), which saturate (SIM-O 0.65→0.66
+   from 200K to 600K hours). "No visible floor" up to N=128 says nothing about N=10⁴.
+
+**Verdict**: the *factorial empirical N×K law* and the *exponent ↔ speaker-space dimension link* are,
+by all indications, new as a quantitative statement; the *theoretical ingredients* are all known.
+The defensible contribution is the transposition and the test, not a new theorem — unless a
+rate is proven for the nonparametric hierarchical setting (see (c), gap).
 
 ---
 
-## Limitações deste levantamento
+## (c) Reusable theorems and required assumptions
 
-- Só cinco artigos tiveram trechos do texto integral lidos (1806.04558, 2203.14688, 2407.11510,
-  2406.05370, 2210.06370); todo o resto é [RESUMO].
-- Fórmulas de teoremas (itens 3 e 4) vêm de resumos gerados pela busca e **devem ser conferidas** nos
-  originais antes de entrar em qualquer texto.
-- Clássicos não devolvidos pela busca (taxa minimax de 1982; "Scaling Laws for Neural Language Models";
-  fórmulas de amostragem em dois estágios) estão marcados [MEMÓRIA] ou omitidos.
-- Não foi feita busca em ISCA Archive / IEEE Xplore nem em teses.
+| Result | Term it provides | Assumptions we would have to make | Risk |
+|---|---|---|---|
+| Two-stage variance decomposition / random effects | A/N + B/(NK) | Speakers i.i.d. from a population; utterances i.i.d. given the speaker; linear/finite-dimensional estimator | Predicts exponent 1 in N — contradicts 0.26. Useful for the "seen" regime (C/K) and as a variance term. |
+| Meta-learning with a Gaussian task distribution (https://arxiv.org/abs/2011.00344) | Lower and upper bounds on the risk on a new task | Linear regression, fixed design, Gaussian tasks | Linear; gives optimality of the hierarchical form, not the small exponent. |
+| Shared representation (https://arxiv.org/abs/2002.09434, https://arxiv.org/abs/2006.11650) | dk/(NK) + k/n₂ | A representation of dimension k common to all tasks; **task diversity** (the N speakers cover the k directions) | In zero-shot n₂ is a single reference utterance; the term k/n₂ becomes the floor *a*. The diversity assumption is exactly what fails with small N. |
+| Learning-to-learn via uniform convergence (https://arxiv.org/abs/1505.06279) | 1/√N + 1/√K | i.i.d. tasks; representation class of finite complexity | It is a worst-case upper bound, not a learning curve; do not use it as a "law". |
+| Wasserstein rate with intrinsic dimension (https://arxiv.org/abs/1707.00087) | N^(-1/d) | Speaker distribution with intrinsic dimension d > 2p; compact support | Gives d ≈ 4 for 0.26 — plausible against the "~6 dimensions" of item 5, but requires a Lipschitz map from the embedding to the metric. |
+| Embedding × Lipschitz bound (https://arxiv.org/abs/2601.22756) | (Wasserstein rate) × L | Lipschitz embedding→output map; i.i.d. samples | Ready-made template for the argument; we would have to replace "sample" with "speaker" and handle the noise of K utterances. |
+| Adaptive nonparametric regression (https://arxiv.org/abs/1907.02177, https://arxiv.org/abs/1908.01842, https://arxiv.org/abs/1110.4300) | N^(-2s/(2s+d)) | Hölder-s speaker→voice map on a support of dimension d; the network attains the minimax rate | Two free parameters (s, d) for one exponent: not identifiable without measuring d. |
+| Variance/resolution regimes (https://arxiv.org/abs/2102.06701) | Interpretation: N in the resolution regime, K in the variance regime | Well-behaved limit in K; power-law spectrum in N | Fits our finding qualitatively (K → C/K; N → small power). It is the most natural narrative framework. |
+| VAE rate-distortion (https://arxiv.org/abs/1711.00464, https://arxiv.org/abs/1906.03402) | KL ≥ I(x;z); capacity in bits | None strong: KL is an **upper** bound on the mutual information | The "10–20 identity bits" require their own estimator (lower bound via a classifier); state which bound is used. |
+| Information counting | Distinguishing N speakers requires ≥ log₂ N bits | Trivial (Fano) | Explains "grows as log N" **within training**; does not by itself explain generalization to unseen speakers. |
+| Linear VAE / pPCA (https://arxiv.org/abs/1911.02469, https://arxiv.org/abs/2309.07663) | No. of active dimensions = no. of eigenvalues above the noise | Linear-Gaussian | Gives a testable prediction of the minimum latent if we measure the spectrum of the between-speaker variance. |
+
+**Theoretical gap (where a new theorem could be)**: no result found covers the
+*hierarchical and nonparametric* case — N groups sampled from a distribution of intrinsic dimension d, each
+observed through K noisy samples, risk measured on a new group. The natural conjecture, combining the
+ingredients above, is an error of the form
+
+    floor + (resolution term in N, exponent fixed by d and smoothness) + (variance term ∝ 1/(NK) or 1/K)
+
+This is **my conjecture**, not a result from the literature.
+
+---
+
+## (d) What a top-venue paper would need to contain
+
+1. **More decades in N.** At least 5–6 values of N covering ≥ 2 decades (e.g., 8 → 1024+; LibriTTS has
+   ~2.4K speakers), to distinguish power law, power law with a floor, and logarithm. The same for K.
+2. **Seeds and uncertainty.** Several seeds per (N, K) cell, confidence intervals, and formal
+   model comparison (AIC/BIC or cross-validation leaving cells out). With 16 runs the tie
+   between the two forms is expected.
+3. **Out-of-sample prediction.** Fit on small N and **predict** large N before running (the standard of
+   "A Constructive Prediction..."). This is what turns curve fitting into a law.
+4. **Independent measurement of the speaker-space dimension**, with ≥ 2 estimators (TwoNN, MLE,
+   PCA spectrum) and ≥ 2 speaker encoders, and the exponent predicted **before** looking at the curve.
+5. **Intervention on the dimension.** As in the image study with GANs: restrict the speaker population
+   (a single gender, a narrow pitch range, or synthetic speakers sampled from a prior of controlled
+   dimension) and show that the exponent changes as predicted. Without this, "exponent ↔ dimension" is a
+   single-point correlation.
+6. **Confound controls.** Separate N from total hours (fixed N·K vs. fixed K); balance gender/accent;
+   fixed and sufficient test speakers (38 is few for tails); channel/recording (speaker identity
+   is correlated with channel).
+7. **Metric robustness.** Repeat with another speaker encoder, with continuous similarity (cosine, EER)
+   in addition to the threshold fraction, and with a small subjective test. Show that the exponent is not a threshold artifact.
+8. **Architectural generality.** At least a second model (e.g., a modern zero-shot TTS at reduced
+   scale, or a voice conversion model) — otherwise the reviewer will say it is a property of Tacotron 2 + VAE.
+   Ideally a second domain (e.g., speaker verification, or faces) to support "law".
+9. **Rigorous information-theoretic part.** State the bounds (KL is an upper bound; identity bits via a classifier
+   is a lower bound), show the rate-distortion curve varying β/latent dimension, and test the "minimum
+   latent": predict the dimension/capacity below which copying degrades and verify the knee.
+10. **Theory with explicit assumptions and a solvable case.** A minimal model (e.g., hierarchical
+    linear-Gaussian, or teacher-student with speakers on a d-dimensional torus/sphere) in which the law is derived
+    exactly and simulated, plus the bridge to the real network. State the convergence (in what sense, at
+    what rate) and what would falsify the theory.
+11. **Honest positioning.** Acknowledge that the forms 1/N, 1/(NK), 1/√N and the dimension-based exponents
+    are known; the novelty is the hierarchical setting, the measurement in speech, and the test. Discuss the saturation
+    observed in large-scale systems and why (or whether) the law stops holding there.
+
+---
+
+## Limitations of this survey
+
+- Only five papers had passages of their full text read (1806.04558, 2203.14688, 2407.11510,
+  2406.05370, 2210.06370); everything else is [ABSTRACT].
+- Theorem formulas (items 3 and 4) come from summaries generated by the search and **must be checked**
+  against the originals before entering any text.
+- Classics not returned by the search (the 1982 minimax rate; "Scaling Laws for Neural Language Models";
+  two-stage sampling formulas) are marked [MEMORY] or omitted.
+- No search was done in the ISCA Archive / IEEE Xplore or in theses.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fit the two-level sampling law of reports/teoria_cobertura.md to the coverage runs.
+Fit the two-level sampling law of reports/theory/coverage_theory.md to the coverage runs.
 
 Share of samples where the voice was NOT copied, at step 2500 and full style strength, in runs
 without a variant suffix (n<N>_k<K>_s<seed>):

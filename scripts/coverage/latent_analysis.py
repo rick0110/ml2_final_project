@@ -100,7 +100,7 @@ def main() -> None:
             ax.scatter(*proj[lab][y == g].T, s=7, color=cmap(i), label=str(g)[:18])
         ax.set_title(f"cor = {name}", fontsize=10)
         ax.legend(fontsize=6, ncol=2, frameon=False, markerscale=1.5)
-        ax.set_xlabel(f"PC1 ({100 * pca.explained_variance_ratio_[0]:.0f}% da variância)")
+        ax.set_xlabel(f"PC1 ({100 * pca.explained_variance_ratio_[0]:.0f}% of variance)")
         ax.set_ylabel(f"PC2 ({100 * pca.explained_variance_ratio_[1]:.0f}%)")
     fig.tight_layout()
     fig.savefig(a.out / "pca.png", dpi=120)

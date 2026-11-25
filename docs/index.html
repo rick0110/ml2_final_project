@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tacotron2-VAE — fala em português com estilo de referência</title>
+<title>Tacotron2-VAE — Portuguese speech with a reference style</title>
 <style>
   :root {
     --bg: #f9f9f7;
@@ -172,123 +172,123 @@
 
 <header class="hero">
   <div class="wrap">
-    <h1>Tacotron2-VAE: fala em português com o estilo de um áudio de referência</h1>
+    <h1>Tacotron2-VAE: Portuguese speech with the style of a reference audio clip</h1>
     <p class="subtitle">
-      O texto diz <b>o que</b> falar; um áudio de referência diz <b>como</b>: tom, velocidade, voz, emoção.
-      Esta página mostra o projeto depois de uma revisão completa: um erro no código invalidava os resultados
-      anteriores, os modelos foram retreinados e todo áudio passou a ser conferido por reconhecimento de fala.
+      The text says <b>what</b> to say; a reference audio clip says <b>how</b>: pitch, speed, voice, emotion.
+      This page shows the project after a full revision: a bug in the code invalidated the previous
+      results, the models were retrained, and every audio clip is now checked with speech recognition.
     </p>
     <div class="badges">
-      <span class="badge"><b>Inglês</b> · 2,2% de palavras erradas</span>
-      <span class="badge"><b>Português</b> · 10,5% de palavras erradas</span>
-      <span class="badge"><b>Emoção</b> · 9% com estilo a 60%, 41% com estilo inteiro</span>
-      <span class="badge">Vocoder: HiFi-GAN universal</span>
+      <span class="badge"><b>English</b> · 2.2% wrong words</span>
+      <span class="badge"><b>Portuguese</b> · 10.5% wrong words</span>
+      <span class="badge"><b>Emotion</b> · 9% with style at 60%, 41% with full style</span>
+      <span class="badge">Vocoder: universal HiFi-GAN</span>
     </div>
   </div>
 </header>
 
 <nav class="toc"><div class="wrap">
-  <a href="#revisao">O que mudou</a>
-  <a href="#modelo">O modelo</a>
-  <a href="#treino">Treino</a>
-  <a href="#ingles">Inglês</a>
-  <a href="#portugues">Português</a>
-  <a href="#emocao">Emoção</a>
-  <a href="#cobertura">Cobertura</a>
-  <a href="#limites">Limites e próximos passos</a>
+  <a href="#revisao">What changed</a>
+  <a href="#modelo">The model</a>
+  <a href="#treino">Training</a>
+  <a href="#ingles">English</a>
+  <a href="#portugues">Portuguese</a>
+  <a href="#emocao">Emotion</a>
+  <a href="#cobertura">Coverage</a>
+  <a href="#limites">Limits and next steps</a>
 </div></nav>
 
 <main class="wrap">
 
 <section id="revisao">
-  <h2><span class="kicker">1 · Revisão</span> O que estava errado e o que mudou</h2>
+  <h2><span class="kicker">1 · Revision</span> What was wrong and what changed</h2>
   <div class="callout warn">
-    <p><b>A "atenção espectral interpretável" da versão anterior desta página não era um resultado válido.</b></p>
+    <p><b>The "interpretable spectral attention" of the previous version of this page was not a valid result.</b></p>
     <p>
-      O codificador do áudio de referência reorganizava o espectrograma com <code>.view()</code> sem trocar os eixos.
-      Tempo e frequência ficavam misturados, e a posição dos blocos mudava com o preenchimento do lote.
-      As "bandas do espectro" que a atenção parecia escolher eram efeito desse erro. A comparação com o
-      <em>baseline</em> também não valia: os dois modelos tinham sido treinados por tempos muito diferentes
-      (11,2 mil e 35,5 mil iterações).
+      The reference audio encoder reshaped the spectrogram with <code>.view()</code> without swapping the axes.
+      Time and frequency were mixed, and the position of the blocks changed with the batch padding.
+      The "spectral bands" that the attention seemed to choose were an effect of this bug. The comparison with the
+      <em>baseline</em> was not valid either: the two models had been trained for very different lengths of time
+      (11.2 thousand and 35.5 thousand iterations).
     </p>
   </div>
-  <p>Conferimos os áudios da versão anterior com reconhecimento de fala (Whisper). O resultado explica por que eles soavam mal:</p>
+  <p>We checked the audio from the previous version with speech recognition (Whisper). The result explains why it sounded bad:</p>
   <div class="players">
-    <figure class="player m-base"><figcaption>Antes · inglês<span class="sub">Pedido: “Hello, this is a test of the voice synthesis system.” · Ouvido: “That is the system, that is the system…”</span></figcaption><audio controls preload="none" src="assets/audio/antes_en.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>Antes · português<span class="sub">Pedido: “Por favor, aguarde enquanto o sistema carrega.” · Ouvido: nada inteligível</span></figcaption><audio controls preload="none" src="assets/audio/antes_pt.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>Depois · inglês<span class="sub">Pedido e ouvido: “The system returned an unexpected error.”</span></figcaption><audio controls preload="none" src="assets/audio/en_4.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>Depois · português<span class="sub">Pedido e ouvido: “Amanhã vamos viajar para o Rio de Janeiro.”</span></figcaption><audio controls preload="none" src="assets/audio/pt_rio.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>Before · English<span class="sub">Requested: “Hello, this is a test of the voice synthesis system.” · Heard: “That is the system, that is the system…”</span></figcaption><audio controls preload="none" src="assets/audio/antes_en.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>Before · Portuguese<span class="sub">Requested: “Por favor, aguarde enquanto o sistema carrega.” (“Please wait while the system loads.”) · Heard: nothing intelligible</span></figcaption><audio controls preload="none" src="assets/audio/antes_pt.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>After · English<span class="sub">Requested and heard: “The system returned an unexpected error.”</span></figcaption><audio controls preload="none" src="assets/audio/en_4.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>After · Portuguese<span class="sub">Requested and heard: “Amanhã vamos viajar para o Rio de Janeiro.” (“Tomorrow we are travelling to Rio de Janeiro.”)</span></figcaption><audio controls preload="none" src="assets/audio/pt_rio.mp3"></audio></figure>
   </div>
   <figure class="figure">
-    <img src="assets/img/fig_retreino_wer.png" alt="Porcentagem de palavras erradas antes e depois do retreino" loading="lazy">
-    <figcaption>Palavras erradas na transcrição automática de cada áudio gerado (quanto menor, melhor). Cinza: modelos anteriores. Azul: modelos retreinados.</figcaption>
+    <img src="assets/img/fig_retreino_wer.png" alt="Percentage of wrong words before and after retraining" loading="lazy">
+    <figcaption>Wrong words in the automatic transcription of each generated audio clip (lower is better). Gray: previous models. Blue: retrained models.</figcaption>
   </figure>
   <div class="scroll"><table>
-    <tr><th>Problema encontrado</th><th>Efeito</th><th>Correção</th></tr>
-    <tr><td>Eixos do mel trocados</td><td>Tempo e frequência misturados no codificador de estilo; origem da "atenção espectral"</td><td>Transposição antes das convoluções; a GRU percorre blocos de tempo de ~0,74 s</td></tr>
-    <tr><td>Preenchimento no resumo</td><td>O vetor de estilo de uma fala mudava com o tamanho do lote</td><td>A atenção dá peso zero aos blocos de preenchimento</td></tr>
-    <tr><td>LayerNorm extra</td><td>Os pesos pré-treinados do Tacotron 2 não funcionavam</td><td>Removida</td></tr>
-    <tr><td>Treino do zero</td><td>Alinhamento texto–áudio ruim; português ininteligível</td><td>Treino a partir do Tacotron 2 pré-treinado, em etapas</td></tr>
-    <tr><td>Vocoder só de inglês</td><td>Artefatos em outras vozes</td><td>HiFi-GAN universal pré-treinado</td></tr>
+    <tr><th>Problem found</th><th>Effect</th><th>Fix</th></tr>
+    <tr><td>Mel axes swapped</td><td>Time and frequency mixed in the style encoder; the origin of the "spectral attention"</td><td>Transpose before the convolutions; the GRU runs over time blocks of ~0.74 s</td></tr>
+    <tr><td>Padding in the summary</td><td>The style vector of an utterance changed with the batch size</td><td>The attention gives zero weight to the padding blocks</td></tr>
+    <tr><td>Extra LayerNorm</td><td>The pretrained Tacotron 2 weights did not work</td><td>Removed</td></tr>
+    <tr><td>Training from scratch</td><td>Poor text–audio alignment; unintelligible Portuguese</td><td>Training from the pretrained Tacotron 2, in stages</td></tr>
+    <tr><td>English-only vocoder</td><td>Artifacts on other voices</td><td>Pretrained universal HiFi-GAN</td></tr>
   </table></div>
 </section>
 
 <section id="modelo">
-  <h2><span class="kicker">2 · O modelo</span> Tacotron 2 com um vetor de estilo</h2>
+  <h2><span class="kicker">2 · The model</span> Tacotron 2 with a style vector</h2>
   <div class="grid2">
     <div class="card">
-      <p class="steplbl">Caminho do texto</p>
-      <p class="expl"><b>Encoder</b>: transforma caracteres (inglês) ou fonemas (português) em uma sequência de vetores.</p>
-      <p class="expl"><b>Atenção</b>: a cada instante, escolhe em que parte do texto o modelo está.</p>
-      <p class="expl"><b>Decoder</b>: gera o espectrograma mel quadro a quadro e decide quando parar.</p>
-      <p class="expl"><b>Vocoder (HiFi-GAN)</b>: transforma o espectrograma em som.</p>
+      <p class="steplbl">Text path</p>
+      <p class="expl"><b>Encoder</b>: turns characters (English) or phonemes (Portuguese) into a sequence of vectors.</p>
+      <p class="expl"><b>Attention</b>: at each instant, chooses which part of the text the model is at.</p>
+      <p class="expl"><b>Decoder</b>: generates the mel spectrogram frame by frame and decides when to stop.</p>
+      <p class="expl"><b>Vocoder (HiFi-GAN)</b>: turns the spectrogram into sound.</p>
     </div>
     <div class="card">
-      <p class="steplbl">Caminho do estilo</p>
-      <p class="expl"><b>Codificador de referência</b>: 6 convoluções e uma GRU leem o espectrograma do áudio de referência em blocos de tempo.</p>
-      <p class="expl"><b>Resumo por atenção</b>: uma média ponderada dos blocos, ignorando o preenchimento.</p>
-      <p class="expl"><b>VAE</b>: o resumo vira uma distribuição (μ, σ) de 32 dimensões, de onde se sorteia o vetor <em>z</em>.</p>
-      <p class="expl"><b>Injeção</b>: <em>z</em> vira um vetor de estilo somado a todas as posições da saída do encoder de texto.</p>
+      <p class="steplbl">Style path</p>
+      <p class="expl"><b>Reference encoder</b>: 6 convolutions and a GRU read the spectrogram of the reference audio in time blocks.</p>
+      <p class="expl"><b>Attention summary</b>: a weighted average of the blocks, ignoring the padding.</p>
+      <p class="expl"><b>VAE</b>: the summary becomes a 32-dimensional distribution (μ, σ), from which the vector <em>z</em> is sampled.</p>
+      <p class="expl"><b>Injection</b>: <em>z</em> becomes a style vector added to every position of the text encoder output.</p>
     </div>
   </div>
-  <div class="formula">L = L<sub>mel</sub> + L<sub>parada</sub> + β(passo) · L<sub>KL</sub> + λ · L<sub>atenção guiada</sub></div>
+  <div class="formula">L = L<sub>mel</sub> + L<sub>stop</sub> + β(step) · L<sub>KL</sub> + λ · L<sub>guided attention</sub></div>
   <p>
-    O termo KL usa <em>free bits</em> (0,5 nat por dimensão) e peso β cíclico, para o modelo não ignorar <em>z</em>.
-    A atenção guiada penaliza alinhamentos longe da diagonal e acelera o início do treino.
+    The KL term uses <em>free bits</em> (0.5 nat per dimension) and a cyclical weight β, so that the model does not ignore <em>z</em>.
+    Guided attention penalizes alignments far from the diagonal and speeds up the start of training.
   </p>
   <div class="callout">
-    <p><b>Sobre o resumo por atenção.</b> Ele foi mantido, agora sobre blocos de tempo de verdade. Não refizemos a
-    comparação com a alternativa usual (último estado da GRU), então não afirmamos que ele seja melhor.</p>
+    <p><b>About the attention summary.</b> It was kept, now over real time blocks. We did not redo the
+    comparison with the usual alternative (last GRU state), so we do not claim that it is better.</p>
   </div>
 </section>
 
 <section id="treino">
-  <h2><span class="kicker">3 · Treino</span> Três etapas, cada uma partindo da anterior</h2>
+  <h2><span class="kicker">3 · Training</span> Three stages, each starting from the previous one</h2>
   <div class="scroll"><table>
-    <tr><th>Etapa</th><th>Ponto de partida</th><th>Dados</th><th>Passos</th></tr>
-    <tr><td>Inglês</td><td>Tacotron 2 pré-treinado (NVIDIA)</td><td>LJSpeech: 13.100 falas, 23,7 h, uma locutora</td><td>2.500</td></tr>
-    <tr><td>Português</td><td>Modelo em inglês</td><td>TTS-Portuguese Corpus: 2.245 falas, 3,8 h, um locutor</td><td>4.000</td></tr>
-    <tr><td>Emoção</td><td>Modelo em português</td><td>TTS-Portuguese + VERBO (1.167 falas, 12 locutores, 7 emoções)</td><td>1.500</td></tr>
+    <tr><th>Stage</th><th>Starting point</th><th>Data</th><th>Steps</th></tr>
+    <tr><td>English</td><td>Pretrained Tacotron 2 (NVIDIA)</td><td>LJSpeech: 13,100 utterances, 23.7 h, one female speaker</td><td>2,500</td></tr>
+    <tr><td>Portuguese</td><td>English model</td><td>TTS-Portuguese Corpus: 2,245 utterances, 3.8 h, one male speaker</td><td>4,000</td></tr>
+    <tr><td>Emotion</td><td>Portuguese model</td><td>TTS-Portuguese + VERBO (1,167 utterances, 12 speakers, 7 emotions)</td><td>1,500</td></tr>
   </table></div>
   <p>
-    Tudo foi treinado em uma GPU L4 no Google Cloud, em máquinas <em>spot</em> (interrompidas várias vezes; o treino
-    retoma do último ponto salvo). Taxa de aprendizado 10<sup>−4</sup>, com aquecimento de 500 passos.
+    Everything was trained on one L4 GPU on Google Cloud, on <em>spot</em> machines (interrupted several times; training
+    resumes from the last saved checkpoint). Learning rate 10<sup>−4</sup>, with a 500-step warmup.
   </p>
   <figure class="figure">
-    <img src="assets/img/fig_retreino_curvas.png" alt="Curvas de treino das três etapas" loading="lazy">
+    <img src="assets/img/fig_retreino_curvas.png" alt="Training curves of the three stages" loading="lazy">
     <figcaption>
-      Em cima: erro de reconstrução do mel no treino (cinza) e na validação (azul). O treino fica acima porque metade
-      dos quadros de entrada do decoder é descartada de propósito durante o treino. Embaixo: nitidez do alinhamento
-      quando o modelo sintetiza sozinho (laranja) e número de dimensões do vetor de estilo em uso (tracejado).
+      Top: mel reconstruction error in training (gray) and in validation (blue). Training sits higher because half
+      of the decoder input frames are deliberately dropped during training. Bottom: alignment sharpness
+      when the model synthesizes on its own (orange) and number of style vector dimensions in use (dashed).
     </figcaption>
   </figure>
 </section>
 
 <section id="ingles">
-  <h2><span class="kicker">4 · Inglês</span> 2,2% de palavras erradas</h2>
+  <h2><span class="kicker">4 · English</span> 2.2% wrong words</h2>
   <p>
-    Em 18 áudios (6 frases × 3 referências), 15 foram transcritos sem nenhum erro e todos terminaram sozinhos.
-    Os 3 erros foram na mesma palavra: “stone” entendida como “storm” ou “strong”.
+    Of 18 audio clips (6 sentences × 3 references), 15 were transcribed without any error and all of them finished on their own.
+    The 3 errors were on the same word: “stone” heard as “storm” or “strong”.
   </p>
   <div class="players">
     <figure class="player m-attn"><figcaption>“The results were published yesterday afternoon.”</figcaption><audio controls preload="none" src="assets/audio/en_1.mp3"></audio></figure>
@@ -296,131 +296,131 @@
     <figure class="player m-attn"><figcaption>“Where did you put the keys to the car?”</figcaption><audio controls preload="none" src="assets/audio/en_3.mp3"></audio></figure>
   </div>
   <figure class="figure">
-    <img src="assets/img/alinhamento_en.png" alt="Mel gerado e alinhamento texto-áudio de uma frase em inglês" loading="lazy">
-    <figcaption>Mel gerado e alinhamento. A diagonal nítida indica que o modelo percorre o texto em ordem, sem pular nem repetir.</figcaption>
+    <img src="assets/img/alinhamento_en.png" alt="Generated mel and text-audio alignment of an English sentence" loading="lazy">
+    <figcaption>Generated mel and alignment. The sharp diagonal shows that the model goes through the text in order, without skipping or repeating.</figcaption>
   </figure>
   <div class="callout warn">
-    <p><b>O estilo quase não muda no inglês.</b> Tom e velocidade dos áudios gerados não acompanharam as três
-    referências testadas. O LJSpeech é uma única locutora lendo de forma uniforme: há pouca variação de estilo para aprender.</p>
+    <p><b>The style barely changes in English.</b> The pitch and speed of the generated audio did not follow the three
+    references tested. LJSpeech is a single female speaker reading in a uniform way: there is little style variation to learn.</p>
   </div>
 </section>
 
 <section id="portugues">
-  <h2><span class="kicker">5 · Português</span> 10,5% de palavras erradas, com a velocidade da referência</h2>
+  <h2><span class="kicker">5 · Portuguese</span> 10.5% wrong words, with the speed of the reference</h2>
   <p>
-    O modelo em inglês foi ajustado em 3,8 h de fala em português. Em 18 áudios, todos terminaram sozinhos.
-    Os erros que sobram são trocas pontuais (“carrega” → “cariga”, “olhou” → “orou”); duas das falhas contadas
-    são só a transcrição escrevendo “8” no lugar de “oito”.
+    The English model was fine-tuned on 3.8 h of Portuguese speech. Of 18 audio clips, all finished on their own.
+    The remaining errors are isolated substitutions (“carrega” → “cariga”, “olhou” → “orou”); two of the failures counted
+    are just the transcription writing “8” instead of “oito”.
   </p>
-  <h3>A mesma frase com três referências</h3>
-  <p>“O filme começa às oito horas da noite.” A referência muda só a velocidade da fala.</p>
+  <h3>The same sentence with three references</h3>
+  <p>“O filme começa às oito horas da noite.” (“The film starts at eight in the evening.”) The reference changes only the speaking speed.</p>
   <div class="players">
-    <figure class="player m-verbo"><figcaption>Referência lenta<span class="sub">referência 9,1 caracteres/s · gerado 8,8</span></figcaption><audio controls preload="none" src="assets/audio/pt_lenta.mp3"></audio></figure>
-    <figure class="player m-verbo"><figcaption>Referência média<span class="sub">referência 12,6 caracteres/s · gerado 11,9</span></figcaption><audio controls preload="none" src="assets/audio/pt_media.mp3"></audio></figure>
-    <figure class="player m-verbo"><figcaption>Referência rápida<span class="sub">referência 16,3 caracteres/s · gerado 12,7</span></figcaption><audio controls preload="none" src="assets/audio/pt_rapida.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>Slow reference<span class="sub">reference 9.1 characters/s · generated 8.8</span></figcaption><audio controls preload="none" src="assets/audio/pt_lenta.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>Medium reference<span class="sub">reference 12.6 characters/s · generated 11.9</span></figcaption><audio controls preload="none" src="assets/audio/pt_media.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>Fast reference<span class="sub">reference 16.3 characters/s · generated 12.7</span></figcaption><audio controls preload="none" src="assets/audio/pt_rapida.mp3"></audio></figure>
   </div>
-  <h3>Outras frases</h3>
+  <h3>Other sentences</h3>
   <div class="players">
-    <figure class="player m-verbo"><figcaption>“Eu nunca pensei que veria você aqui de novo.”</figcaption><audio controls preload="none" src="assets/audio/pt_nunca.mp3"></audio></figure>
-    <figure class="player m-verbo"><figcaption>“Ela abriu a porta devagar e olhou para dentro.”</figcaption><audio controls preload="none" src="assets/audio/pt_porta.mp3"></audio></figure>
-    <figure class="player m-verbo"><figcaption>“Amanhã vamos viajar para o Rio de Janeiro.”</figcaption><audio controls preload="none" src="assets/audio/pt_rio.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>“Eu nunca pensei que veria você aqui de novo.” (“I never thought I would see you here again.”)</figcaption><audio controls preload="none" src="assets/audio/pt_nunca.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>“Ela abriu a porta devagar e olhou para dentro.” (“She slowly opened the door and looked inside.”)</figcaption><audio controls preload="none" src="assets/audio/pt_porta.mp3"></audio></figure>
+    <figure class="player m-verbo"><figcaption>“Amanhã vamos viajar para o Rio de Janeiro.” (“Tomorrow we are travelling to Rio de Janeiro.”)</figcaption><audio controls preload="none" src="assets/audio/pt_rio.mp3"></audio></figure>
   </div>
   <figure class="figure">
-    <img src="assets/img/alinhamento_pt.png" alt="Mel gerado e alinhamento texto-áudio de uma frase em português" loading="lazy">
-    <figcaption>Mel gerado e alinhamento de “Por favor, aguarde enquanto o sistema carrega.”</figcaption>
+    <img src="assets/img/alinhamento_pt.png" alt="Generated mel and text-audio alignment of a Portuguese sentence" loading="lazy">
+    <figcaption>Generated mel and alignment of “Por favor, aguarde enquanto o sistema carrega.” (“Please wait while the system loads.”)</figcaption>
   </figure>
 </section>
 
 <section id="emocao">
-  <h2><span class="kicker">6 · Emoção</span> Voz e tom copiados das referências do VERBO</h2>
+  <h2><span class="kicker">6 · Emotion</span> Voice and pitch copied from the VERBO references</h2>
   <p>
-    O VERBO tem 12 locutores falando em 7 emoções, mas só <b>14 frases</b> diferentes. Isso cria um conflito:
-    o corpus ensina muito sobre <em>como</em> falar e quase nada sobre <em>o que</em> falar. Testamos três receitas,
-    sempre com as mesmas 6 frases novas e 10 referências (7 emoções da locutora f1, 3 do locutor m1).
+    VERBO has 12 speakers speaking in 7 emotions, but only <b>14 different sentences</b>. This creates a conflict:
+    the corpus teaches a lot about <em>how</em> to speak and almost nothing about <em>what</em> to say. We tested three recipes,
+    always with the same 6 new sentences and 10 references (7 emotions from female speaker f1, 3 from male speaker m1).
   </p>
   <div class="scroll"><table>
-    <tr><th>Receita</th><th>Palavras erradas</th><th>O tom acompanha a referência?</th></tr>
-    <tr><td>Modelo de português, sem VERBO</td><td>19% <span class="legendnote">(4 referências)</span></td><td>Não: a voz é sempre a do corpus de português</td></tr>
-    <tr><td>Ajuste só no VERBO</td><td>52%</td><td>Sim (correlação 0,96)</td></tr>
-    <tr><td>Português + VERBO juntos</td><td>41%</td><td>Sim (correlação 0,97)</td></tr>
-    <tr class="diff"><td>Português + VERBO, estilo a 60%</td><td>9% <span class="legendnote">(7 referências)</span></td><td>Em parte: a velocidade muda com a emoção, o tom fica perto do neutro</td></tr>
+    <tr><th>Recipe</th><th>Wrong words</th><th>Does the pitch follow the reference?</th></tr>
+    <tr><td>Portuguese model, without VERBO</td><td>19% <span class="legendnote">(4 references)</span></td><td>No: the voice is always that of the Portuguese corpus</td></tr>
+    <tr><td>Fine-tuning on VERBO only</td><td>52%</td><td>Yes (correlation 0.96)</td></tr>
+    <tr><td>Portuguese + VERBO together</td><td>41%</td><td>Yes (correlation 0.97)</td></tr>
+    <tr class="diff"><td>Portuguese + VERBO, style at 60%</td><td>9% <span class="legendnote">(7 references)</span></td><td>Partly: the speed changes with the emotion, the pitch stays close to neutral</td></tr>
   </table></div>
   <p>
-    Com o estilo inteiro da referência, o modelo copia a voz e o tom (inclusive troca voz feminina por masculina),
-    mas perde inteligibilidade: ele passa a falar com uma voz que só conhece em 14 frases. A saída que encontramos
-    é um <b>controle de intensidade</b>: multiplicar o código de estilo da referência por um fator entre 0 e 1 antes
-    de sintetizar. Em 60%, quase todas as palavras voltam a ser entendidas.
+    With the full style of the reference, the model copies the voice and the pitch (it even switches from a female to a male voice),
+    but loses intelligibility: it starts speaking in a voice it only knows from 14 sentences. The way out we found
+    is a <b>strength control</b>: multiplying the reference style code by a factor between 0 and 1 before
+    synthesizing. At 60%, almost all words are understood again.
   </p>
   <figure class="figure">
-    <img src="assets/img/fig_retreino_intensidade.png" alt="Palavras erradas e faixa de tom em função da intensidade do estilo" loading="lazy">
-    <figcaption>Efeito da intensidade do estilo no modelo português + VERBO (7 emoções da locutora f1). À esquerda, palavras erradas. À direita, o menor e o maior tom médio entre as emoções: quanto mais larga a faixa, mais a emoção muda o tom.</figcaption>
+    <img src="assets/img/fig_retreino_intensidade.png" alt="Wrong words and pitch range as a function of style strength" loading="lazy">
+    <figcaption>Effect of style strength on the Portuguese + VERBO model (7 emotions from female speaker f1). Left: wrong words. Right: the lowest and highest mean pitch across the emotions: the wider the range, the more the emotion changes the pitch.</figcaption>
   </figure>
   <figure class="figure">
-    <img src="assets/img/fig_retreino_estilo_ptverbo_vae_v1.png" alt="Tom e velocidade da fala gerada contra os da referência" loading="lazy">
-    <figcaption>Estilo a 100%: cada ponto é uma referência (círculos: locutora f1; quadrados: locutor m1). Na diagonal, a fala gerada teria o mesmo tom ou velocidade da referência.</figcaption>
+    <img src="assets/img/fig_retreino_estilo_ptverbo_vae_v1.png" alt="Pitch and speed of the generated speech against those of the reference" loading="lazy">
+    <figcaption>Style at 100%: each point is a reference (circles: female speaker f1; squares: male speaker m1). On the diagonal, the generated speech would have the same pitch or speed as the reference.</figcaption>
   </figure>
 
-  <h3>Referências (áudio real do VERBO)</h3>
-  <p>Todas dizem “Agora vou pôr a camiseta e sair para uma caminhada.”</p>
+  <h3>References (real VERBO audio)</h3>
+  <p>All of them say “Agora vou pôr a camiseta e sair para uma caminhada.” (“Now I am going to put on my T-shirt and go for a walk.”)</p>
   <div class="players">
-    <figure class="player gt"><figcaption>neutro <span class="sub">neu-f1-l3 · áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_neu.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>alegria <span class="sub">ale-f1-l3 · áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_ale.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>tristeza <span class="sub">tri-f1-l3 · áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_tri.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>raiva <span class="sub">rai-f1-l3 · áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_rai.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>surpresa <span class="sub">sur-f1-l3 · áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_sur.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>medo <span class="sub">med-f1-l3 · áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_med.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>desgosto <span class="sub">des-f1-l3 · áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_des.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>neutral <span class="sub">neu-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_neu.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>joy <span class="sub">ale-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_ale.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>sadness <span class="sub">tri-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_tri.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>anger <span class="sub">rai-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_rai.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>surprise <span class="sub">sur-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_sur.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>fear <span class="sub">med-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_med.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>disgust <span class="sub">des-f1-l3 · real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_des.mp3"></audio></figure>
   </div>
-  <h3>Frase nova com o estilo inteiro (100%)</h3>
-  <p>“Eu nunca pensei que veria você aqui de novo.” A voz e o tom seguem a referência, mas várias saem truncadas ou erradas (surpresa e medo são as piores).</p>
+  <h3>New sentence with the full style (100%)</h3>
+  <p>“Eu nunca pensei que veria você aqui de novo.” (“I never thought I would see you here again.”) The voice and pitch follow the reference, but several come out truncated or wrong (surprise and fear are the worst).</p>
   <div class="players">
-    <figure class="player m-base"><figcaption>→ neutro <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_neu.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ alegria <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_ale.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ tristeza <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_tri.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ raiva <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_rai.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ surpresa <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_sur.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ medo <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_med.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ desgosto <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_des.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ neutral <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_neu.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ joy <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_ale.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ sadness <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_tri.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ anger <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_rai.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ surprise <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_sur.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ fear <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_med.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ disgust <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_des.mp3"></audio></figure>
   </div>
-  <h3>A mesma frase com o estilo a 60%</h3>
-  <p>Todas são entendidas. A voz volta a ser a do corpus de português; o que sobra da emoção é principalmente o ritmo.</p>
+  <h3>The same sentence with the style at 60%</h3>
+  <p>All of them are understood. The voice goes back to being that of the Portuguese corpus; what remains of the emotion is mainly the rhythm.</p>
   <div class="players">
-    <figure class="player m-attn"><figcaption>→ neutro <span class="sub">estilo a 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_neu.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ alegria <span class="sub">estilo a 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_ale.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ tristeza <span class="sub">estilo a 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_tri.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ raiva <span class="sub">estilo a 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_rai.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ surpresa <span class="sub">estilo a 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_sur.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ medo <span class="sub">estilo a 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_med.mp3"></audio></figure>
-    <figure class="player m-attn"><figcaption>→ desgosto <span class="sub">estilo a 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_des.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ neutral <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_neu.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ joy <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_ale.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ sadness <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_tri.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ anger <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_rai.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ surprise <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_sur.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ fear <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_med.mp3"></audio></figure>
+    <figure class="player m-attn"><figcaption>→ disgust <span class="sub">style at 60%</span></figcaption><audio controls preload="none" src="assets/audio/emo_60_des.mp3"></audio></figure>
   </div>
-  <h3>Trocando de locutor</h3>
+  <h3>Switching speakers</h3>
   <div class="players">
-    <figure class="player gt"><figcaption>Locutor m1, neutro <span class="sub">áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_m1_neu.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ voz de m1, neutro <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_m1_neu.mp3"></audio></figure>
-    <figure class="player gt"><figcaption>Locutor m1, alegria <span class="sub">áudio real</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_m1_ale.mp3"></audio></figure>
-    <figure class="player m-base"><figcaption>→ voz de m1, alegria <span class="sub">estilo a 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_m1_ale.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>Speaker m1, neutral <span class="sub">real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_m1_neu.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ m1's voice, neutral <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_m1_neu.mp3"></audio></figure>
+    <figure class="player gt"><figcaption>Speaker m1, joy <span class="sub">real audio</span></figcaption><audio controls preload="none" src="assets/audio/emo_ref_m1_ale.mp3"></audio></figure>
+    <figure class="player m-base"><figcaption>→ m1's voice, joy <span class="sub">style at 100%</span></figcaption><audio controls preload="none" src="assets/audio/emo_100_m1_ale.mp3"></audio></figure>
   </div>
   <div class="callout warn">
-    <p><b>Conclusão desta parte.</b> Copiar voz e emoção funciona, mas com os dados que temos não dá para ter emoção forte
-    e fala clara ao mesmo tempo. O limite é o VERBO ter só 14 frases, não o modelo. Um corpus emocional com texto variado é o que falta.</p>
+    <p><b>Conclusion of this part.</b> Copying voice and emotion works, but with the data we have it is not possible to have strong emotion
+    and clear speech at the same time. The limit is that VERBO has only 14 sentences, not the model. An emotional corpus with varied text is what is missing.</p>
   </div>
 </section>
 
 <section id="cobertura">
-  <h2><span class="kicker">7 · Cobertura</span> Quantos dados cada voz precisa para ser copiada</h2>
+  <h2><span class="kicker">7 · Coverage</span> How much data each voice needs to be copied</h2>
   <p>
-    O erro com emoção forte vem de um estilo visto com poucas frases. Para medir isso de forma controlada, trocamos
-    emoções por vozes: 2.000 frases do LJSpeech (a voz padrão) mais N locutores do LibriTTS com K frases cada,
-    partindo do modelo em inglês, 2.500 passos por treino. Cada treino sintetiza 25 frases fora do treino com
-    8 vozes treinadas e 4 vozes nunca vistas. Uma voz conta como copiada quando o áudio gerado fica mais parecido
-    com a referência do que com a voz padrão, segundo um codificador de locutor externo.
+    The error with strong emotion comes from a style seen with few sentences. To measure this in a controlled way, we swapped
+    emotions for voices: 2,000 LJSpeech sentences (the default voice) plus N LibriTTS speakers with K sentences each,
+    starting from the English model, 2,500 steps per training run. Each run synthesizes 25 held-out sentences with
+    8 trained voices and 4 never-seen voices. A voice counts as copied when the generated audio is closer
+    to the reference than to the default voice, according to an external speaker encoder.
   </p>
   <figure class="figure">
-    <img src="assets/img/fig_cobertura.png" alt="Voz copiada em função das frases por locutor, para 2, 8 e 32 locutores, em vozes treinadas e nunca vistas" loading="lazy">
-    <figcaption>Parcela das amostras com a voz copiada. Pontos: sementes; linhas: médias.</figcaption>
+    <img src="assets/img/fig_cobertura.png" alt="Voice copied as a function of sentences per speaker, for 2, 8 and 32 speakers, on trained and never-seen voices" loading="lazy">
+    <figcaption>Share of samples with the voice copied. Points: seeds; lines: means.</figcaption>
   </figure>
   <div class="scroll"><table>
-    <tr><th>Locutores</th><th>Frases por locutor</th><th>Palavras erradas: treinadas</th><th>Palavras erradas: novas</th><th>Voz copiada: treinadas</th><th>Voz copiada: novas</th></tr>
+    <tr><th>Speakers</th><th>Sentences per speaker</th><th>Wrong words: trained</th><th>Wrong words: new</th><th>Voice copied: trained</th><th>Voice copied: new</th></tr>
     <tr><td>2</td><td>128</td><td>13% / 11%</td><td>8% / 5%</td><td>70% / 74%</td><td>4% / 2%</td></tr>
     <tr><td>8</td><td>8</td><td>21% / 26%</td><td>14% / 24%</td><td>45% / 44%</td><td>26% / 39%</td></tr>
     <tr><td>8</td><td>32</td><td>17%</td><td>14%</td><td>74%</td><td>47%</td></tr>
@@ -430,34 +430,34 @@
     <tr><td>32</td><td>128</td><td>12% / 10%</td><td>5% / 5%</td><td>86% / 86%</td><td>61% / 57%</td></tr>
   </table></div>
   <ul>
-    <li><b>Frases por locutor decidem as vozes treinadas.</b> Com 8 locutores, a cópia vai de 45% (8 frases) a 90% (128).</li>
-    <li><b>Número de locutores decide as vozes novas.</b> Com 128 frases, a cópia de vozes nunca vistas vai de 3% (2 locutores) a 59% (32).</li>
-    <li><b>Muitos locutores compensam poucas frases.</b> 32 locutores com 8 frases copiam vozes novas tanto quanto 8 locutores com 128.</li>
-    <li><b>O latente explica o erro.</b> Quanto mais longe da voz padrão está o código de estilo, mais a voz é copiada (correlação 0,83) e mais palavras saem erradas (0,45).</li>
-    <li><b>Duas perdas novas não ajudaram.</b> Treinar com o estilo tirado de outra frase do mesmo locutor, com ou sem uma perda contrastiva sobre o código de estilo, não mudou a cópia da voz nem o erro de palavras além da variação entre sementes (8 locutores com 8 frases: 42–52% das vozes treinadas copiadas, contra 45% / 44%). O gargalo parece ser quantas vozes e frases o modelo viu, não o conteúdo da frase no código.</li>
-    <li><b>Vetor de locutor pré-treinado também não.</b> Uma segunda entrada com o vetor de um codificador de locutor congelado é ignorada pelo treino (0% das vozes copiadas com o VAE desligado). Forçando o uso (VAE zerado em metade dos itens de treino), o vetor sozinho copia 5% das vozes novas com 8 locutores e 47% com 32; junto com o VAE dá 62%, igual ao treino normal (61% / 57%). O limite é quantas vozes o decodificador ouviu.</li>
-    <li><b>Pseudo-locutores também não.</b> Uma lei de amostragem em dois níveis ajusta os 12 treinos (<a href="https://github.com/rick0110/ml2_final_project/blob/main/reports/teoria_cobertura.md">nota teórica</a>). A solução tirada dela, criar vozes novas alterando a velocidade das gravações, foi testada com previsões registradas antes: 28% e 42% das vozes novas copiadas, contra 26% / 39% e 51% / 37% no treino normal. O que conta é o número de vozes reais.</li>
-    <li><b>Mais locutores rendem até certo ponto.</b> Com 128 locutores e 32 frases cada, 74% e 56% das vozes novas são copiadas em duas sementes (média 65%, 8% de palavras erradas); com 200 locutores, 64%. De 32 para 128 há ganho, de 128 para 200 não. Com só 4 vozes novas essa medida é ruidosa.</li>
-    <li><b>Medido em 38 vozes nunca ouvidas, o ganho continua.</b> Com 32 frases por locutor, a cópia vai de 57% (8 locutores) a 70% (32) e 79% (128), com 12–13% de palavras erradas nos três: o ganho continua de 32 para 128 locutores, mas três pontos de uma semente ainda não dizem qual é a forma da curva. Tirar o estilo da média de 4 frases do locutor não melhora a cópia nessa medida; só deixa a fala um pouco mais correta.</li>
-    <li><b>Limites.</b> Duas configurações têm uma semente só, cada treino avalia 4 vozes novas, e entre sementes a cópia de vozes novas varia até 14 pontos.</li>
+    <li><b>Sentences per speaker decide the trained voices.</b> With 8 speakers, copying goes from 45% (8 sentences) to 90% (128).</li>
+    <li><b>The number of speakers decides the new voices.</b> With 128 sentences, copying of never-seen voices goes from 3% (2 speakers) to 59% (32).</li>
+    <li><b>Many speakers make up for few sentences.</b> 32 speakers with 8 sentences copy new voices as well as 8 speakers with 128.</li>
+    <li><b>The latent explains the error.</b> The farther the style code is from the default voice, the more the voice is copied (correlation 0.83) and the more words come out wrong (0.45).</li>
+    <li><b>Two new losses did not help.</b> Training with the style taken from another sentence by the same speaker, with or without a contrastive loss on the style code, did not change voice copying or the word error beyond the variation between seeds (8 speakers with 8 sentences: 42–52% of trained voices copied, against 45% / 44%). The bottleneck seems to be how many voices and sentences the model has seen, not the content of the sentence in the code.</li>
+    <li><b>A pretrained speaker vector did not help either.</b> A second input with the vector from a frozen speaker encoder is ignored by training (0% of voices copied with the VAE turned off). Forcing its use (VAE zeroed in half of the training items), the vector alone copies 5% of the new voices with 8 speakers and 47% with 32; together with the VAE it gives 62%, the same as normal training (61% / 57%). The limit is how many voices the decoder has heard.</li>
+    <li><b>Pseudo-speakers did not help either.</b> A two-level sampling law fits the 12 runs (<a href="https://github.com/rick0110/ml2_final_project/blob/main/reports/theory/coverage_theory.md">theory note</a>). The solution derived from it, creating new voices by changing the speed of the recordings, was tested with predictions registered beforehand: 28% and 42% of new voices copied, against 26% / 39% and 51% / 37% with normal training. What counts is the number of real voices.</li>
+    <li><b>More speakers pay off up to a point.</b> With 128 speakers and 32 sentences each, 74% and 56% of the new voices are copied in two seeds (mean 65%, 8% wrong words); with 200 speakers, 64%. From 32 to 128 there is a gain, from 128 to 200 there is not. With only 4 new voices this measure is noisy.</li>
+    <li><b>Measured on 38 never-heard voices, the gain continues.</b> With 32 sentences per speaker, copying goes from 57% (8 speakers) to 70% (32) and 79% (128), with 12–13% wrong words in all three: the gain continues from 32 to 128 speakers, but three points from one seed still do not tell what the shape of the curve is. Taking the style from the mean of 4 of the speaker's sentences does not improve copying on this measure; it only makes the speech slightly more correct.</li>
+    <li><b>Limits.</b> Two configurations have only one seed, each run evaluates 4 new voices, and between seeds the copying of new voices varies by up to 14 points.</li>
   </ul>
 </section>
 
 <section id="limites">
-  <h2><span class="kicker">8 · Limites e próximos passos</span> O que ainda não está resolvido</h2>
+  <h2><span class="kicker">8 · Limits and next steps</span> What is not solved yet</h2>
   <ul>
-    <li><b>Amostra pequena de avaliação.</b> São 6 frases por referência. Os números indicam a ordem de grandeza, não uma medida precisa.</li>
-    <li><b>Só inteligibilidade foi medida.</b> A naturalidade não foi avaliada por ouvintes.</li>
-    <li><b>Falas longas ficaram de fora.</b> O treino em português usou só falas de até 11 s.</li>
-    <li><b>O resumo por atenção não foi comparado</b> com a alternativa mais simples.</li>
-    <li><b>O vetor de estilo é global.</b> Ele descreve a fala inteira; não varia ao longo da frase.</li>
+    <li><b>Small evaluation sample.</b> There are 6 sentences per reference. The numbers indicate the order of magnitude, not a precise measurement.</li>
+    <li><b>Only intelligibility was measured.</b> Naturalness was not assessed by listeners.</li>
+    <li><b>Long utterances were left out.</b> Portuguese training used only utterances of up to 11 s.</li>
+    <li><b>The attention summary was not compared</b> with the simpler alternative.</li>
+    <li><b>The style vector is global.</b> It describes the whole utterance; it does not vary along the sentence.</li>
   </ul>
-  <h3>Rumo à dublagem</h3>
+  <h3>Toward dubbing</h3>
   <p>
-    O objetivo seguinte é dublar filmes: o texto traduzido entra como texto, e a fala do ator original entra como
-    referência de estilo. Este projeto entrega a primeira peça: síntese em português com tom e velocidade vindos
-    de uma referência. Faltam o controle da duração de cada fala (para caber na cena), o uso do vídeo como entrada
-    e a sincronia labial.
+    The next goal is to dub films: the translated text goes in as text, and the original actor's speech goes in as the
+    style reference. This project delivers the first piece: Portuguese synthesis with pitch and speed taken
+    from a reference. Still missing are control over the duration of each line (so it fits the scene), using the video as input,
+    and lip sync.
   </p>
 </section>
 
@@ -466,16 +466,16 @@
 <footer>
   <div class="wrap">
     <p>
-      <b>Projeto final de Machine Learning II — IMPA Tech.</b> Beatriz Nunes, Herivelton Siqueira, Richard Viana.
-      Professores: Francisco Ganacim e Daniel Silveira Yukimura Lopez.
-      Código: <a href="https://github.com/rick0110/ml2_final_project">github.com/rick0110/ml2_final_project</a> ·
-      <a href="https://github.com/rick0110/ml2_final_project/blob/main/reports/relatorio_final.pdf">Relatório (PDF)</a>
+      <b>Machine Learning II final project — IMPA Tech.</b> Beatriz Nunes, Herivelton Siqueira, Richard Viana.
+      Professors: Francisco Ganacim and Daniel Silveira Yukimura Lopez.
+      Code: <a href="https://github.com/rick0110/ml2_final_project">github.com/rick0110/ml2_final_project</a> ·
+      <a href="https://github.com/rick0110/ml2_final_project/blob/main/reports/final_report.pdf">Report (PDF)</a>
     </p>
     <p>
-      Dados: <a href="https://keithito.com/LJ-Speech-Dataset/">LJSpeech 1.1</a> ·
+      Data: <a href="https://keithito.com/LJ-Speech-Dataset/">LJSpeech 1.1</a> ·
       <a href="https://github.com/Edresson/TTS-Portuguese-Corpus">TTS-Portuguese Corpus</a> · VERBO (Torres Neto et al., 2018).
-      Modelos pré-treinados: Tacotron 2 (NVIDIA) e HiFi-GAN UNIVERSAL_V1 (Kong et al., 2020).
-      Conferência dos áudios: Whisper <em>small</em>.
+      Pretrained models: Tacotron 2 (NVIDIA) and HiFi-GAN UNIVERSAL_V1 (Kong et al., 2020).
+      Audio checking: Whisper <em>small</em>.
     </p>
   </div>
 </footer>

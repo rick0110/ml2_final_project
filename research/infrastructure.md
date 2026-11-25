@@ -30,7 +30,7 @@ Runs from before 2026-11-24 02:30 kept only their last checkpoints; the intermed
 3. A job that **continues** an existing run (more steps) goes straight into the queue of the machine holding the checkpoint.
 4. If the main queue and the backlog run out, the PC writes `QUEUE EMPTY` to `~/ml2_backup/alerts.log`. A machine that goes down produces `DOWN` in the same file.
 
-The PC's `ml2-sync` service checks the machines every 2 minutes (`~/ml2_backup/status.txt`) and rebuilds the inventory page (`~/ml2_backup/inventario.html`) every ~10 minutes. The page lists each experiment with status, machine, results, checkpoints and paths, plus the queues.
+The PC's `ml2-sync` service checks the machines every 2 minutes (`~/ml2_backup/status.txt`) and rebuilds the inventory page (`~/ml2_backup/inventory.html`) every ~10 minutes. The page lists each experiment with status, machine, results, checkpoints and paths, plus the queues.
 
 ## Where the data is
 

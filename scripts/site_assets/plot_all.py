@@ -12,7 +12,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 HERE = Path(__file__).parent
 ANA = HERE / "analysis"
-IMG = Path("/home/al.richard.viana/Documentos/ml2_final_project/docs/assets/img")
+IMG = HERE.parents[1] / "docs" / "assets" / "img"
 IMG.mkdir(parents=True, exist_ok=True)
 
 # ---- palette (reference instance, light mode) ----
@@ -30,6 +30,10 @@ EMO_COLORS = {
     "medo": VIOLET, "surpresa": AQUA, "desgosto": GREEN,
 }
 EMO_ORDER = ["neutro", "alegria", "tristeza", "raiva", "medo", "surpresa", "desgosto"]
+# English display names for the emotion labels stored in the analysis files
+EMO_NAMES = {"neutro": "neutral", "alegria": "joy", "tristeza": "sadness", "raiva": "anger",
+             "medo": "fear", "surpresa": "surprise", "desgosto": "disgust"}
+EMO_ORDER_EN = [EMO_NAMES[e] for e in EMO_ORDER]
 
 MEL_CMAP = LinearSegmentedColormap.from_list(
     "melblue", ["#fcfcfb", "#cde2fb", "#86b6ef", "#3987e5", "#1c5cab", "#0d366b"])
@@ -65,15 +69,15 @@ summary = {}
 # ================================================== 1. LJ reconstructed curves
 ck = json.load(open(HERE / "ckpt_eval.json"))
 fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.4))
-for ax, key, title in [(axes[0], "recon", "Perda de reconstrução (mel + gate)"),
-                       (axes[1], "kl", "Divergência KL (nats/dim)")]:
-    for name, color, label in [("baseline_lj", AQUA, "Baseline (última saída da GRU)"),
-                               ("attn_lj", BLUE, "Com atenção temporal")]:
+for ax, key, title in [(axes[0], "recon", "Reconstruction loss (mel + gate)"),
+                       (axes[1], "kl", "KL divergence (nats/dim)")]:
+    for name, color, label in [("baseline_lj", AQUA, "Baseline (last GRU output)"),
+                               ("attn_lj", BLUE, "With temporal attention")]:
         pts = [(p["iteration"], p[key]) for p in ck[name] if p["iteration"] >= 500]
         xs, ys = zip(*pts)
         ax.plot(xs, ys, color=color, lw=2, label=label)
     ax.set_title(title)
-    ax.set_xlabel("Iteração de treino")
+    ax.set_xlabel("Training iteration")
     ax.xaxis.set_major_formatter(lambda v, _: f"{v/1000:.0f}k")
 legend(axes[0], loc="upper right")
 save(fig, "fig_lj_curves.png")
@@ -87,14 +91,14 @@ summary["lj_recon_final"] = {
 # ================================================== 2. TB curves (attn_lj, verbo)
 tb = json.load(open(HERE / "tb_curves.json"))
 fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.4))
-for ax, name, title in [(axes[0], "attn_lj", "LJSpeech c/ atenção — TensorBoard"),
+for ax, name, title in [(axes[0], "attn_lj", "LJSpeech with attention — TensorBoard"),
                         (axes[1], "verbo_v4_f1", "VERBO f1 (v4) — TensorBoard")]:
     tr = [(s, v) for s, v in tb[name]["Loss/Train_Total"] if s >= 500]
     va = [(s, v) for s, v in tb[name]["Loss/Val_Total"] if s >= 500]
-    ax.plot(*zip(*tr), color=BLUE, lw=2, label="Treino (total)")
-    ax.plot(*zip(*va), color=ORANGE, lw=2, label="Validação (total)")
+    ax.plot(*zip(*tr), color=BLUE, lw=2, label="Training (total)")
+    ax.plot(*zip(*va), color=ORANGE, lw=2, label="Validation (total)")
     ax.set_title(title)
-    ax.set_xlabel("Iteração")
+    ax.set_xlabel("Iteration")
     ax.xaxis.set_major_formatter(lambda v, _: f"{v/1000:.0f}k")
 legend(axes[0], loc="upper right")
 legend(axes[1], loc="upper right")
@@ -108,9 +112,9 @@ summary["tb_final"] = {
 
 # ================================================== 3. LJ attention overlays
 lj_attn = json.load(open(ANA / "lj_attention.json"))
-STYLE_LABEL = {"expressiva": "Expressiva (F0 muito variável)",
-               "grave_lenta": "Grave e lenta",
-               "rapida": "Rápida"}
+STYLE_LABEL = {"expressiva": "Expressive (highly variable F0)",
+               "grave_lenta": "Low-pitched and slow",
+               "rapida": "Fast"}
 fig, axes = plt.subplots(3, 1, figsize=(9.6, 7.2))
 for ax, (style, d) in zip(axes, lj_attn.items()):
     mel = np.array(d["mel"])
@@ -125,9 +129,9 @@ for ax, (style, d) in zip(axes, lj_attn.items()):
     ax.stairs(dens / dens.max() * 70 + 5, edges, color=ORANGE, lw=2.5,
               baseline=None)
     ax.set_title(f"{STYLE_LABEL[style]} — {d['utt']}", loc="left")
-    ax.set_ylabel("Canal mel")
+    ax.set_ylabel("Mel channel")
     ax.set_yticks([0, 40, 80])
-axes[-1].set_xlabel("Tempo (s) — linha laranja: peso de atenção por janela de ~0,74 s")
+axes[-1].set_xlabel("Time (s) — orange line: attention weight per ~0.74 s window")
 fig.tight_layout()
 save(fig, "fig_lj_attention.png")
 
@@ -167,10 +171,10 @@ summary["verbo_energy_corr"] = {k: [round(a, 3), round(b, 3)] for k, (a, b) in c
 fig, ax = plt.subplots(figsize=(8.4, 3.4))
 im = ax.imshow(heat, aspect="auto", cmap=MEL_CMAP, vmin=heat.min(), vmax=heat.max())
 ax.grid(False)
-ax.set_yticks(range(len(EMO_ORDER)), EMO_ORDER)
-ax.set_xticks([0, NBINS / 2 - 0.5, NBINS - 1], ["início", "meio", "fim"])
-ax.set_xlabel("Tempo normalizado do áudio de referência")
-ax.set_title("Densidade média de atenção por emoção (1,0 = atenção uniforme)", loc="left")
+ax.set_yticks(range(len(EMO_ORDER)), EMO_ORDER_EN)
+ax.set_xticks([0, NBINS / 2 - 0.5, NBINS - 1], ["start", "middle", "end"])
+ax.set_xlabel("Normalized time of the reference audio")
+ax.set_title("Mean attention density per emotion (1.0 = uniform attention)", loc="left")
 cb = fig.colorbar(im, ax=ax, shrink=0.9, pad=0.015)
 cb.outline.set_visible(False)
 cb.ax.tick_params(color=MUTED, labelcolor=MUTED, labelsize=8)
@@ -179,8 +183,8 @@ save(fig, "fig_verbo_attn_heatmap.png")
 fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.3))
 xs = np.arange(len(EMO_ORDER))
 for ax, data, title, ylab in [
-        (axes[0], ent, "Entropia normalizada da atenção", "H / ln T′  (1,0 = uniforme)"),
-        (axes[1], corr, "Correlação atenção × energia do mel", "Pearson r")]:
+        (axes[0], ent, "Normalized attention entropy", "H / ln T′  (1.0 = uniform)"),
+        (axes[1], corr, "Attention × mel energy correlation", "Pearson r")]:
     vals = [data[e][0] for e in EMO_ORDER]
     errs = [data[e][1] for e in EMO_ORDER]
     ax.bar(xs, vals, 0.62, color=[EMO_COLORS[e] for e in EMO_ORDER], zorder=3)
@@ -189,7 +193,7 @@ for ax, data, title, ylab in [
     for x, v in zip(xs, vals):
         ax.text(x, v + (0.02 if v >= 0 else -0.05), f"{v:.2f}", ha="center",
                 fontsize=8, color=INK2)
-    ax.set_xticks(xs, EMO_ORDER, rotation=30, ha="right")
+    ax.set_xticks(xs, EMO_ORDER_EN, rotation=30, ha="right")
     ax.set_title(title, loc="left")
     ax.set_ylabel(ylab)
 axes[1].axhline(0, color=BASELINE_AX, lw=1)
@@ -209,10 +213,10 @@ for ax, (e, d) in zip(axes, ex.items()):
     dens = w * len(w)
     edges = np.arange(len(w) + 1) * 64 * 256 / 22050
     ax.stairs(dens / max(dens.max(), 1e-9) * 70 + 5, edges, color=ORANGE, lw=2.5)
-    ax.set_title(f"{e} — {d['utt']} — “{d['text']}”", loc="left")
-    ax.set_ylabel("Canal mel")
+    ax.set_title(f"{EMO_NAMES.get(e, e)} — {d['utt']} — “{d['text']}”", loc="left")
+    ax.set_ylabel("Mel channel")
     ax.set_yticks([0, 40, 80])
-axes[-1].set_xlabel("Tempo (s) — linha laranja: peso de atenção por janela de ~0,74 s")
+axes[-1].set_xlabel("Time (s) — orange line: attention weight per ~0.74 s window")
 fig.tight_layout()
 save(fig, "fig_verbo_attention_examples.png")
 
@@ -220,7 +224,7 @@ save(fig, "fig_verbo_attention_examples.png")
 li = json.load(open(ANA / "latent_info.json"))
 fig, axes = plt.subplots(1, 3, figsize=(11.4, 3.2))
 for ax, tag, title in [(axes[0], "base", "LJ baseline (32 dims)"),
-                       (axes[1], "attn", "LJ c/ atenção (32 dims)"),
+                       (axes[1], "attn", "LJ with attention (32 dims)"),
                        (axes[2], "verbo", "VERBO f1 (16 dims)")]:
     var = np.array(li[tag]["var_all"])
     top = [d["dim"] for d in li[tag]["top_dims"]]
@@ -230,10 +234,10 @@ for ax, tag, title in [(axes[0], "base", "LJ baseline (32 dims)"),
         ax.text(d, var[d], f" z{d}", ha="center", va="bottom", fontsize=8,
                 color=INK2)
     ax.set_title(title, loc="left")
-    ax.set_xlabel("Dimensão do latente")
+    ax.set_xlabel("Latent dimension")
     ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
-axes[0].set_ylabel("Var(μ) no corpus")
-axes[0].text(0.97, 0.72, "escala ~100×\nmenor: posterior\ncolapsado",
+axes[0].set_ylabel("Var(μ) over the corpus")
+axes[0].text(0.97, 0.72, "~100× smaller\nscale: collapsed\nposterior",
              transform=axes[0].transAxes, ha="right", fontsize=8.5, color=RED)
 save(fig, "fig_latent_var.png")
 summary["latent"] = {t: {"top_dims": li[t]["top_dims"],
@@ -250,16 +254,16 @@ pcs = mu_c @ Vt[:2].T
 evr = (S ** 2 / (S ** 2).sum())[:2]
 fig, axes = plt.subplots(1, 2, figsize=(9.8, 4.1))
 for ax, X, title, xl, yl in [
-        (axes[0], pcs, f"PCA de μ ({100*evr.sum():.0f}% da variância)",
+        (axes[0], pcs, f"PCA of μ ({100*evr.sum():.0f}% of the variance)",
          f"PC1 ({100*evr[0]:.0f}%)", f"PC2 ({100*evr[1]:.0f}%)"),
         (axes[1], mus[:, [li["verbo"]["top_dims"][0]["dim"],
                           li["verbo"]["top_dims"][1]["dim"]]],
-         "Dimensões mais influentes",
+         "Most influential dimensions",
          f"z{li['verbo']['top_dims'][0]['dim']}",
          f"z{li['verbo']['top_dims'][1]['dim']}")]:
     for e in EMO_ORDER:
         idx = [i for i, x in enumerate(emos) if x == e]
-        ax.scatter(X[idx, 0], X[idx, 1], s=34, color=EMO_COLORS[e], label=e,
+        ax.scatter(X[idx, 0], X[idx, 1], s=34, color=EMO_COLORS[e], label=EMO_NAMES[e],
                    edgecolors=SURFACE, linewidths=1.2, zorder=3)
     ax.set_title(title, loc="left")
     ax.set_xlabel(xl)
@@ -279,11 +283,11 @@ emb = tsne.fit_transform(mus)
 fig, ax = plt.subplots(figsize=(6.6, 5.2))
 for e in EMO_ORDER:
     idx = [i for i, x in enumerate(emos) if x == e]
-    ax.scatter(emb[idx, 0], emb[idx, 1], s=42, color=EMO_COLORS[e], label=e,
+    ax.scatter(emb[idx, 0], emb[idx, 1], s=42, color=EMO_COLORS[e], label=EMO_NAMES[e],
                edgecolors=SURFACE, linewidths=1.2, zorder=3)
-ax.set_title("t-SNE de μ (16 dims → 2) — VERBO f1", loc="left")
-ax.set_xlabel("dimensão t-SNE 1")
-ax.set_ylabel("dimensão t-SNE 2")
+ax.set_title("t-SNE of μ (16 dims → 2) — VERBO f1", loc="left")
+ax.set_xlabel("t-SNE dimension 1")
+ax.set_ylabel("t-SNE dimension 2")
 leg = ax.legend(frameon=False, loc="center left", bbox_to_anchor=(1.01, 0.5))
 for t in leg.get_texts():
     t.set_color(INK2)
@@ -294,12 +298,12 @@ ii = json.load(open(ANA / "interp_info.json"))
 fig, axes = plt.subplots(1, 3, figsize=(11.4, 3.2))
 ts = np.linspace(0, 1, 21)
 for ax, tag, title in [(axes[0], "base", "LJ baseline"),
-                       (axes[1], "attn", "LJ c/ atenção"),
+                       (axes[1], "attn", "LJ with attention"),
                        (axes[2], "verbo", "VERBO f1")]:
     d = ii[tag]
     ax.plot(ts, d["norms_lerp"], color=RED, lw=2, label="lerp (linear)")
-    ax.plot(ts, d["norms_slerp"], color=BLUE, lw=2, label="slerp (esférica)")
-    ax.set_title(f"{title} — ângulo {d['angle_deg']:.0f}°", loc="left")
+    ax.plot(ts, d["norms_slerp"], color=BLUE, lw=2, label="slerp (spherical)")
+    ax.set_title(f"{title} — angle {d['angle_deg']:.0f}°", loc="left")
     ax.set_xlabel("t")
     ax.set_ylim(bottom=0)
 axes[0].set_ylabel("‖z(t)‖")
@@ -312,7 +316,7 @@ summary["interp"] = {t: {"angle": round(ii[t]["angle_deg"], 1),
                      for t in ["base", "attn", "verbo"]}
 
 # ================================================== 9. interpolation mel strips
-for tag, label in [("base", "LJ baseline"), ("attn", "LJ c/ atenção"),
+for tag, label in [("base", "LJ baseline"), ("attn", "LJ with attention"),
                    ("verbo", "VERBO f1")]:
     z = np.load(ANA / f"interp_mels_{tag}.npz")
     fig, axes = plt.subplots(2, 5, figsize=(13, 4.2))
@@ -332,7 +336,7 @@ for tag, label in [("base", "LJ baseline"), ("attn", "LJ c/ atenção"),
                 ax.set_title(f"t = {t/100:.2f}", fontsize=10)
             if col == 0:
                 ax.set_ylabel(method, fontsize=11, color=INK)
-    fig.suptitle(f"Mel-espectrogramas ao longo da interpolação — {label}",
+    fig.suptitle(f"Mel spectrograms along the interpolation — {label}",
                  fontsize=12, color=INK, x=0.5, y=1.0)
     fig.tight_layout()
     save(fig, f"fig_interp_mels_{tag}.png")
