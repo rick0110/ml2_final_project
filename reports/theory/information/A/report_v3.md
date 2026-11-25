@@ -1,221 +1,221 @@
-# Clonagem *zero-shot* como codificação de fonte — v3: temperatura, capacidade e cobertura
+# *Zero-shot* cloning as source coding — v3: temperature, capacity and coverage
 
-Documento de trabalho (teoria2/A), 17/11/2026. v1 (`relatorio.md`) e v2 (`relatorio_v2.md`) ficam como estão.
-Pergunta desta rodada: a "largura por voz" que implica $T\approx21$ (v2) e o "decodificador usa ~1/22 da evidência"
-(análise bayesiana independente) são o mesmo fato? E a temperatura cai com $N$?
-Scripts novos: `c1_temperatura.py`, `c2_nominal.py`, `c3_extrap.py`, `c4_loro.py`; saídas `out/c1.json`–`out/c4.json`.
-Só CPU, `python3 -I`, nenhum repositório tocado.
-
----
-
-## 0. Resumo
-
-**Resposta direta à hipótese: a temperatura NÃO cai com $N$.** Estimada pela forma da resposta por voz em cada
-treino, $T(8)=18{,}7$, $T(32)=19{,}4$, $T(128)=27{,}1$, com ICs de 11 a 29–71 que se sobrepõem.
-$\Pr(T_8>T_{128})=0{,}23$ no bootstrap. Um $T$ comum ($21{,}6$) não é rejeitado. A capacidade usada fica em
-$C\approx0{,}8$–$1{,}1$ bit em todos os $N$. **Toda a queda de $q$ com $N$ vem do livro-código (cobertura/massa),
-nada da capacidade.** A convergência com a outra análise é numérica ($1/T\approx1/19$–$1/27$ contra $1/22$), mas é
-uma **propriedade fixa do decodificador** (ou um artefato comum de geometria, §6), não um mecanismo de escala.
-
-| treino ($K=32$) | $T$ (IC 90%) | $1/T$ | $C(T)$ bits (IC) | $\lambda=\ln(M_{\rm ef}/K)$ |
-|---|---|---|---|---|
-| $N=8$ | 18,7 (11,8–29,1) | 1/19 | 1,13 (0,75–1,70) | 4,26 |
-| $N=32$ | 19,4 (11,7–26,3) | 1/19 | 1,09 (0,83–1,71) | 4,98 |
-| $N=128$ | 27,1 (11,2–71,1) | 1/27 | 0,80 (0,32–1,77) | 5,04 |
-| comum | 21,6 | 1/22 | 1,06 | 3,91 / 4,72 / 5,45 |
-| nominal $\ln(2000/32)$ | | | | 4,14 |
-
-**Achados que mudam a v2.**
-1. **Com $T$ alto, a massa nominal volta a funcionar.** O nível ajustado por treino é
-   $\lambda=4{,}3$–$5{,}0$, contra o nominal $\ln(M/K)=4{,}14$, ou seja $M_{\rm ef}\approx2.300$–$5.000$ contra
-   2.000 frases LJ. O "fracasso de $M$" da v2 ($M_{\rm ef}=10^{26}$) era artefato de $T=1$.
-   A v2 rejeitou $T$ alto supondo massa fixa entre treinos; com o nível livre por treino, $T\approx21$ é compatível
-   com a curva.
-2. **Diluição de massa.** O nível sobe $0{,}56$ por unidade de $\ln N$: a massa efetiva das vozes LibriTTS cresce
-   como $N^{0,44}$, não como $N$. Em bits: **cada duplicação de $N$ acrescenta 1 bit de livro-código, dos quais
-   ~0,44 bit chega à decisão; a capacidade acrescenta 0.**
-3. **Decomposição de $q_8\to q_{128}$** (Shapley, nível fixo): cobertura −0,40 a −0,48 (IC −0,50 a −0,39);
-   capacidade +0,10 a +0,12 (IC −0,16 a +0,31, sinal errado e compatível com 0).
-
-**Parâmetros e previsões** (38 vozes externas, espaço comum = latente do treino $N=128$):
-
-| previsão para o treino $r$ | ajustado no nível de $r$? | $q_8$ | $q_{32}$ | $q_{128}$ |
-|---|---|---|---|---|
-| observado | — | 0,434 | 0,302 | 0,211 |
-| $T$ próprio (forma) + $\lambda$ **nominal** | não (0 parâmetros de nível) | 0,409 | 0,186 | 0,112 |
-| $T$ comum (forma) + $\lambda$ nominal | não | 0,481 | 0,214 | 0,090 |
-| $T$ comum + $\lambda$ interpolado/extrapolado dos outros 2 treinos | não (deixando o treino de fora) | 0,453 | 0,294 | 0,223 |
-| *nulo*: logit$(q)$ linear em $\ln N$, deixando o treino de fora | não | 0,412 | (interp.) | 0,196 |
-
-A previsão deixando o treino de fora acerta a 0,01–0,02, **mas o nulo de dois parâmetros acerta igual**: com
-3 pontos, esse teste não distingue a teoria de uma tendência suave. A versão com massa nominal (nenhum parâmetro de
-nível) acerta $N=8$ e erra $N=32$ e 128 por ~0,1 no sentido de prever queda demais. A diferença é exatamente a
-diluição de massa do item 2.
+Working document (teoria2/A), 17 November 2026. v1 (`report_v1.md`) and v2 (`report_v2.md`) stay as they are.
+Question for this round: are the "per-voice width" that implies $T\approx21$ (v2) and the "decoder uses ~1/22 of the evidence"
+(independent Bayesian analysis) the same fact? And does the temperature fall with $N$?
+New scripts: `c1_temperatura.py`, `c2_nominal.py`, `c3_extrap.py`, `c4_loro.py`; outputs `out/c1.json`–`out/c4.json`.
+CPU only, `python3 -I`, no repository touched.
 
 ---
 
-## 1. $T$ por treino
+## 0. Summary
 
-**Método** [DADOS, `c1_temperatura.py`]. O canal de Gibbs dá o logit de cópia de cada voz:
+**Direct answer to the hypothesis: the temperature does NOT fall with $N$.** Estimated from the shape of the per-voice response in each
+training run, $T(8)=18.7$, $T(32)=19.4$, $T(128)=27.1$, with CIs from 11 to 29–71 that overlap.
+$\Pr(T_8>T_{128})=0.23$ in the bootstrap. A common $T$ ($21.6$) is not rejected. The capacity used stays at
+$C\approx0.8$–$1.1$ bits at every $N$. **All of the drop in $q$ with $N$ comes from the codebook (coverage/mass),
+none from capacity.** The convergence with the other analysis is numerical ($1/T\approx1/19$–$1/27$ versus $1/22$), but it is
+a **fixed property of the decoder** (or a shared geometry artifact, §6), not a scaling mechanism.
+
+| training run ($K=32$) | $T$ (90% CI) | $1/T$ | $C(T)$ bits (CI) | $\lambda=\ln(M_{\rm ef}/K)$ |
+|---|---|---|---|---|
+| $N=8$ | 18.7 (11.8–29.1) | 1/19 | 1.13 (0.75–1.70) | 4.26 |
+| $N=32$ | 19.4 (11.7–26.3) | 1/19 | 1.09 (0.83–1.71) | 4.98 |
+| $N=128$ | 27.1 (11.2–71.1) | 1/27 | 0.80 (0.32–1.77) | 5.04 |
+| common | 21.6 | 1/22 | 1.06 | 3.91 / 4.72 / 5.45 |
+| nominal $\ln(2000/32)$ | | | | 4.14 |
+
+**Findings that change v2.**
+1. **With high $T$, the nominal mass works again.** The level fitted per training run is
+   $\lambda=4.3$–$5.0$, versus the nominal $\ln(M/K)=4.14$, that is $M_{\rm ef}\approx2,300$–$5,000$ versus
+   2,000 LJ utterances. The "failure of $M$" of v2 ($M_{\rm ef}=10^{26}$) was an artifact of $T=1$.
+   v2 rejected high $T$ by assuming a mass fixed across training runs; with the level free per training run, $T\approx21$ is compatible
+   with the curve.
+2. **Mass dilution.** The level rises by $0.56$ per unit of $\ln N$: the effective mass of the LibriTTS voices grows
+   as $N^{0.44}$, not as $N$. In bits: **each doubling of $N$ adds 1 bit of codebook, of which
+   ~0.44 bits reach the decision; capacity adds 0.**
+3. **Decomposition of $q_8\to q_{128}$** (Shapley, fixed level): coverage −0.40 to −0.48 (CI −0.50 to −0.39);
+   capacity +0.10 to +0.12 (CI −0.16 to +0.31, wrong sign and compatible with 0).
+
+**Parameters and predictions** (38 external voices, common space = latent of the $N=128$ training run):
+
+| prediction for training run $r$ | fitted on the level of $r$? | $q_8$ | $q_{32}$ | $q_{128}$ |
+|---|---|---|---|---|
+| observed | — | 0.434 | 0.302 | 0.211 |
+| own $T$ (shape) + **nominal** $\lambda$ | no (0 level parameters) | 0.409 | 0.186 | 0.112 |
+| common $T$ (shape) + nominal $\lambda$ | no | 0.481 | 0.214 | 0.090 |
+| common $T$ + $\lambda$ interpolated/extrapolated from the other 2 training runs | no (leaving the training run out) | 0.453 | 0.294 | 0.223 |
+| *null*: logit$(q)$ linear in $\ln N$, leaving the training run out | no | 0.412 | (interp.) | 0.196 |
+
+The leave-one-training-run-out prediction is accurate to 0.01–0.02, **but the two-parameter null is just as accurate**: with
+3 points, this test does not distinguish the theory from a smooth trend. The version with nominal mass (no level
+parameter) gets $N=8$ right and misses $N=32$ and 128 by ~0.1, in the direction of predicting too large a drop. The difference is exactly the
+mass dilution of item 2.
+
+---
+
+## 1. $T$ per training run
+
+**Method** [DATA, `c1_temperatura.py`]. The Gibbs channel gives the copy logit of each voice:
 $$
-\operatorname{logit}P(\text{cópia}\mid c)=\ln\!\sum_i e^{-\|c-v_i\|^2/2T}+\frac{\|c-v_0\|^2}{2T}-\lambda,\qquad \lambda=\ln\frac{M_{\rm ef}}K .
+\operatorname{logit}P(\text{copy}\mid c)=\ln\!\sum_i e^{-\|c-v_i\|^2/2T}+\frac{\|c-v_0\|^2}{2T}-\lambda,\qquad \lambda=\ln\frac{M_{\rm ef}}K .
 $$
-O ajuste é binomial, com 25 frases por voz, livros-código reais e o espaço comum (latente do treino $N=128$,
-branqueado). Em cada treino, $T$ fixa a **forma**: quão depressa a probabilidade muda com a geometria da voz.
-$\lambda$ fixa o **nível** (a cópia média). As duas coisas são quase ortogonais. O bootstrap (150 reamostras das
-38 vozes) refaz os dois ajustes.
+The fit is binomial, with 25 utterances per voice, real codebooks and the common space (latent of the $N=128$ training run,
+whitened). In each training run, $T$ sets the **shape**: how quickly the probability changes with the geometry of the voice.
+$\lambda$ sets the **level** (the mean copying). The two are almost orthogonal. The bootstrap (150 resamples of the
+38 voices) redoes both fits.
 
-**Resultado:** tabela do §0. $T$ não cai com $N$. A razão de verossimilhança entre "$T$ comum" e "$T$ por treino"
-é 10,4 em escala binomial. A superdispersão por voz é ~15×; corrigida, fica em ~0,7 contra $\chi^2_2$, longe de
-significativa.
+**Result:** table of §0. $T$ does not fall with $N$. The likelihood ratio between "common $T$" and "$T$ per training run"
+is 10.4 on the binomial scale. The per-voice overdispersion is ~15×; once corrected, it is ~0.7 against $\chi^2_2$, far from
+significant.
 
-**Capacidade usada** [HEURÍSTICO]. O canal de Gibbs a temperatura $T$ é o posterior de Bayes para códigos com
-ruído $T$ por direção, em vez de 1. A informação de voz que o decodificador "enxerga" é
+**Capacity used** [HEURISTIC]. The Gibbs channel at temperature $T$ is the Bayes posterior for codes with
+noise $T$ per direction, instead of 1. The voice information that the decoder "sees" is
 $$
 C(T)=\tfrac12\sum_j\log_2\!\big(1+\lambda_j/T\big),
 $$
-com $\lambda_j$ o espectro entre locutores medido: $C(1)=10{,}3$, $C(5)=3{,}4$, $C(10)=2{,}0$, $C(20)=1{,}06$,
-$C(27)=0{,}81$ bits. Com $T(N)$ medido, $C\approx1$ bit em todos os $N$.
-Comparação com a outra análise (1,1–2,4 de ~14 bits; fração 1/22): **mesma ordem de grandeza**. Meu $C$ fica no
-extremo inferior porque a escala total aqui é 10,3 bits (canal $z$), não 14.
+with $\lambda_j$ the measured between-speaker spectrum: $C(1)=10.3$, $C(5)=3.4$, $C(10)=2.0$, $C(20)=1.06$,
+$C(27)=0.81$ bits. With the measured $T(N)$, $C\approx1$ bit at every $N$.
+Comparison with the other analysis (1.1–2.4 of ~14 bits; fraction 1/22): **same order of magnitude**. My $C$ is at the
+lower end because the total scale here is 10.3 bits (channel $z$), not 14.
 
 ---
 
-## 2. Previsão sem ajuste no nível do treino previsto
+## 2. Prediction without fitting on the level of the predicted training run
 
-As contas estão em `c2.json` e `c4.json`.
+The calculations are in `c2.json` and `c4.json`.
 
-- **Zero parâmetros de nível** ($\lambda=\ln(2000/32)$; $T$ de forma, próprio ou comum): 0,41–0,48 / 0,19–0,21 /
-  0,09–0,11. Acerta $N=8$ e prevê queda demais depois.
-- **Nível dos outros dois treinos** (interpolação ou extrapolação de $\lambda$ em $\ln N$), com $T$ comum:
-  0,453 / 0,294 / 0,223. Erros de 0,02 / 0,01 / 0,01. Com $T$ próprio de cada treino, mais ruidoso:
-  0,565 / 0,252 / 0,316.
+- **Zero level parameters** ($\lambda=\ln(2000/32)$; shape $T$, own or common): 0.41–0.48 / 0.19–0.21 /
+  0.09–0.11. Gets $N=8$ right and predicts too large a drop afterwards.
+- **Level from the other two training runs** (interpolation or extrapolation of $\lambda$ in $\ln N$), with common $T$:
+  0.453 / 0.294 / 0.223. Errors of 0.02 / 0.01 / 0.01. With each training run's own $T$, noisier:
+  0.565 / 0.252 / 0.316.
 
-**Contagem de parâmetros honesta.**
-- Medidos: espectro, $v_0$, ruído, livros-código.
-- De forma: $T$, um número, estimado com a forma das respostas por voz dos três treinos (inclusive o previsto, mas
-  não o nível dele).
-- De nível: dois ($a$ e $b$ em $\lambda=a+b\ln N$), ajustados nos outros dois treinos.
-- Total: 3 parâmetros para 3 pontos. Cada previsão deixando o treino de fora usa 0 parâmetros do nível do treino
-  previsto.
+**Honest parameter count.**
+- Measured: spectrum, $v_0$, noise, codebooks.
+- Shape: $T$, one number, estimated from the shape of the per-voice responses of the three training runs (including the predicted one, but
+  not its level).
+- Level: two ($a$ and $b$ in $\lambda=a+b\ln N$), fitted on the other two training runs.
+- Total: 3 parameters for 3 points. Each leave-one-training-run-out prediction uses 0 parameters from the level of the predicted
+  training run.
 
-**O que isso vale.** Um logit linear em $\ln N$ (2 parâmetros) faz a mesma previsão deixando o treino de fora com
-erro semelhante (0,412 em $N=8$, 0,196 em $N=128$). **A teoria não ganha da tendência nula na curva.** O que ela
-acrescenta é a *interpretação* dos dois números de nível: $\lambda$ em torno do valor nominal, com inclinação
-0,56 (diluição).
+**What this is worth.** A logit linear in $\ln N$ (2 parameters) makes the same leave-one-training-run-out prediction with
+similar error (0.412 at $N=8$, 0.196 at $N=128$). **The theory does not beat the null trend on the curve.** What it
+adds is the *interpretation* of the two level numbers: $\lambda$ around the nominal value, with slope
+0.56 (dilution).
 
 ---
 
-## 3. Decomposição: cobertura × capacidade
+## 3. Decomposition: coverage × capacity
 
-Contrafactuais no modelo ajustado (`c1.json: decomposicao`): $q(\text{livro-código de }N_a,\ T\text{ de }N_b)$,
-média das duas ordens (Shapley).
+Counterfactuals in the fitted model (`c1.json: decomposicao`): $q(\text{codebook of }N_a,\ T\text{ of }N_b)$,
+averaged over the two orderings (Shapley).
 
-| passo | total (modelo) | cobertura | capacidade |
+| step | total (model) | coverage | capacity |
 |---|---|---|---|
-| 8→32 | −0,27 / −0,22 | −0,28 / −0,24 | +0,02 / +0,01 |
-| 32→128 | −0,09 / −0,07 | −0,18 / −0,14 | +0,09 / +0,06 |
-| 8→128 | −0,36 / −0,30 | −0,48 / −0,40 | +0,12 / +0,10 |
-| IC 90% (8→128, bootstrap) | [−0,66; −0,11] | [−0,50; −0,39] | [−0,16; +0,31] |
+| 8→32 | −0.27 / −0.22 | −0.28 / −0.24 | +0.02 / +0.01 |
+| 32→128 | −0.09 / −0.07 | −0.18 / −0.14 | +0.09 / +0.06 |
+| 8→128 | −0.36 / −0.30 | −0.48 / −0.40 | +0.12 / +0.10 |
+| 90% CI (8→128, bootstrap) | [−0.66; −0.11] | [−0.50; −0.39] | [−0.16; +0.31] |
 
-(Primeiro número: $\lambda$ fixo na média dos ajustes; segundo: $\lambda$ nominal.)
+(First number: $\lambda$ fixed at the mean of the fits; second: nominal $\lambda$.)
 
-**Leitura.** A cobertura explica mais que toda a queda; a capacidade não ajuda (a estimativa pontual piora, porque
-$T_{128}$ saiu maior). A queda observada de 0,43→0,21 é **100% cobertura** dentro da incerteza.
+**Interpretation.** Coverage explains more than the whole drop; capacity does not help (the point estimate gets worse, because
+$T_{128}$ came out larger). The observed drop of 0.43→0.21 is **100% coverage** within the uncertainty.
 
-Em unidades de informação, no regime de $T$ alto (lei dos grandes números), o logit de cópia de uma voz é
+In information units, in the high-$T$ regime (law of large numbers), the copy logit of a voice is
 $$
-\ln N+\ln\mathbb E_v\,k_T(c,v)+\frac{\|c-v_0\|^2}{2T}-\lambda(N),\qquad \frac{d\,\operatorname{logit}}{d\ln N}=1-0{,}56=0{,}44 .
+\ln N+\ln\mathbb E_v\,k_T(c,v)+\frac{\|c-v_0\|^2}{2T}-\lambda(N),\qquad \frac{d\,\operatorname{logit}}{d\ln N}=1-0.56=0.44 .
 $$
-Cada duplicação de $N$ dá 1 bit de livro-código; a diluição devolve 0,56 bit; a capacidade dá 0.
+Each doubling of $N$ gives 1 bit of codebook; dilution takes back 0.56 bits; capacity gives 0.
 
-**Por que "cobertura" aqui não é a distorção do vizinho da v1.** Com $T\approx21$, o núcleo cobre a população inteira
-($\lambda_1=8{,}3<T$). O que importa é a **massa** de vozes treinadas que o canal "vê" em torno de $c$, não a
-distância ao vizinho mais próximo. Por isso o livro-código gaussiano agora funciona (`c3.json`: 0,40/0,31/0,21 com o
-gaussiano, contra 0,42/0,30 com subconjuntos das vozes reais), enquanto na v1 falhava.
+**Why "coverage" here is not the nearest-neighbor distortion of v1.** With $T\approx21$, the kernel covers the whole population
+($\lambda_1=8.3<T$). What matters is the **mass** of trained voices that the channel "sees" around $c$, not the
+distance to the nearest neighbor. That is why the Gaussian codebook now works (`c3.json`: 0.40/0.31/0.21 with the
+Gaussian, versus 0.42/0.30 with subsets of the real voices), whereas in v1 it failed.
 
 ---
 
-## 4. $T$ e $K$
+## 4. $T$ and $K$
 
-Grade com $N$ fixo, ajuste nas 12 referências de cada treino (4 novas + 8 treinadas; ICs muito largos):
+Grid with fixed $N$, fit on the 12 references of each training run (4 new + 8 trained; very wide CIs):
 
 | $N$ | $K=8$ | $K=32$ | $K=128$ |
 |---|---|---|---|
-| 8 | 5,3 / 8,4 | 9,5 | 15,1 / 18,2 |
-| 32 | 13,2 / 8,8 | 15,1 | 15,7 / 15,6 |
-| 128 | 12,0 | 15,3 / 11,1 | — |
+| 8 | 5.3 / 8.4 | 9.5 | 15.1 / 18.2 |
+| 32 | 13.2 / 8.8 | 15.1 | 15.7 / 15.6 |
+| 128 | 12.0 | 15.3 / 11.1 | — |
 
-Nível $\lambda$ em $N=8$: 14,5/9,2 ($K=8$) → 6,2 ($K=32$) → 3,2/3,3 ($K=128$).
+Level $\lambda$ at $N=8$: 14.5/9.2 ($K=8$) → 6.2 ($K=32$) → 3.2/3.3 ($K=128$).
 
-**Leitura.** $T$ não cai com $K$; a estimativa pontual até sobe, e a capacidade não melhora com $K$. O efeito de $K$
-está no **nível**: $\lambda$ cai ~8 unidades de $K=8$ para 128, contra $\ln16=2{,}8$ do nominal. É o efeito forte de
-$K$ nas vozes treinadas (v2 §5b), que continua sem mecanismo: **$K$ age como massa ~3× mais forte que a contagem
-de frases, não como capacidade**.
+**Interpretation.** $T$ does not fall with $K$; the point estimate even rises, and capacity does not improve with $K$. The effect of $K$
+is in the **level**: $\lambda$ falls by ~8 units from $K=8$ to 128, versus $\ln16=2.8$ for the nominal. This is the strong effect of
+$K$ on the trained voices (v2 §5b), which still has no mechanism: **$K$ acts as a mass ~3× stronger than the count
+of utterances, not as capacity**.
 
-Ressalva: as temperaturas da grade (5–18) são menores que as das 38 externas (19–27). As vozes treinadas pesam
-nessas 12 referências, então $T$ depende do conjunto de vozes. Isso não é o esperado de uma constante do
-decodificador e reforça a ressalva do §6.
+Caveat: the temperatures of the grid (5–18) are lower than those of the 38 external voices (19–27). The trained voices carry weight
+in these 12 references, so $T$ depends on the set of voices. This is not what one would expect of a constant of the
+decoder, and it reinforces the caveat of §6.
 
 ---
 
-## 5. Consequências para a arquitetura em duas etapas
+## 5. Consequences for the two-stage architecture
 
-- **O gargalo atual é a capacidade**: ~1 bit usado de ~10 disponíveis. Ela não sobe com $N$ nem com $K$.
-  No modelo, com massa nominal, baixar $T$ de 20 para 5 ($C$ de 1,1 para 3,4 bits) leva $q_8$ de 0,44 para 0,08
-  e $q_{128}$ de 0,084 para 0,043 (`c2.json: varre_T`). **Ganhar capacidade vale mais que multiplicar $N$ por 16.**
-- **A etapa de voz deve ser dimensionada pela capacidade, não só alimentada com mais locutores.** Mais locutores sem
-  transcrição melhoram só o termo de cobertura, que rende 0,44 bit de logit por duplicação. Isso continua útil:
-  $N_{\rm voz}=2048$ dá ~0,10 no modelo. O que pode baixar $T$ não aparece nos dados disponíveis; candidatos
-  [CONJECTURA] são um condicionamento de voz mais largo ou com mais camadas, peso de KL e treino mais longo (os
-  2.500 passos partem de um *checkpoint* de um só locutor).
-- **Diagnóstico barato**: medir $T$ pela largura por voz (este método) em cada treino novo. É o número que diz se
-  uma mudança de arquitetura aumentou a capacidade.
+- **The current bottleneck is capacity**: ~1 bit used out of ~10 available. It does not rise with $N$ or with $K$.
+  In the model, with nominal mass, lowering $T$ from 20 to 5 ($C$ from 1.1 to 3.4 bits) takes $q_8$ from 0.44 to 0.08
+  and $q_{128}$ from 0.084 to 0.043 (`c2.json: varre_T`). **Gaining capacity is worth more than multiplying $N$ by 16.**
+- **The voice stage should be sized by capacity, not just fed with more speakers.** More untranscribed speakers
+  improve only the coverage term, which yields 0.44 bits of logit per doubling. This is still useful:
+  $N_{\rm voz}=2048$ gives ~0.10 in the model. What could lower $T$ does not appear in the available data; candidates
+  [CONJECTURE] are a wider or deeper voice conditioning, the KL weight and longer training (the
+  2,500 steps start from a single-speaker *checkpoint*).
+- **Cheap diagnostic**: measure $T$ from the per-voice width (this method) in every new training run. It is the number that tells whether
+  an architecture change increased capacity.
 
-**Previsões falsificáveis** (38 vozes; melhor com ≥200):
+**Falsifiable predictions** (38 voices; better with ≥200):
 
-| treino | termo de capacidade | termo de cobertura | $q$ previsto |
+| training run | capacity term | coverage term | predicted $q$ |
 |---|---|---|---|
-| $N=512$, $K=32$, arquitetura atual | $T=20$ (11–30), $C\approx1$ bit, igual a $N\le128$ | $\lambda(512)=6{,}2$ (diluição 0,56) | 0,14 (gaussiano) |
-| $N=2048$ | $T$ igual | $\lambda=7{,}0$ | 0,096 |
-| $N=2456$ | $T$ igual | $\lambda=7{,}1$ | 0,090 |
-| $N=512$ sem diluição (massa ∝ $N$) | $T$ igual | $\lambda=\lambda(128)$ | 0,03 |
-| duas etapas, sem voz dominante, $N_{\rm voz}=512$ | se $T$ é propriedade do decodificador: $T\approx20$ | — | $T$ medido < 10 refuta "capacidade fixa" |
+| $N=512$, $K=32$, current architecture | $T=20$ (11–30), $C\approx1$ bit, same as $N\le128$ | $\lambda(512)=6.2$ (dilution 0.56) | 0.14 (Gaussian) |
+| $N=2048$ | same $T$ | $\lambda=7.0$ | 0.096 |
+| $N=2456$ | same $T$ | $\lambda=7.1$ | 0.090 |
+| $N=512$ without dilution (mass ∝ $N$) | same $T$ | $\lambda=\lambda(128)$ | 0.03 |
+| two stages, no dominant voice, $N_{\rm voz}=512$ | if $T$ is a property of the decoder: $T\approx20$ | — | measured $T$ < 10 refutes "fixed capacity" |
 
-Critérios de refutação: $T(512)<10$ (IC fora de 11–30) refuta "a capacidade não depende de $N$";
-$q(512)<0{,}06$ refuta a diluição; $q(512)>0{,}22$ refuta o termo de cobertura.
-
----
-
-## 6. Se $T$ não depende de $N$ (é o caso)
-
-Digo com clareza: **a hipótese "treinar com mais locutores baixa $T$" é rejeitada pelos dados disponíveis**,
-dentro de ICs largos. A convergência com a análise bayesiana então é uma de duas coisas:
-
-1. **Propriedade fixa do decodificador**: ele usa ~1/20 da evidência de voz da referência em qualquer $N$, o que
-   aponta para limitação de arquitetura ou de treino, não de dados. Implicação: escalar $N$ rende devagar (0,44 bit de
-   logit por duplicação), e o que mudaria a curva é aumentar a capacidade.
-2. **Artefato comum de geometria**: as duas análises medem o quanto a decisão do decodificador depende do latente
-   da referência. Se o latente (espaço do treino $N=128$) for uma medida ruidosa do espaço onde o decodificador
-   decide, os dois métodos veem uma resposta "amolecida" pelo mesmo ruído, e a concordância 1/22 ≈ 1/21 não é
-   independente. Dois indícios a favor: $T$ muda com o conjunto de vozes (grade 5–18 contra externas 19–27), e na v2
-   §3 a previsão mudava em ~0,1 conforme o espaço latente.
-
-Não consigo separar 1 de 2 com os dados salvos. O teste é o diagnóstico da arquitetura: se aumentar a largura do
-condicionamento de voz baixar o $T$ medido e o $q$ junto, é (1); se $q$ mudar sem $T$ mudar, ou o contrário, é (2).
+Refutation criteria: $T(512)<10$ (CI outside 11–30) refutes "capacity does not depend on $N$";
+$q(512)<0.06$ refutes dilution; $q(512)>0.22$ refutes the coverage term.
 
 ---
 
-## 7. Situação (atualiza a v2)
+## 6. If $T$ does not depend on $N$ (which is the case)
 
-| Afirmação | v3 |
+I say it clearly: **the hypothesis "training with more speakers lowers $T$" is rejected by the available data**,
+within wide CIs. The convergence with the Bayesian analysis is then one of two things:
+
+1. **A fixed property of the decoder**: it uses ~1/20 of the voice evidence of the reference at any $N$, which
+   points to a limitation of architecture or of training, not of data. Implication: scaling $N$ pays off slowly (0.44 bits of
+   logit per doubling), and what would change the curve is increasing capacity.
+2. **A shared geometry artifact**: both analyses measure how much the decoder's decision depends on the latent
+   of the reference. If the latent (space of the $N=128$ training run) is a noisy measure of the space where the decoder
+   decides, both methods see a response "softened" by the same noise, and the agreement 1/22 ≈ 1/21 is not
+   independent. Two indications in favor: $T$ changes with the set of voices (grid 5–18 versus external 19–27), and in v2
+   §3 the prediction changed by ~0.1 depending on the latent space.
+
+I cannot separate 1 from 2 with the saved data. The test is the architecture diagnostic: if increasing the width of the
+voice conditioning lowers the measured $T$ and $q$ together, it is (1); if $q$ changes without $T$ changing, or the reverse, it is (2).
+
+---
+
+## 7. Status (updates v2)
+
+| Claim | v3 |
 |---|---|
-| $T$ cai com $N$ | **rejeitada** ($T\approx19$–27, sem tendência; $T$ comum aceito) |
-| capacidade usada $\approx1$ bit, $1/T\approx1/22$ | DADOS; mesma ordem da análise independente; pode ser artefato comum (§6) |
-| massa nominal $M$ explica o atrator | **reabilitada** com $T$ alto ($M_{\rm ef}$ 2.300–5.000 contra 2.000) |
-| diluição: massa LibriTTS ∝ $N^{0,44}$ | DADOS (3 pontos); mecanismo não derivado |
-| queda de $q$ = cobertura | DADOS no modelo; capacidade contribui 0 (IC −0,16 a +0,31) |
-| $K$ age por nível (~3× o nominal), não por capacidade | DADOS na grade (ruidoso) |
-| previsão deixando o treino de fora | 0,01–0,02 de erro, mas **igual ao nulo** logit-linear |
-| regime de distorção ($T\approx1$) da v1/v2 | **não preferido**: compatível com a curva, incompatível com a largura por voz; com nível livre, $T$ alto explica curva, largura e $M$ nominal |
-| piso 0,10 da v1/v2 | **não sobrevive** no regime de $T$ alto: a massa acumula e $q\to0$ lentamente ($q(10^4)\approx0{,}06$) |
+| $T$ falls with $N$ | **rejected** ($T\approx19$–27, no trend; common $T$ accepted) |
+| capacity used $\approx1$ bit, $1/T\approx1/22$ | DATA; same order as the independent analysis; may be a shared artifact (§6) |
+| nominal mass $M$ explains the attractor | **rehabilitated** with high $T$ ($M_{\rm ef}$ 2,300–5,000 versus 2,000) |
+| dilution: LibriTTS mass ∝ $N^{0.44}$ | DATA (3 points); mechanism not derived |
+| drop in $q$ = coverage | DATA within the model; capacity contributes 0 (CI −0.16 to +0.31) |
+| $K$ acts through the level (~3× the nominal), not through capacity | DATA on the grid (noisy) |
+| leave-one-training-run-out prediction | 0.01–0.02 error, but **same as the** logit-linear **null** |
+| distortion regime ($T\approx1$) of v1/v2 | **not preferred**: compatible with the curve, incompatible with the per-voice width; with a free level, high $T$ explains the curve, the width and the nominal $M$ |
+| floor 0.10 of v1/v2 | **does not survive** in the high-$T$ regime: mass accumulates and $q\to0$ slowly ($q(10^4)\approx0.06$) |

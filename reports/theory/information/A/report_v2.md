@@ -1,357 +1,357 @@
-# Clonagem *zero-shot* como codificação de fonte — v2 (revisão após a crítica)
+# *Zero-shot* cloning as source coding — v2 (revision after the critique)
 
-Documento de trabalho (teoria2/A), 17/11/2026. A v1 (`relatorio.md`) fica como está; esta versão corrige a contagem
-de parâmetros e responde aos 10 pontos da crítica. Derivações que não mudaram (Proposições 1–2, verificação da
-fórmula, comparação água reversa × livro-código aleatório, teorema tauberiano) estão na v1 e só são resumidas aqui.
-Novos scripts: `b1_revisao.py` (pontos 1, 3, 4, 5, 8, 10), `b2_aug.py` (ponto 6), `b3_regimes_extrap.py`
-(pontos 5b, 7, 9); saídas em `out/b1.json`, `out/b2.json`, `out/b3.json`. Só CPU, `python3 -I`, nenhum repositório
-tocado.
+Working document (teoria2/A), 17 November 2026. v1 (`report_v1.md`) stays as it is; this version corrects the parameter
+count and answers the 10 points of the critique. Derivations that did not change (Propositions 1–2, verification of the
+formula, reverse water-filling × random codebook comparison, Tauberian theorem) are in v1 and are only summarized here.
+New scripts: `b1_revisao.py` (points 1, 3, 4, 5, 8, 10), `b2_aug.py` (point 6), `b3_regimes_extrap.py`
+(points 5b, 7, 9); outputs in `out/b1.json`, `out/b2.json`, `out/b3.json`. CPU only, `python3 -I`, no repository
+touched.
 
-Legenda: **[PROVADO]**, **[HEURÍSTICO]**, **[CONJECTURA]**, **[SIMULADO]**, **[DADOS]** como na v1.
-**[MORTO]** marca uma ideia que a revisão derruba.
+Legend: **[PROVEN]**, **[HEURISTIC]**, **[CONJECTURE]**, **[SIMULATED]**, **[DATA]** as in v1.
+**[DEAD]** marks an idea that the revision knocks down.
 
 ---
 
-## 0. Resumo da v2
+## 0. Summary of v2
 
-**Modelo (inalterado).** O decodificador é tratado como um canal de teste de Gibbs sobre o livro-código de treino
-(massas $K$ por voz LibriTTS e $M$ para a voz padrão $v_0$, temperatura $T$). No limite de Poisson:
+**Model (unchanged).** The decoder is treated as a Gibbs test channel over the training codebook
+(masses $K$ per LibriTTS voice and $M$ for the default voice $v_0$, temperature $T$). In the Poisson limit:
 $$
 q(N,K,M)=\mathbb E_c\big[(1-F_c(\|c-v_0\|^2-\tau))^N\big],\qquad \tau=2T\ln(M_{\rm ef}/K),
 $$
-com $F_c(t)=\Pr(\|c-V\|^2\le t)$ e $V$ uma voz treinada sorteada.
+with $F_c(t)=\Pr(\|c-V\|^2\le t)$ and $V$ a randomly drawn trained voice.
 
-**O que mudou de veredito.**
+**What changed verdict.**
 
-| Afirmação da v1 | v2 |
+| v1 claim | v2 |
 |---|---|
-| "1 parâmetro livre" | **2 parâmetros** ($\tau$, $T$), mais a escolha do espaço comum. Com $T=1$ fixado *a priori*, o teste vira **1 parâmetro, 3 pontos, 2 g.l.**; esses 2 g.l. só rejeitam a hipótese "sem dependência em $N$"; não distinguem o modelo de alternativas razoáveis |
-| $\tau_0=\|\mu-v_0\|^2$ como previsão sem parâmetro | **retirado**: vai para a seção de hipóteses pós-hoc (§2) |
-| $M$ entra como contagem de frases | **[MORTO]**: com $T=1$, $M_{\rm ef}\approx2\times10^{26}$. Então $\tau$ não é contagem. Previsão para $M/2$: $\Delta q\approx0$ se $T\approx1$; $-0{,}12$ se $T\approx21$ (§4) |
-| vozes treinadas como codewords ruidosos ($\sigma^2/K$) explicam o efeito de $K$ | **[MORTO]**: prevê $q_{\rm seen}=0{,}46/0{,}38/0{,}38$ contra $0{,}55/0{,}26/0{,}11$ (§5b) |
-| média de referências "cancela exatamente" | vale para $\|\xi\|^2$; o termo cruzado não cancela e explica o ganho nas 4 vozes da grade (§8) |
-| $q(2456)\approx0{,}15$, piso 0,10 | depende do modelo de extrapolação: 0,14–0,19, IC 90% de 0,07 a 0,29; o piso (0,105, IC 0,05–0,21) não depende do modelo de vozes, só de $\tau$ (§9) |
-| bits por voz | a forma agregada fica; **a forma por voz não prevê melhor que a distância** (§10) |
-| expoente | sem lei de potência em $8\le N\le2456$; o modelo prevê $\alpha_g\approx0{,}53$ para a medida contínua (observado 0,55 em `sim_ref`, 0,41 em `sim_spk`), com IC largo (§7) |
+| "1 free parameter" | **2 parameters** ($\tau$, $T$), plus the choice of the common space. With $T=1$ fixed *a priori*, the test becomes **1 parameter, 3 points, 2 d.o.f.**; these 2 d.o.f. only reject the hypothesis "no dependence on $N$"; they do not distinguish the model from reasonable alternatives |
+| $\tau_0=\|\mu-v_0\|^2$ as a parameter-free prediction | **withdrawn**: moves to the section on post hoc hypotheses (§2) |
+| $M$ enters as a count of utterances | **[DEAD]**: with $T=1$, $M_{\rm ef}\approx2\times10^{26}$. So $\tau$ is not a count. Prediction for $M/2$: $\Delta q\approx0$ if $T\approx1$; $-0.12$ if $T\approx21$ (§4) |
+| trained voices as noisy codewords ($\sigma^2/K$) explain the effect of $K$ | **[DEAD]**: predicts $q_{\rm seen}=0.46/0.38/0.38$ versus $0.55/0.26/0.11$ (§5b) |
+| averaging references "cancels exactly" | holds for $\|\xi\|^2$; the cross term does not cancel and explains the gain on the 4 voices of the grid (§8) |
+| $q(2456)\approx0.15$, floor 0.10 | depends on the extrapolation model: 0.14–0.19, 90% CI from 0.07 to 0.29; the floor (0.105, CI 0.05–0.21) does not depend on the voice model, only on $\tau$ (§9) |
+| bits per voice | the aggregate form stays; **the per-voice form does not predict better than distance** (§10) |
+| exponent | no power law in $8\le N\le2456$; the model predicts $\alpha_g\approx0.53$ for the continuous measure (observed 0.55 in `sim_ref`, 0.41 in `sim_spk`), with a wide CI (§7) |
 
-**Contagem honesta e tabela final** (38 vozes externas, $K=32$, espaço comum = latente do treino $N=128$):
+**Honest count and final table** (38 external voices, $K=32$, common space = latent of the $N=128$ training run):
 
-| | ajustado em | $q_8$ | $q_{32}$ | $q_{128}$ |
+| | fitted at | $q_8$ | $q_{32}$ | $q_{128}$ |
 |---|---|---|---|---|
-| observado | — | 0,434 | 0,302 | 0,211 |
-| **principal**: $T=1$ (*a priori*), $\tau$ ajustado | $q_{128}$ | **0,375** | **0,263** | (0,211) |
-| resíduo obs − prev, IC 90% (bootstrap por voz, $\tau$ reajustado) | | [−0,15; +0,21] | [−0,11; +0,14] | |
-| nulo "$q$ não depende de $N$", resíduo IC 90% | | [+0,14; +0,31] | [+0,02; +0,15] | |
-| $T=3$ (escolhido entre {1,2,3} olhando a curva: **2 parâmetros**) | $q_{128}$ | 0,445 | 0,279 | (0,211) |
-| espaço do treino $N=32$, $\tau$ ajustado em $q_{32}$ | $q_{32}$ | 0,557 | (0,302) | — |
-| espaço do treino $N=128$, $\tau$ ajustado em $q_{32}$ | $q_{32}$ | 0,455 | (0,302) | — |
+| observed | — | 0.434 | 0.302 | 0.211 |
+| **main**: $T=1$ (*a priori*), $\tau$ fitted | $q_{128}$ | **0.375** | **0.263** | (0.211) |
+| residual obs − pred, 90% CI (per-voice bootstrap, $\tau$ refitted) | | [−0.15; +0.21] | [−0.11; +0.14] | |
+| null "$q$ does not depend on $N$", residual 90% CI | | [+0.14; +0.31] | [+0.02; +0.15] | |
+| $T=3$ (chosen from {1,2,3} by looking at the curve: **2 parameters**) | $q_{128}$ | 0.445 | 0.279 | (0.211) |
+| space of the $N=32$ training run, $\tau$ fitted at $q_{32}$ | $q_{32}$ | 0.557 | (0.302) | — |
+| space of the $N=128$ training run, $\tau$ fitted at $q_{32}$ | $q_{32}$ | 0.455 | (0.302) | — |
 
-O modelo reproduz 74% (N=8) e 57% (N=32) da queda observada até $N=128$. Isso é compatível com os dados e
-descarta "sem efeito de $N$", mas com 38 vozes e uma semente não separa este modelo de outra curva monótona
-qualquer. A previsão de $q_8$ muda em ~0,1 conforme o espaço latente.
+The model reproduces 74% (N=8) and 57% (N=32) of the observed drop down to $N=128$. This is compatible with the data and
+rules out "no effect of $N$", but with 38 voices and one seed it does not separate this model from any other monotone
+curve. The prediction of $q_8$ changes by ~0.1 depending on the latent space.
 
 ---
 
-## 1. Contagem de parâmetros e $T$
+## 1. Parameter count and $T$
 
-**Tentativa de fixar $T$ por uma medida que não é a curva.** No canal de Gibbs, a probabilidade de cópia de uma voz
-em função da folga $s=\|c-v_0\|^2-D_N(c)$ é logística, $\sigma((s-\tau)/2T)$. Ajustei essa logística às frações
-por voz (38 vozes × 3 $N$, binomial com 25 frases), com $\tau$ e uma largura $w$ únicos. Isso usa as **posições**
-das vozes, não a curva agregada:
-$w=42$ (IC 90% 27–60) $\Rightarrow T_{\rm largura}=w/2\approx21$ (`b1.json: p1_width`).
+**Attempt to fix $T$ by a measurement that is not the curve.** In the Gibbs channel, the copy probability of a voice
+as a function of the margin $s=\|c-v_0\|^2-D_N(c)$ is logistic, $\sigma((s-\tau)/2T)$. I fitted this logistic to the
+per-voice fractions (38 voices × 3 $N$, binomial with 25 utterances), with a single $\tau$ and a single width $w$. This uses the **positions**
+of the voices, not the aggregate curve:
+$w=42$ (90% CI 27–60) $\Rightarrow T_{\rm largura}=w/2\approx21$ (`b1.json: p1_width`).
 
-**Esse valor contradiz a curva** [DADOS, `b3.json: regime_massa`]. Com $T=21$ e $\tau$ ajustado em $q_{128}$, o
-modelo prevê $q_8=1{,}00$ e $q_{32}=0{,}85$. A largura medida inclui o erro da geometria: o latente não é o espaço
-onde o decodificador decide, e por isso a largura é uma **cota superior** para $T$, não uma medida dele.
-Nenhuma medida disponível fixa $T$ de forma independente.
+**This value contradicts the curve** [DATA, `b3.json: regime_massa`]. With $T=21$ and $\tau$ fitted at $q_{128}$, the
+model predicts $q_8=1.00$ and $q_{32}=0.85$. The measured width includes the error of the geometry: the latent is not the space
+where the decoder decides, and so the width is an **upper bound** on $T$, not a measurement of it.
+No available measurement fixes $T$ independently.
 
-**Decisão.** Fixo $T=1$ *a priori*: é a escala do ruído dos códigos de treino nas unidades branqueadas pelo canal,
-a temperatura do decodificador MSE-ótimo (Proposição 1 da v1). Com isso o teste tem **1 parâmetro ajustado
-($\tau$), 3 pontos, 2 graus de liberdade**.
+**Decision.** I fix $T=1$ *a priori*: it is the noise scale of the training codes in the units whitened by the channel,
+the temperature of the MSE-optimal decoder (Proposition 1 of v1). With this the test has **1 fitted parameter
+($\tau$), 3 points, 2 degrees of freedom**.
 
-**Quanto valem esses 2 g.l.** O bootstrap por voz, reajustando $\tau$ em cada reamostra, dá resíduos com IC 90% de
-±0,15–0,2 em $N=8$. O nulo "sem dependência em $N$" fica fora do IC; qualquer curva monótona razoável fica dentro.
-Valor como teste: **fraco**. Ele mostra que o mecanismo tem a direção e a ordem de grandeza certas, não que é o
-mecanismo certo. Usar $T=3$ melhora o ajuste (0,445/0,279), mas aí são 2 parâmetros para 3 pontos (1 g.l.), o que
-quase não testa nada.
+**What these 2 d.o.f. are worth.** The per-voice bootstrap, refitting $\tau$ in each resample, gives residuals with a 90% CI of
+±0.15–0.2 at $N=8$. The null "no dependence on $N$" falls outside the CI; any reasonable monotone curve falls inside.
+Value as a test: **weak**. It shows that the mechanism has the right direction and order of magnitude, not that it is the
+right mechanism. Using $T=3$ improves the fit (0.445/0.279), but then there are 2 parameters for 3 points (1 d.o.f.), which
+tests almost nothing.
 
-## 2. Hipótese pós-hoc a testar: $\tau=\|\mu-v_0\|^2$
+## 2. Post hoc hypothesis to be tested: $\tau=\|\mu-v_0\|^2$
 
-**Status: hipótese pós-hoc, não é previsão.** Notei a coincidência depois de ajustar $\tau$. Não tenho derivação: o
-canal de Gibbs dá $\tau=2T\ln(M/K)$, que não envolve geometria. Uma justificativa exigiria modelar o *checkpoint* de
-partida (decodificador de um só locutor, ajustado por 2.500 passos), o que não fiz.
+**Status: post hoc hypothesis, not a prediction.** I noticed the coincidence after fitting $\tau$. I have no derivation: the
+Gibbs channel gives $\tau=2T\ln(M/K)$, which does not involve geometry. A justification would require modeling the starting
+*checkpoint* (single-speaker decoder, fine-tuned for 2,500 steps), which I did not do.
 
-Evidência a favor e contra, com $\tau$ ajustado contra $\|\mu-v_0\|^2$ no espaço de cada treino:
+Evidence for and against, with $\tau$ fitted against $\|\mu-v_0\|^2$ in the space of each training run:
 
-| treino | 8 | 32 | 128 |
+| training run | 8 | 32 | 128 |
 |---|---|---|---|
-| $\tau$ ajustado | 146 | 110 | 114 |
+| fitted $\tau$ | 146 | 110 | 114 |
 | $\|\mu_N-v_0\|^2$ | 135 | 107 | 116 |
 
-O acordo é de 2–8%, mas os três espaços vêm dos mesmos dados e de codificadores parecidos.
+The agreement is 2–8%, but the three spaces come from the same data and from similar encoders.
 
-**Teste prospectivo.** Num treino novo (por exemplo $N=512$), calcular $\|\mu_N-v_0\|^2$ nos latentes antes de
-sintetizar e prever $q$ com $T=1$. Falha se o $\tau$ ajustado depois se afastar mais de 15%.
+**Prospective test.** In a new training run (for example $N=512$), compute $\|\mu_N-v_0\|^2$ on the latents before
+synthesizing and predict $q$ with $T=1$. It fails if the $\tau$ fitted afterwards deviates by more than 15%.
 
-## 3. Circularidade da geometria
+## 3. Circularity of the geometry
 
-Na v1, a tabela principal usou **um espaço comum**: o latente do treino $N=128$, onde estão as 127 vozes treinadas
-dos três livros-código aninhados, as 38 referências e a LJ. Só a `a4` usou o espaço de cada treino. Nenhum espaço
-disponível é externo; o espaço do treino de 128 é parcialmente resultado do treino com essas vozes (circular para
-$N=128$, menos para os subconjuntos 8 e 32).
+In v1, the main table used **a common space**: the latent of the $N=128$ training run, which contains the 127 trained voices
+of the three nested codebooks, the 38 references and LJ. Only `a4` used the space of each training run. No available
+space is external; the space of the 128 training run is partly a result of training with these voices (circular for
+$N=128$, less so for the subsets 8 and 32).
 
-Sensibilidade (`b1.json: p3_espacos`), mesmo procedimento (ajustar $\tau$ em $N=32$, prever $N=8$, $T=1$):
+Sensitivity (`b1.json: p3_espacos`), same procedure (fit $\tau$ at $N=32$, predict $N=8$, $T=1$):
 
-| espaço | $\tau$ | $q_8$ previsto (obs. 0,434) | Spearman por voz |
+| space | $\tau$ | predicted $q_8$ (obs. 0.434) | Spearman per voice |
 |---|---|---|---|
-| latente do treino $N=32$ | 110 | 0,557 | 0,59 |
-| latente do treino $N=128$ | 122 | 0,455 | 0,48 |
-| próprio de cada treino | 146 / 110 / 114 | — ($\tau$ não é constante) | — |
+| latent of the $N=32$ training run | 110 | 0.557 | 0.59 |
+| latent of the $N=128$ training run | 122 | 0.455 | 0.48 |
+| own space of each training run | 146 / 110 / 114 | — ($\tau$ is not constant) | — |
 
-Nos espaços próprios, um único $\tau$ **não** serve para os três treinos (146 contra 110–114). Nos espaços comuns,
-$q_8$ muda em 0,1 conforme o espaço escolhido. **A incerteza da geometria é do mesmo tamanho do efeito a prever.**
-Um espaço externo (embeddings de verificador de locutor das vozes de treino) resolveria; não há embeddings dos
-locutores de treino salvos.
+In the own spaces, a single $\tau$ does **not** work for the three training runs (146 versus 110–114). In the common spaces,
+$q_8$ changes by 0.1 depending on the chosen space. **The uncertainty of the geometry is the same size as the effect to be predicted.**
+An external space (speaker-verifier embeddings of the training voices) would resolve this; no embeddings of the
+training speakers were saved.
 
-## 4. O fracasso de $M$ e a massa efetiva
+## 4. The failure of $M$ and the effective mass
 
-$\tau=2T\ln(M_{\rm ef}/K)$ dá, com o $\tau$ ajustado:
+$\tau=2T\ln(M_{\rm ef}/K)$ gives, with the fitted $\tau$:
 
 | $T$ | $\ln(M_{\rm ef}/K)$ | $M_{\rm ef}$ |
 |---|---|---|
 | 1 (*a priori*) | 57 | $2\times10^{26}$ |
-| 5 | 13 | $1{,}6\times10^{7}$ |
-| 21 (largura) | 6,0 | $1{,}2\times10^{4}$ |
+| 5 | 13 | $1.6\times10^{7}$ |
+| 21 (width) | 6.0 | $1.2\times10^{4}$ |
 
-**[MORTO]** Com $T\approx1$, $M_{\rm ef}$ não é contagem de nada: o atrator não vem das 2.000 frases de ajuste fino.
-Com $T\approx21$, $M_{\rm ef}\approx12.400$, curiosamente perto das 13.100 frases do LJSpeech completo (pré-treino).
-Mas $T=21$ é incompatível com a curva em $N$ (§1). Registro como coincidência, sem peso.
+**[DEAD]** With $T\approx1$, $M_{\rm ef}$ is not a count of anything: the attractor does not come from the 2,000 fine-tuning utterances.
+With $T\approx21$, $M_{\rm ef}\approx12,400$, curiously close to the 13,100 utterances of the full LJSpeech (pre-training).
+But $T=21$ is incompatible with the curve in $N$ (§1). I record it as a coincidence, with no weight.
 
-**A teoria ainda prevê efeito de $M$/2? Depende de $T$, e é exatamente isso que o experimento mede**
-(`b1.json: p4_M`, `b3.json: Mhalf_dq128`), $N=128$, $K=32$, reduzindo $M$ de 2.000 para 1.000:
+**Does the theory still predict an effect of $M$/2? It depends on $T$, and that is exactly what the experiment measures**
+(`b1.json: p4_M`, `b3.json: Mhalf_dq128`), $N=128$, $K=32$, reducing $M$ from 2,000 to 1,000:
 
-| hipótese | $\Delta q_{128}$ previsto | IC 90% |
+| hypothesis | predicted $\Delta q_{128}$ | 90% CI |
 |---|---|---|
-| regime de distorção, $T=1$ | −0,001 | [−0,07; 0,00] |
-| $T=5$ | −0,055 | — |
-| $T=10$ | −0,09 | — |
-| regime de massa, $T=21$ | −0,115 | [−0,19; −0,04] |
-| $\tau$ geométrico (§2) | 0 | — |
+| distortion regime, $T=1$ | −0.001 | [−0.07; 0.00] |
+| $T=5$ | −0.055 | — |
+| $T=10$ | −0.09 | — |
+| mass regime, $T=21$ | −0.115 | [−0.19; −0.04] |
+| geometric $\tau$ (§2) | 0 | — |
 
-**Previsão registrada (2 treinos: $N=128,K=32$ com $M=2000$ e $M=1000$, 38 vozes):** $|\Delta q|\le0{,}03$ se a
-teoria de distorção com $T\approx1$ estiver certa. $\Delta q\le-0{,}08$ derruba $T\approx1$ e favorece o regime de
-massa. Ressalva de poder: o desvio padrão de $\Delta q$ só por semente é ~0,05–0,08 (04), então são necessárias
-2 sementes por braço para separar 0 de −0,1.
+**Registered prediction (2 training runs: $N=128,K=32$ with $M=2000$ and $M=1000$, 38 voices):** $|\Delta q|\le0.03$ if the
+distortion theory with $T\approx1$ is right. $\Delta q\le-0.08$ knocks down $T\approx1$ and favors the mass
+regime. Power caveat: the standard deviation of $\Delta q$ from the seed alone is ~0.05–0.08 (04), so
+2 seeds per arm are needed to separate 0 from −0.1.
 
-## 5. Falhas fora da amostra
+## 5. Out-of-sample failures
 
-### 5a. As 4 vozes fixas da grade (`b1.json: p5a_vozes_grade`)
+### 5a. The 4 fixed voices of the grid (`b1.json: p5a_vozes_grade`)
 
-| voz | F0 | $\|c-v_0\|^2$ (percentil entre as 38) | folga em $N=8/32/128$ (percentil) | cópia obs. 8/32/128 (`-wide`) | prevista |
+| voice | F0 | $\|c-v_0\|^2$ (percentile among the 38) | margin at $N=8/32/128$ (percentile) | obs. copying 8/32/128 (`-wide`) | predicted |
 |---|---|---|---|---|---|
-| 4297 | 171 | 201 (84%) | 160 / 187 / 187 (74–89%) | 1,0 / 1,0 / 1,0 | 1 / 1 / 1 |
-| 696 | 168 | 161 (45%) | 125 / 139 / 142 (45–50%) | 0,0 / 0,04 / 0,64 | 1 / 1 / 1 |
-| 6415 | 198 | 173 (50%) | 130 / 157 / 159 (53–71%) | 0,44 / 0,88 / 0,96 | 1 / 1 / 1 |
-| 7800 | 183 | 60 (0%) | 15 / 15 / 27 (5–8%) | 0 / 0 / 0,40 | 0 / 0 / 0 |
+| 4297 | 171 | 201 (84%) | 160 / 187 / 187 (74–89%) | 1.0 / 1.0 / 1.0 | 1 / 1 / 1 |
+| 696 | 168 | 161 (45%) | 125 / 139 / 142 (45–50%) | 0.0 / 0.04 / 0.64 | 1 / 1 / 1 |
+| 6415 | 198 | 173 (50%) | 130 / 157 / 159 (53–71%) | 0.44 / 0.88 / 0.96 | 1 / 1 / 1 |
+| 7800 | 183 | 60 (0%) | 15 / 15 / 27 (5–8%) | 0 / 0 / 0.40 | 0 / 0 / 0 |
 
-Medianas das 38: F0 174 Hz, $\|c-v_0\|^2=168$, distância ao centro 6,3 (as 4: 4,4–6,6).
+Medians of the 38: F0 174 Hz, $\|c-v_0\|^2=168$, distance to the center 6.3 (the 4: 4.4–6.6).
 
-**Explicação.** As 4 vozes **não** são atípicas: nem longe do livro-código, nem perto da voz padrão, nem
-deslocadas em F0 ou na distância ao centro. A diferença de origem (locutores de treino retirados: 4297, 696, 6415,
-7800, contra test-clean nas 38) não aparece na geometria. O erro vem de duas vozes (696, 6415) com folga mediana,
-11–45 unidades acima de $\tau$, que falham em $N$ pequeno (e 7800, no piso, copia 40% em $N=128$). O modelo de limiar duro chama essas vozes de "copiadas"; os dados dizem que vozes
-nessa faixa são copiadas só às vezes.
+**Explanation.** The 4 voices are **not** atypical: neither far from the codebook, nor close to the default voice, nor
+shifted in F0 or in distance to the center. The difference of origin (held-out training speakers: 4297, 696, 6415,
+7800, versus test-clean for the 38) does not show up in the geometry. The error comes from two voices (696, 6415) with median margin,
+11–45 units above $\tau$, which fail at small $N$ (and 7800, at the floor, copies 40% at $N=128$). The hard-threshold model calls these voices "copied"; the data say that voices
+in this range are copied only sometimes.
 
-O mesmo acontece nas 38: a largura por voz medida é $w\approx42$, contra $2T=2$ no modelo, e 2 das 4 vozes que o
-modelo põe no piso já são copiadas em $N=128$. **O modelo é preciso demais por voz.** O acerto agregado nas 38
-vem de erros que se compensam (vozes "copiáveis" que falham e vozes "no piso" que copiam). Com 4 vozes não há
-compensação. A falha na grade não é anomalia das 4 vozes; é a falha da forma por voz (§10) aparecendo num conjunto
-pequeno.
+The same happens in the 38: the measured per-voice width is $w\approx42$, versus $2T=2$ in the model, and 2 of the 4 voices that the
+model puts at the floor are already copied at $N=128$. **The model is too sharp per voice.** The aggregate fit on the 38
+comes from errors that compensate each other ("copyable" voices that fail and "floor" voices that copy). With 4 voices there is no
+compensation. The failure on the grid is not an anomaly of the 4 voices; it is the failure of the per-voice form (§10) showing up in a small
+set.
 
-### 5b. Efeito de $K$ nas vozes treinadas, $N=8$ (`b1.json: p5b_seen`, `b3.json: regime_massa`)
+### 5b. Effect of $K$ on the trained voices, $N=8$ (`b1.json: p5b_seen`, `b3.json: regime_massa`)
 
-**Derivação.** Uma voz treinada é o próprio codeword, conhecido pela média de $K$ frases. Para a referência
-$c=v+\xi$, $D_{\rm self}=\|\xi-\bar\varepsilon_K\|^2$, com
-$\mathbb E D_{\rm self}=\mathrm{tr}W_x+\mathrm{tr}(I)/K=11{,}9+32/K$ = 15,9 / 12,9 / 12,2 para $K=8/32/128$.
-O limiar desloca $2T\ln(K/32)$. Com $T=1$, a folga muda ~10 unidades entre $K=8$ e 128, contra uma dispersão de
-folgas entre vozes de ~60.
+**Derivation.** A trained voice is the codeword itself, known through the mean of $K$ utterances. For the reference
+$c=v+\xi$, $D_{\rm self}=\|\xi-\bar\varepsilon_K\|^2$, with
+$\mathbb E D_{\rm self}=\mathrm{tr}W_x+\mathrm{tr}(I)/K=11.9+32/K$ = 15.9 / 12.9 / 12.2 for $K=8/32/128$.
+The threshold shifts by $2T\ln(K/32)$. With $T=1$, the margin changes by ~10 units between $K=8$ and 128, versus a spread of
+margins across voices of ~60.
 
 | $q_{\rm seen}$, $N=8$ | $K=8$ | 32 | 128 |
 |---|---|---|---|
-| observado (sementes) | 0,55 / 0,555 | 0,26 | 0,09 / 0,125 |
-| codeword ruidoso, $T=1$ | 0,46 | 0,375 | 0,375 |
-| + erro de renderização $A/K$ ajustado ($A=50$) | 0,50 | 0,375 | 0,375 |
-| regime de massa $T=21$ | 1,00 | 0,97 | 0,70 |
-| $T=21$, massa total $\propto N^{0,25}$ | 0,79 | 0,53 | 0,05 |
-| $T=10$, $N^{0,25}$ (melhor compromisso) | 0,50 | 0,49 | 0,27 |
+| observed (seeds) | 0.55 / 0.555 | 0.26 | 0.09 / 0.125 |
+| noisy codeword, $T=1$ | 0.46 | 0.375 | 0.375 |
+| + fitted rendering error $A/K$ ($A=50$) | 0.50 | 0.375 | 0.375 |
+| mass regime $T=21$ | 1.00 | 0.97 | 0.70 |
+| $T=21$, total mass $\propto N^{0.25}$ | 0.79 | 0.53 | 0.05 |
+| $T=10$, $N^{0.25}$ (best compromise) | 0.50 | 0.49 | 0.27 |
 
-**[MORTO]** "Voz treinada = codeword ruidoso $\sigma^2/K$" não produz o efeito de $K$: o ruído de estimação da média
-é pequeno demais. Nenhuma combinação de ($T$, massa sublinear em $N$) ajusta ao mesmo tempo a curva das treinadas
-em $K$ e a curva das novas em $N$. O efeito de $K$ nas treinadas é outro mecanismo: quão bem o decodificador aprende
-a **renderizar** cada voz (erro de aprendizado, não de geometria do código), que o canal de Gibbs não tem.
-A teoria cobre vozes novas no regime de distorção e **não** cobre vozes treinadas.
+**[DEAD]** "Trained voice = noisy codeword $\sigma^2/K$" does not produce the effect of $K$: the estimation noise of the mean
+is too small. No combination of ($T$, mass sublinear in $N$) fits at the same time the curve of the trained voices
+in $K$ and the curve of the new voices in $N$. The effect of $K$ on the trained voices is another mechanism: how well the decoder learns
+to **render** each voice (a learning error, not one of code geometry), which the Gibbs channel does not have.
+The theory covers new voices in the distortion regime and does **not** cover trained voices.
 
-## 6. Pseudo-locutores por velocidade (`b2_aug.py`, espaço de cada treino `-aug`)
+## 6. Speed-perturbed pseudo-speakers (`b2_aug.py`, space of each `-aug` training run)
 
-Os latentes existem. O manifesto mostra dois tipos de pseudo-voz: perturbações das 8 vozes LibriTTS (16 a 47 nos
-latentes) e **6 perturbações da própria LJ** (`lj_v±2..4`, 251–487 frases cada).
+The latents exist. The manifest shows two kinds of pseudo-voice: perturbations of the 8 LibriTTS voices (16 to 47 in the
+latents) and **6 perturbations of LJ itself** (`lj_v±2..4`, 251–487 utterances each).
 
-| medida (mediana) | 8×8-aug | 8×128-aug |
+| measure (median) | 8×8-aug | 8×128-aug |
 |---|---|---|
-| pseudo-voz → sua voz de origem | 6,4 | 5,6 |
-| pseudo-voz → outra voz real mais próxima | 7,8 | 8,0 |
-| voz real → voz real mais próxima | 5,7 | 6,2 |
-| pseudo-LJ → LJ | 5,8–12,4 | 4,9–9,2 |
-| fração da variância dos deslocamentos na 1ª direção | 0,39 | 0,62 |
+| pseudo-voice → its source voice | 6.4 | 5.6 |
+| pseudo-voice → nearest other real voice | 7.8 | 8.0 |
+| real voice → nearest real voice | 5.7 | 6.2 |
+| pseudo-LJ → LJ | 5.8–12.4 | 4.9–9.2 |
+| fraction of the variance of the displacements in the 1st direction | 0.39 | 0.62 |
 
-**Leitura.**
-1. As pseudo-vozes **não** ficam coladas na origem: estão tão longe dela quanto duas vozes reais vizinhas entre si.
-   Mas se deslocam sobretudo ao longo de uma direção comum (o eixo de tom/velocidade; 62% da variância em
-   8×128). Elas formam uma família de dimensão ~1 em torno de cada voz e cobrem uma fatia fina do espaço, não uma
-   região.
-2. As pseudo-LJ põem codewords de **massa alta perto da voz padrão**, isto é, alargam o atrator. Nas referências,
-   a folga cai até 18–58 unidades em vozes treinadas (ex.: 2952: 240→182).
-3. Efeito previsto nas 4 vozes novas (folga só reais → com pseudo): 8×128: 4297 +15, 696 +24, 6415 −1, 7800 +7.
-   8×8: −2 a 0. Com $\tau\approx110$–150, só 696 (122→146) pode cruzar o limiar. Previsão: no máximo 1 voz de 4
-   muda, $|\Delta q|\le0{,}25$, direção ambígua (pseudo-LibriTTS ajudam, pseudo-LJ atrapalham).
-   Observado: 8×128 0,51→0,42; 8×8 0,26→0,28 (frações copiadas). 696 foi de 0,28 para 0,32, sem cruzar.
+**Interpretation.**
+1. The pseudo-voices do **not** stay glued to their source: they are as far from it as two neighboring real voices are from each other.
+   But they move mostly along a common direction (the pitch/speed axis; 62% of the variance in
+   8×128). They form a family of dimension ~1 around each voice and cover a thin slice of the space, not a
+   region.
+2. The pseudo-LJ voices place **high-mass** codewords **near the default voice**, that is, they widen the attractor. On the references,
+   the margin drops by 18–58 units for trained voices (e.g. 2952: 240→182).
+3. Predicted effect on the 4 new voices (margin with real voices only → with pseudo-voices): 8×128: 4297 +15, 696 +24, 6415 −1, 7800 +7.
+   8×8: −2 to 0. With $\tau\approx110$–150, only 696 (122→146) can cross the threshold. Prediction: at most 1 voice of 4
+   changes, $|\Delta q|\le0.25$, ambiguous direction (pseudo-LibriTTS voices help, pseudo-LJ voices hurt).
+   Observed: 8×128 0.51→0.42; 8×8 0.26→0.28 (copied fractions). 696 went from 0.28 to 0.32, without crossing.
 
-**Veredito:** a teoria prevê um efeito pequeno, de sinal incerto, e o resultado nulo é compatível com isso. Não é
-contradição. Também não é uma confirmação forte: com 4 vozes e uma semente, o teste não tem poder. A v1 citava a
-previsão de 02 (ganho grande), feita num modelo em que as pseudo-vozes eram vozes da população; a geometria medida
-mostra que não são (família quase unidimensional, mais uma extensão do atrator).
+**Verdict:** the theory predicts a small effect of uncertain sign, and the null result is compatible with that. It is not a
+contradiction. Nor is it a strong confirmation: with 4 voices and one seed, the test has no power. v1 cited the
+prediction of 02 (large gain), made in a model in which the pseudo-voices were voices of the population; the measured geometry
+shows that they are not (an almost one-dimensional family, plus an extension of the attractor).
 
-## 7. Regimes e expoente
+## 7. Regimes and exponent
 
-**Cruzamento explícito** (espectro medido $a\approx1$–1,5, $d$ intrínseco 7–10):
-- **Distorção ótima** $D(\log_2N)\propto(\ln N)^{-(a-1)}$: vale para $D$ enquanto o número de direções codificadas
-  $J\approx2\ln N/a$ for menor que as ~8–14 direções com variância relevante, isto é, até $N\sim e^{4a\text{–}7a}$
-  ≈ $10^2$–$10^4$. Na simulação, a fórmula de alta resolução erra por 4–7× até $N=4096$ (v1 §2.2). **Em 8–2456,
-  $D_N$ está no regime de taxa baixa.**
-- **$q-q_\infty\sim N^{-2/d}$** (tauberiano) é uma afirmação **assintótica**: só vale quando as vozes que restam
-  são as da fronteira do atrator e cada uma já está em alta resolução local. No modelo gaussiano calibrado, o
-  expoente local do excesso $q-q_\infty$ vale 0,27 / 0,11 / 0,17 / 0,25 / 0,22 / 0,09 / 0,03 / 0,15 entre
-  $N=8,32,\dots,10^6$ (`b3.json: expoente_local_gauss`). **Não há lei de potência estável em nenhuma janela de
-  8 a $10^6$.** A curva é a função de sobrevivência da distribuição de $L(c)$ ao longo de $\log_2N$
-  (§10), cheia de degraus com 38 vozes. Em 8–2456 nenhum dos dois regimes assintóticos se aplica.
-- A concordância "2/d ≈ 0,26" da v1 **não é evidência**: o expoente binário não está identificado (IC de −0,7 a
-  1,6) e o modelo, com os mesmos números, não produz um expoente estável. Retiro esse argumento.
+**Explicit crossover** (measured spectrum $a\approx1$–1.5, intrinsic $d$ 7–10):
+- **Optimal distortion** $D(\log_2N)\propto(\ln N)^{-(a-1)}$: holds for $D$ as long as the number of coded directions
+  $J\approx2\ln N/a$ is smaller than the ~8–14 directions with relevant variance, that is, up to $N\sim e^{4a\text{–}7a}$
+  ≈ $10^2$–$10^4$. In the simulation, the high-resolution formula is off by 4–7× up to $N=4096$ (v1 §2.2). **In 8–2456,
+  $D_N$ is in the low-rate regime.**
+- **$q-q_\infty\sim N^{-2/d}$** (Tauberian) is an **asymptotic** statement: it only holds when the voices that remain
+  are those at the boundary of the attractor and each one is already in local high resolution. In the calibrated Gaussian model, the
+  local exponent of the excess $q-q_\infty$ is 0.27 / 0.11 / 0.17 / 0.25 / 0.22 / 0.09 / 0.03 / 0.15 between
+  $N=8,32,\dots,10^6$ (`b3.json: expoente_local_gauss`). **There is no stable power law in any window from
+  8 to $10^6$.** The curve is the survival function of the distribution of $L(c)$ along $\log_2N$
+  (§10), full of steps with 38 voices. In 8–2456 neither of the two asymptotic regimes applies.
+- The "2/d ≈ 0.26" agreement of v1 **is not evidence**: the binary exponent is not identified (CI from −0.7 to
+  1.6) and the model, with the same numbers, does not produce a stable exponent. I withdraw this argument.
 
-**Previsão para as medidas contínuas** (`b3.json: continua`). Se `sim_ref` (e, aproximadamente, `sim_spk`) for linear
-em $-\|\hat y-c\|^2$, o modelo prevê o expoente pela razão de ganhos
+**Prediction for the continuous measures** (`b3.json: continua`). If `sim_ref` (and, approximately, `sim_spk`) is linear
+in $-\|\hat y-c\|^2$, the model predicts the exponent through the ratio of gains
 $\alpha_g=\log_4\frac{y_8-y_{32}}{y_{32}-y_{128}}$:
 
-| quantidade (modelo, livros-código reais) | $\alpha_g$ previsto (IC 90% por voz) | observado (04) |
+| quantity (model, real codebooks) | predicted $\alpha_g$ (90% CI over voices) | observed (04) |
 |---|---|---|
-| $\mathbb E\|\hat y-c\|^2$, $T=1$ | 0,53 [0,15; 0,92] | `sim_ref` 0,55 (−0,17; 1,88); `sim_spk` 0,41 (−0,59; 2,00) |
-| $\mathbb E\|\hat y-c\|^2$, $T=21$ | 0,31 [0,25; 0,38] | |
-| só $D_N$ (sem atrator) | 0,33 | |
-| binário $q$, $T=1$ | 0,55 | 0,26 (−0,73; 1,57) |
+| $\mathbb E\|\hat y-c\|^2$, $T=1$ | 0.53 [0.15; 0.92] | `sim_ref` 0.55 (−0.17; 1.88); `sim_spk` 0.41 (−0.59; 2.00) |
+| $\mathbb E\|\hat y-c\|^2$, $T=21$ | 0.31 [0.25; 0.38] | |
+| $D_N$ only (no attractor) | 0.33 | |
+| binary $q$, $T=1$ | 0.55 | 0.26 (−0.73; 1.57) |
 
-Os pontos concordam com $T=1$, mas todos os ICs observados cobrem 0–1,5: **não é teste**. Previsão registrada: com
-≥200 vozes de avaliação e $N\in\{128,512,2048\}$, $\alpha_g$ de `sim_ref` em 0,3–0,9.
+The point estimates agree with $T=1$, but all the observed CIs cover 0–1.5: **this is not a test**. Registered prediction: with
+≥200 evaluation voices and $N\in\{128,512,2048\}$, $\alpha_g$ of `sim_ref` in 0.3–0.9.
 
-## 8. Média de referências
+## 8. Averaging references
 
-A v1 dizia que o ruído cancela. Precisando: na folga,
-$s=\|v-v_0\|^2-\|v-v_{\rm nn}\|^2+2\langle\xi,v_{\rm nn}-v_0\rangle$, **$\|\xi\|^2$ cancela exatamente; o termo
-cruzado não** [PROVADO]. Seu desvio é $\sigma_\times=2\sqrt{(v_{\rm nn}-v_0)^\top W_x(v_{\rm nn}-v_0)}\approx20$
-(mediana nas 38). Com $R$ referências, $\sigma_\times/\sqrt R$: só vozes com $|s-\tau|\lesssim\sigma_\times$ podem
-virar.
+v1 said that the noise cancels. To be precise: in the margin,
+$s=\|v-v_0\|^2-\|v-v_{\rm nn}\|^2+2\langle\xi,v_{\rm nn}-v_0\rangle$, **$\|\xi\|^2$ cancels exactly; the cross
+term does not** [PROVEN]. Its standard deviation is $\sigma_\times=2\sqrt{(v_{\rm nn}-v_0)^\top W_x(v_{\rm nn}-v_0)}\approx20$
+(median over the 38). With $R$ references, $\sigma_\times/\sqrt R$: only voices with $|s-\tau|\lesssim\sigma_\times$ can
+flip.
 
-Nas 4 vozes da grade (`b1.json: p8_R`), $z=(s-\tau)/\sigma_\times$: 696 tem $z=0{,}49$ ($N=8$) e 1,5 ($N=128$);
-6415 tem 0,83 e 2,3. São exatamente as duas vozes falhas com folga **acima** de $\tau$, ou seja, cuja referência
-única teve um termo cruzado desfavorável. Reduzir esse termo pela média as empurra para a cópia (regressão à
-média). 4297 ($z=1{,}9$–3,2) já copia; 7800 ($z=-7$ a $-9$) não muda. Previsão: 1–2 vozes de 4 sobem, ou seja,
-+10 a +25 pontos no critério por locutor. Observado: +13 (IC +1 a +35) nos 4 plain; 128×8: 47%→67%.
+On the 4 voices of the grid (`b1.json: p8_R`), $z=(s-\tau)/\sigma_\times$: 696 has $z=0.49$ ($N=8$) and 1.5 ($N=128$);
+6415 has 0.83 and 2.3. These are exactly the two failing voices with a margin **above** $\tau$, that is, whose single
+reference had an unfavorable cross term. Reducing this term by averaging pushes them toward copying (regression to the
+mean). 4297 ($z=1.9$–3.2) already copies; 7800 ($z=-7$ to $-9$) does not change. Prediction: 1–2 voices of 4 go up, that is,
++10 to +25 points in the per-speaker criterion. Observed: +13 (CI +1 to +35) on the 4 plain runs; 128×8: 47%→67%.
 
-Nas 38, só 21% das vozes estão a menos de $1\sigma_\times$ do limiar, e as viradas vão nos dois sentidos.
-Previsão ≈0; observado −2,5 pontos (IC −6,4 a +0,8).
+In the 38, only 21% of the voices are less than $1\sigma_\times$ from the threshold, and the flips go both ways.
+Prediction ≈0; observed −2.5 points (CI −6.4 to +0.8).
 
-**Conciliação:** o ganho nas 4 vozes vem da **seleção**. São vozes que falhavam com folga geométrica positiva; o
-efeito de $R$ é real por voz e nulo na média de uma população.
+**Reconciliation:** the gain on the 4 voices comes from **selection**. They are voices that failed with a positive geometric margin; the
+effect of $R$ is real per voice and null on average over a population.
 
-## 9. Incerteza da extrapolação (`b3.json: extrapolacao`)
+## 9. Uncertainty of the extrapolation (`b3.json: extrapolacao`)
 
-Três modelos para $P_v$. Todos usam o mesmo $\tau$ (regra dura ajustada em $q_{128}$) e são ancorados em
-$q_{\rm obs}(128)=0{,}211$, somando a queda prevista por cada modelo. Bootstrap de 60 reamostras das vozes,
-reajustando $\tau$:
+Three models for $P_v$. All use the same $\tau$ (hard rule fitted at $q_{128}$) and are anchored at
+$q_{\rm obs}(128)=0.211$, adding the drop predicted by each model. Bootstrap of 60 resamples of the voices,
+refitting $\tau$:
 
-| modelo de $P_v$ | $q(512)$ | $q(2456)$ | $q(10^4)$ | piso |
+| model of $P_v$ | $q(512)$ | $q(2456)$ | $q(10^4)$ | floor |
 |---|---|---|---|---|
-| empírico (127 vozes reamostradas; resolução 1/127, sem cauda) | 0,19 [0,12; 0,29] | 0,19 [0,12; 0,29] | 0,19 | 0,105 [0,05; 0,19] |
-| gaussiano (espectro medido) | 0,18 [0,10; 0,29] | 0,145 [0,07; 0,28] | 0,13 [0,06; 0,28] | 0,105 [0,05; 0,21] |
-| mistura de 2 gaussianas | 0,18 [0,09; 0,27] | 0,146 [0,07; 0,24] | 0,12 [0,06; 0,23] | 0,105 [0,05; 0,18] |
+| empirical (127 resampled voices; resolution 1/127, no tail) | 0.19 [0.12; 0.29] | 0.19 [0.12; 0.29] | 0.19 | 0.105 [0.05; 0.19] |
+| Gaussian (measured spectrum) | 0.18 [0.10; 0.29] | 0.145 [0.07; 0.28] | 0.13 [0.06; 0.28] | 0.105 [0.05; 0.21] |
+| mixture of 2 Gaussians | 0.18 [0.09; 0.27] | 0.146 [0.07; 0.24] | 0.12 [0.06; 0.23] | 0.105 [0.05; 0.18] |
 
-Notas:
-1. O empírico satura porque não tem cauda: vozes sem vizinho entre as 127 nunca ficam cobertas. É uma cota
-   pessimista.
-2. O BIC prefere **1** componente (127 pontos em 32 dimensões não sustentam uma mistura); a mistura de 2 foi
-   imposta. Ela não reproduz a cobertura real mais rápida: $D_N$ mediano 40,1/30,0/23,9 contra real 39,2/26,6/19,5,
-   o mesmo erro do gaussiano. **Nenhum modelo paramétrico testado captura a aglomeração das vozes reais.**
-   Os modelos paramétricos subestimam a cobertura e, portanto, superestimam $q$ em $N$ grande.
-3. O **piso** é o único número que não depende do modelo de vozes: $\Pr(\|c-v_0\|^2<\tau)$, 4 das 38 vozes.
-   Mas a forma por voz é ruim (§5a: 2 das 4 já copiam), então o piso real pode ser menor.
+Notes:
+1. The empirical model saturates because it has no tail: voices with no neighbor among the 127 never get covered. It is a
+   pessimistic bound.
+2. BIC prefers **1** component (127 points in 32 dimensions do not support a mixture); the mixture of 2 was
+   imposed. It does not reproduce the faster real coverage: median $D_N$ 40.1/30.0/23.9 versus real 39.2/26.6/19.5,
+   the same error as the Gaussian. **No parametric model tested captures the clustering of the real voices.**
+   The parametric models underestimate coverage and therefore overestimate $q$ at large $N$.
+3. The **floor** is the only number that does not depend on the voice model: $\Pr(\|c-v_0\|^2<\tau)$, 4 of the 38 voices.
+   But the per-voice form is poor (§5a: 2 of the 4 already copy), so the real floor may be lower.
 
-**Previsão revisada:** $q(2456)$ entre 0,14 e 0,19 (IC conjunto 0,07–0,29). $q(2456)<0{,}07$ refuta o piso; acima
-de 0,29 refuta a teoria. A previsão das leis sem piso de 02 (~0,09) fica **dentro** do IC: a extrapolação não
-discrimina com 38 vozes.
+**Revised prediction:** $q(2456)$ between 0.14 and 0.19 (joint CI 0.07–0.29). $q(2456)<0.07$ refutes the floor; above
+0.29 refutes the theory. The prediction of the floor-free laws of 02 (~0.09) lies **inside** the CI: the extrapolation does not
+discriminate with 38 voices.
 
-## 10. Bits como espectro de informação, por voz
+## 10. Bits as information spectrum, per voice
 
-**Derivação** [PROVADO]. Para um livro-código i.i.d., $\Pr(\text{falha}\mid c)=(1-p_c)^N$ com
-$e^{-Np_c/(1-p_c)}\le(1-p_c)^N\le e^{-Np_c}$. Escrevendo $L(c)=-\log_2p_c$ (autoinformação da tolerância da voz
-sob a distribuição de vozes treinadas):
+**Derivation** [PROVEN]. For an i.i.d. codebook, $\Pr(\text{failure}\mid c)=(1-p_c)^N$ with
+$e^{-Np_c/(1-p_c)}\le(1-p_c)^N\le e^{-Np_c}$. Writing $L(c)=-\log_2p_c$ (self-information of the voice's tolerance
+under the distribution of trained voices):
 $$
 q(N)\approx\mathbb E_c\exp\!\big(-2^{\log_2N-L(c)}\big)=\Pr\!\big[L(c)>\log_2N\big]+\int h(\ell)\,g(\ell-\log_2N)\,d\ell,
 $$
-com $g(x)=e^{-2^{-x}}-\mathbf 1[x>0]$ e $\int g=-\gamma_E/\ln2$. Logo, para densidade $h$ suave,
-$q(N)\approx\Pr\big[L(c)>\log_2N+\gamma_E/\ln2\big]$, isto é, o limiar efetivo fica 0,83 bit acima de $\log_2N$.
-Uma voz passa a ser copiada quando $\log_2N\gtrsim L(c)-0{,}83$. A afirmação "80% de cópia ≈ 10 bits ≈ 1.000
-locutores" é o quantil 80% de $L$ (v1 §6.2). Ela depende de $\tau$ e da cauda gaussiana de $P_v$ [HEURÍSTICO].
+with $g(x)=e^{-2^{-x}}-\mathbf 1[x>0]$ and $\int g=-\gamma_E/\ln2$. Hence, for a smooth density $h$,
+$q(N)\approx\Pr\big[L(c)>\log_2N+\gamma_E/\ln2\big]$, that is, the effective threshold lies 0.83 bits above $\log_2N$.
+A voice starts being copied when $\log_2N\gtrsim L(c)-0.83$. The statement "80% copying ≈ 10 bits ≈ 1,000
+speakers" is the 80% quantile of $L$ (v1 §6.2). It depends on $\tau$ and on the Gaussian tail of $P_v$ [HEURISTIC].
 
-**Teste por voz** (`b1.json: p10_L`). $-L(c)$ (cauda gaussiana, ou contagem empírica) contra distância simples:
+**Per-voice test** (`b1.json: p10_L`). $-L(c)$ (Gaussian tail, or empirical count) versus simple distance:
 
-| | Spearman $-L$ (gauss / emp.) | Spearman $d_{LJ}$ | Spearman folga | AUC $-L$ | AUC $d_{LJ}$ | Brier de $1-e^{-N2^{-L}}$ | Brier constante |
+| | Spearman $-L$ (Gauss. / emp.) | Spearman $d_{LJ}$ | Spearman margin | AUC $-L$ | AUC $d_{LJ}$ | Brier of $1-e^{-N2^{-L}}$ | constant Brier |
 |---|---|---|---|---|---|---|---|
-| $N=8$ | 0,50 / 0,52 | 0,38 | 0,51 | 0,80 | 0,73 | 0,209 | 0,178 |
-| $N=32$ | 0,54 / 0,56 | 0,49 | 0,57 | 0,85 | 0,80 | 0,136 | 0,130 |
-| $N=128$ | 0,53 / 0,53 | 0,58 | 0,56 | 0,74 | 0,78 | 0,121 | 0,108 |
+| $N=8$ | 0.50 / 0.52 | 0.38 | 0.51 | 0.80 | 0.73 | 0.209 | 0.178 |
+| $N=32$ | 0.54 / 0.56 | 0.49 | 0.57 | 0.85 | 0.80 | 0.136 | 0.130 |
+| $N=128$ | 0.53 / 0.53 | 0.58 | 0.56 | 0.74 | 0.78 | 0.121 | 0.108 |
 
-**Veredito.** $L(c)$ ordena as vozes melhor que $d_{LJ}$ em $N=8$ e 32, pior em 128, e nunca melhor que a folga
-geométrica simples, da qual é quase uma transformação monótona. As probabilidades por voz que o espectro de
-informação implica são **piores que uma constante** (Brier 0,209 contra 0,178 em $N=8$): são precisas demais
-(§5a). **A forma por voz do espectro de informação não se sustenta.** A forma agregada (quantis de $L$ → $N$
-necessário) continua sendo uma conta de modelo, sem teste por voz que a apoie.
+**Verdict.** $L(c)$ ranks the voices better than $d_{LJ}$ at $N=8$ and 32, worse at 128, and never better than the simple
+geometric margin, of which it is almost a monotone transformation. The per-voice probabilities implied by the information
+spectrum are **worse than a constant** (Brier 0.209 versus 0.178 at $N=8$): they are too sharp
+(§5a). **The per-voice form of the information spectrum does not hold up.** The aggregate form (quantiles of $L$ → required $N$)
+remains a model calculation, with no per-voice test to support it.
 
-A relação com os 10,3 bits por frase permanece **conjectura**: a escala $N^\star\approx2^{I(v;c)}\approx10^3$ é onde
-$D_N$ do livro-código gaussiano atinge o ruído da referência, mas os modelos paramétricos subestimam a cobertura
-real (§9), então o $N^\star$ real deve ser menor.
+The relation to the 10.3 bits per utterance remains a **conjecture**: the scale $N^\star\approx2^{I(v;c)}\approx10^3$ is where
+the $D_N$ of the Gaussian codebook reaches the reference noise, but the parametric models underestimate the real
+coverage (§9), so the real $N^\star$ should be smaller.
 
 ---
 
-## 11. Situação final
+## 11. Final status
 
-| Afirmação | v2 |
+| Claim | v2 |
 |---|---|
-| Proposição 1 (Bayes, $T=1$, massas nominais) | PROVADO; **refutado** como descrição (q≈0) |
-| Proposição 2 e fórmula $\mathbb E_c(1-F_c)^N$ | PROVADO; SIMULADO |
-| Mecanismo distorção × tolerância do atrator para vozes novas | compatível com DADOS (74%/57% da queda prevista com 1 parâmetro); teste fraco (2 g.l., IC ±0,15) |
-| $T$ | não identificado; $T=1$ *a priori*; largura por voz dá 21, incompatível com a curva |
-| $\tau=\|\mu-v_0\|^2$ | hipótese pós-hoc (§2) |
-| $M$ como contagem de frases | MORTO; experimento $M/2$ mede $T$ (§4) |
-| Vozes treinadas como codewords ruidosos | MORTO (§5b) |
-| 4 vozes da grade | explicado como excesso de precisão por voz, não como anomalia (§5a) |
-| Pseudo-locutores | nulo compatível (família ~1D + atrator alargado); teste sem poder (§6) |
-| Leis assintóticas ($\ln N$, $N^{-2/d}$) em 8–2456 | não se aplicam; sem lei de potência estável (§7) |
-| "0,26 ≈ 2/d" | retirado |
-| Média de referências | termo cruzado explica o ganho seletivo nas 4 vozes e o nulo nas 38 (§8) |
-| $q(2456)$, piso | 0,14–0,19 [0,07–0,29]; piso 0,105 [0,05–0,21]; o piso por voz é pouco confiável |
-| Espectro de informação por voz | MORTO como preditor por voz; agregado é HEURÍSTICO |
+| Proposition 1 (Bayes, $T=1$, nominal masses) | PROVEN; **refuted** as a description (q≈0) |
+| Proposition 2 and the formula $\mathbb E_c(1-F_c)^N$ | PROVEN; SIMULATED |
+| Mechanism distortion × attractor tolerance for new voices | compatible with DATA (74%/57% of the drop predicted with 1 parameter); weak test (2 d.o.f., CI ±0.15) |
+| $T$ | not identified; $T=1$ *a priori*; per-voice width gives 21, incompatible with the curve |
+| $\tau=\|\mu-v_0\|^2$ | post hoc hypothesis (§2) |
+| $M$ as a count of utterances | DEAD; the $M/2$ experiment measures $T$ (§4) |
+| Trained voices as noisy codewords | DEAD (§5b) |
+| 4 voices of the grid | explained as excess per-voice sharpness, not as an anomaly (§5a) |
+| Pseudo-speakers | compatible null (~1D family + widened attractor); test without power (§6) |
+| Asymptotic laws ($\ln N$, $N^{-2/d}$) in 8–2456 | do not apply; no stable power law (§7) |
+| "0.26 ≈ 2/d" | withdrawn |
+| Averaging references | the cross term explains the selective gain on the 4 voices and the null on the 38 (§8) |
+| $q(2456)$, floor | 0.14–0.19 [0.07–0.29]; floor 0.105 [0.05–0.21]; the per-voice floor is unreliable |
+| Per-voice information spectrum | DEAD as a per-voice predictor; aggregate is HEURISTIC |
 
-**Parâmetros, contagem final.**
-- Medidos, sem usar cópia: $\Sigma_b$, $\mu$, $v_0$, $W_x$, as vozes de cada livro-código, $\sigma_w$.
-- Supostos: $\|\Delta\|^2=0{,}65$ (só suaviza); o espaço comum (o latente do treino $N=128$; muda $q_8$ em ~0,1).
-- Fixado *a priori*: $T=1$.
-- Ajustado à curva: $\tau$ (1 número, em $q_{128}$).
-- Graus de liberdade restantes: 2 ($q_8$, $q_{32}$), ambos dentro do IC; só o nulo plano é rejeitado.
+**Parameters, final count.**
+- Measured, without using copying: $\Sigma_b$, $\mu$, $v_0$, $W_x$, the voices of each codebook, $\sigma_w$.
+- Assumed: $\|\Delta\|^2=0.65$ (only smooths); the common space (the latent of the $N=128$ training run; changes $q_8$ by ~0.1).
+- Fixed *a priori*: $T=1$.
+- Fitted to the curve: $\tau$ (1 number, at $q_{128}$).
+- Remaining degrees of freedom: 2 ($q_8$, $q_{32}$), both inside the CI; only the flat null is rejected.
