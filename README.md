@@ -2,6 +2,8 @@
 
 **Projeto final de ML2 (IMPA Tech)** · [Página do projeto](https://rick0110.github.io/ml2_final_project) · [Relatório (PDF)](reports/relatorio_final.pdf) · [Proposta de pesquisa (PDF)](reports/proposta/proposta.pdf)
 
+> **Pesquisa em andamento:** a organização da pesquisa (pergunta, resultados um a um e caminhos em exploração) está em [`research/`](research/README.md). Para trabalhar no projeto, leia antes o [`AGENTS.md`](AGENTS.md).
+
 Sistema de síntese de fala (*Text-to-Speech*) baseado no **Tacotron 2** com um **VAE** que resume um áudio de referência em um vetor de estilo. O texto diz *o que* falar; o áudio de referência diz *como* (tom, velocidade, voz, emoção).
 
 > **Revisão de novembro de 2026.** A versão anterior deste projeto descrevia uma "atenção espectral interpretável". Esse resultado **não era válido**: vinha de um erro de código (seção 2). O código foi corrigido, os modelos foram retreinados e todos os áudios passaram a ser conferidos por reconhecimento de fala. Este README, o relatório e a página descrevem só os resultados novos.
