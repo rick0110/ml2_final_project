@@ -1,5 +1,5 @@
-"""c2 (v3): previsoes com nivel NOMINAL lam = ln(M/K) = ln(2000/32) (nenhum parametro de nivel ajustado)
-e T de forma: (i) T proprio, (ii) T comum, (iii) T dos outros treinos; decomposicao com lam nominal.
+"""c2 (v3): predictions with the NOMINAL level lam = ln(M/K) = ln(2000/32) (no level parameter fitted)
+and shape T: (i) the run's own T, (ii) common T, (iii) T from the other runs; decomposition with nominal lam.
 python3 -I c2_nominal.py <coverage2> <results> <out>"""
 import sys, os, json, csv
 import numpy as np
@@ -32,7 +32,7 @@ for N in (8, 32, 128):
                   q_Tproprio_ci90=[q(X, CB[N], t, lamN) for t in np.percentile(bts, [5, 95])],
                   q_Tcomum_K8=q(X, CB[N], Tc, float(np.log(2000 / 8))), q_Tcomum_K128=q(X, CB[N], Tc, float(np.log(2000 / 128))),
                   q_Tcomum_Mhalf=q(X, CB[N], Tc, float(np.log(1000 / 32))))
-# decomposicao com lam nominal e T proprio
+# decomposition with nominal lam and the run's own T
 Q = lambda a, b: q(X, CB[a], T[b], lamN)
 dec = {}
 for a, b in ((8, 32), (32, 128), (8, 128)):
@@ -40,12 +40,12 @@ for a, b in ((8, 32), (32, 128), (8, 128)):
     cap = 0.5 * ((Q(a, b) - Q(a, a)) + (Q(b, b) - Q(b, a)))
     dec[f'{a}->{b}'] = dict(total=tot, cobertura=tot - cap, capacidade=cap)
 rep['dec_nominal'] = dec
-# Tc: varrer T para o efeito de capacidade hipotetico: q(cb_N, T) para T = 5, 10, 20, 40
+# Tc: sweep T for the hypothetical capacity effect: q(cb_N, T) for T = 5, 10, 20, 40
 rep['varre_T'] = {t: {N: q(X, CB[N], t, lamN) for N in (8, 32, 128)} for t in (2, 5, 10, 20, 40)}
-# capacidade C(T) e T necessario para q=0.1 com cb_128
+# capacity C(T) and the T needed for q=0.1 with cb_128
 ev = np.clip(np.linalg.eigvalsh(G.Sb), 0, None)
 rep['C_of_T'] = {t: float(0.5 * np.sum(np.log2(1 + ev / t))) for t in (1, 2, 5, 10, 20, 27)}
-# extrapolacao em N: livro-codigo gaussiano (espectro medido) sorteado, T comum, lam nominal
+# extrapolation in N: sampled Gaussian codebook (measured spectrum), common T, nominal lam
 evv, U = np.linalg.eigh(G.Sb); evv = np.clip(evv, 0, None)
 rng = np.random.default_rng(9)
 ext = {}

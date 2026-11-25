@@ -1,5 +1,5 @@
-"""Tarefa 7: efeito de R (media dos codigos de 4/16 frases de referencia) com estatistica pareada por amostra.
-Bootstrap por cluster: reamostra locutores do grupo (os mesmos em todos os treinos) e frases. Uso: python3 -I dados_07_R.py <results_dir> <out_dir> [B]"""
+"""Task 7: effect of R (mean of the codes of 4/16 reference utterances) with per-sample paired statistics.
+Cluster bootstrap: resamples the group's speakers (the same in every training run) and utterances. Usage: python3 -I dados_07_R.py <results_dir> <out_dir> [B]"""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np, pandas as pd
@@ -21,7 +21,7 @@ for R in [4, 16]:
     J = J.reset_index()
     for (grp, setname), x in J.assign(setname=np.where(J.run.str.endswith("-wide"), "wide", "plain")).groupby(["group", "setname"]):
         runs = sorted(x.run.unique()); spks = np.array(sorted(x.spk.unique()))
-        # matriz treino x locutor de medias das diferencas (frases como replicas)
+        # run x speaker matrix of mean differences (utterances as replicates)
         M = {c: x.pivot_table(index="spk", columns="run", values="d_" + c, aggfunc="mean").loc[spks, runs].values for c in cols}
         for c in cols:
             est = np.nanmean(M[c])
@@ -36,6 +36,6 @@ for R in [4, 16]:
             per_run.append(dict(R=R, run=r_, grupo=grp, **{c: xr[c + "_1"].mean() for c in ["copied", "copied_spk", "wer"]},
                                 **{c + "_R": xr[c + "_R"].mean() for c in ["copied", "copied_spk", "wer"]}))
 T = pd.DataFrame(rows); T.to_csv(os.path.join(out, "efeito_R.csv"), index=False)
-print("diferenca media (R - R1), IC95 bootstrap de locutores (pareado), n locutores que sobem/descem, Wilcoxon sobre medias por locutor")
+print("mean difference (R - R1), 95% CI from speaker bootstrap (paired), n speakers going up/down, Wilcoxon on per-speaker means")
 print(T[T.metrica.isin(["copied", "copied_spk", "m", "ms", "sim_spk", "sim_default", "wer"])].round(4).to_string())
 print(pd.DataFrame(per_run).round(3).to_string())

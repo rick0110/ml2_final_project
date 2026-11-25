@@ -43,8 +43,8 @@ for run, N, K, seed, var in list_runs(root):
     rows.append([run, r["n_lj"], r["n_lib"], f"{r['rate_total']:.1f}", f"{r['rate_lj']:.1f}", f"{r['rate_lib']:.1f}", f"{r['kl_refs']:.1f}",
                  f"{r['dim_min']:.2f}–{r['dim_max']:.2f}", r["active_001"], r["active_var"], f"{r['sigma_mean']:.3f}", f"{r['mu_sd']:.3f}",
                  f"{r['I_gauss_full']:.1f}", f"{r['I_mc']:.2f}/{r['log2n']:.2f}", f"{r['kl_log_last']:.3f}", f"{r['klw']:.4f}"])
-hdr = ["run", "n LJ", "n Libri", "taxa total (bits)", "taxa LJ", "taxa Libri", "taxa refs", "bits/dim min–max", "dims KL>0,01 nat", "dims var(mu)>0,01",
-       "sigma médio", "dp(mu) médio", "I(x;z) gauss.", "I(x;z) MC / log2 n", "kl no log (últ. 10)", "peso KL"]
+hdr = ["run", "n LJ", "n Libri", "total rate (bits)", "LJ rate", "Libri rate", "refs rate", "bits/dim min–max", "dims KL>0.01 nat", "dims var(mu)>0.01",
+       "mean sigma", "mean sd(mu)", "I(x;z) Gauss.", "I(x;z) MC / log2 n", "logged kl (last 10)", "KL weight"]
 open(os.path.join(out, "rate_table.md"), "w").write(md_table(hdr, rows))
 json.dump(res, open(os.path.join(out, "rate.json"), "w"), indent=1)
 print(md_table(hdr, rows))

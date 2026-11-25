@@ -1,5 +1,5 @@
-"""b12: embeddings Resemblyzer (o verificador do projeto) das saidas salvas e das referencias LibriTTS test-clean.
-Uso: python3 -I b12_embed.py <wavs_ext> <libritts_tc> <ref_ids.txt> <out.npz> [max_por_locutor]"""
+"""b12: Resemblyzer embeddings (the project's verifier) of the saved outputs and of the LibriTTS test-clean references.
+Usage: python3 -I b12_embed.py <wavs_ext> <libritts_tc> <ref_ids.txt> <out.npz> [max_per_speaker]"""
 import sys, os, glob, re
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, os.path.join(HERE, "pylib"))
 import numpy as np
@@ -11,12 +11,12 @@ def add(key, path):
     try:
         e = enc.embed_utterance(preprocess_wav(path))
     except Exception as ex:
-        print("falhou", path, ex); return
+        print("failed", path, ex); return
     keys.append(key); embs.append(e)
 outs = sorted(glob.glob(os.path.join(wdir, "*", "step_2500", "*", "*.wav")))
 for p in outs:
     parts = p.split(os.sep); add("out|" + parts[-4] + "|" + parts[-2] + "|" + parts[-1][:-4], p)
-print("saidas:", len(outs), flush=True)
+print("outputs:", len(outs), flush=True)
 refs = [l.strip() for l in open(idf) if l.strip()]
 allw = glob.glob(os.path.join(ldir, "**", "*.wav"), recursive=True)
 byspk = {}

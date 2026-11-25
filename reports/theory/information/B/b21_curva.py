@@ -1,5 +1,5 @@
-"""b21: curva C(N,K) num conjunto comum de vozes, consistencia s0<->s1, e decomposicao I = H(Y) - H(Y|S).
-Uso: python3 -I b21_curva.py out/b0.npz out/b12_emb.npz out/b20_outs.npz [out/b20_refs.npz] [B]"""
+"""b21: C(N,K) curve on a common set of voices, s0<->s1 consistency, and decomposition I = H(Y) - H(Y|S).
+Usage: python3 -I b21_curva.py out/b0.npz out/b12_emb.npz out/b20_outs.npz [out/b20_refs.npz] [B]"""
 import sys, os, re, json; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from scipy.special import logsumexp
@@ -37,7 +37,7 @@ def lovo_rows(sim, true):
     tab = np.array([[-(b * sim[i, true[i]] - logsumexp(b * sim[i])) / np.log(2) for i in range(len(sim))] for b in betas])
     tot = tab.sum(1); return np.array([tab[np.argmin(tot - tab[:, i]), i] for i in range(len(sim))])
 def ident(run, cond, vs):
-    """saidas (todas as frases) da voz v identificadas entre centroides reais das vozes vs"""
+    """outputs (all utterances) of voice v identified among the real centroids of the voices vs"""
     o = OUT.get((run, cond), {}); spk = [v.split("_")[0] for v in vs]
     if not all(s in CEN for s in spk) or not all(v in o for v in vs): return None
     C = np.array([CEN[s] for s in spk]); Y, t, vid = [], [], []
@@ -58,20 +58,20 @@ def consist(run, cond, vs):
     A = np.array([o[v]["s0"] for v in vs]); Bm = np.array([o[v]["s1"] for v in vs]); sim = A @ Bm.T; t = np.arange(len(vs))
     return dict(n=len(vs), acc=float(np.mean(sim.argmax(1) == t)), fano=float(fano(np.mean(sim.argmax(1) == t), len(vs))), ce=float(np.log2(len(vs)) - lovo_rows(sim, t).mean()))
 def decomp(run, cond, vs):
-    """espalhamento (H) e ruido por voz (H|S), escalar: D_tot = dist^2 media entre saidas de vozes diferentes; D_w = dist^2 media s0-s1 da mesma voz / 2"""
+    """spread (H) and per-voice noise (H|S), scalar: D_tot = mean dist^2 between outputs of different voices; D_w = mean s0-s1 dist^2 of the same voice / 2"""
     o = OUT.get((run, cond), {}); vs = [v for v in vs if v in o and "s0" in o[v] and "s1" in o[v]]
     if len(vs) < 4: return None
     A = np.array([o[v]["s0"] for v in vs]); Bm = np.array([o[v]["s1"] for v in vs]); M_ = (A + Bm) / 2
-    Dw = np.mean(((A - Bm) ** 2).sum(1)) / 2                       # variancia dentro (por amostra, soma das dims)
-    Dm = np.mean([((M_[i] - M_[j]) ** 2).sum() for i in range(len(vs)) for j in range(len(vs)) if i < j]) / 2   # variancia das medias (com Dw/2)
-    Db = Dm - Dw / 2                                                # variancia entre vozes, sem o ruido
+    Dw = np.mean(((A - Bm) ** 2).sum(1)) / 2                       # within variance (per sample, summed over dims)
+    Dm = np.mean([((M_[i] - M_[j]) ** 2).sum() for i in range(len(vs)) for j in range(len(vs)) if i < j]) / 2   # variance of the means (includes Dw/2)
+    Db = Dm - Dw / 2                                                # between-voice variance, without the noise
     return dict(n=len(vs), D_within=float(Dw), D_between=float(Db), D_total=float(Db + Dw), snr=float(Db / Dw),
                 I_iso_per_dim=float(0.5 * np.log2(1 + Db / Dw)))
 runs = sorted(set(r for r, c in OUT), key=lambda r: (meta(r)[0], meta(r)[1], r))
 res = {}
-print(f"conjunto comum V12 = 8 treinadas + 4 novas (log2 12 = {np.log2(12):.2f}); centroides reais disponiveis: {sum(v.split('_')[0] in CEN for v in V12)}/12; EXT4 {sum(v.split('_')[0] in CEN for v in EXT4)}/4")
-print("\n(A) fidelidade (saida x centroide real) e (B) consistencia s0<->s1, (C) decomposicao escalar; forca 1.0, R=1")
-hdr = f"{'treino':22s} {'N':>4s} {'K':>4s} | V12 Fano  EC [IC]          | treinadas(8) EC | novas(4) EC | consist. EC | D_within D_between I_iso/dim"
+print(f"common set V12 = 8 trained + 4 new (log2 12 = {np.log2(12):.2f}); real centroids available: {sum(v.split('_')[0] in CEN for v in V12)}/12; EXT4 {sum(v.split('_')[0] in CEN for v in EXT4)}/4")
+print("\n(A) fidelity (output x real centroid) and (B) s0<->s1 consistency, (C) scalar decomposition; strength 1.0, R=1")
+hdr = f"{'run':22s} {'N':>4s} {'K':>4s} | V12 Fano  EC [CI]          | trained(8) EC   | new(4) EC   | consist. EC | D_within D_between I_iso/dim"
 print(hdr)
 for r in runs:
     N, K, var = meta(r)

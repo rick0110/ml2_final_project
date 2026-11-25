@@ -1,5 +1,5 @@
-"""Modelo populacional (teoria com entradas medidas): vozes gaussianas no espaco branqueado de um treino de referencia.
-Sem efeitos colaterais."""
+"""Population model (theory with measured inputs): Gaussian voices in the whitened space of a reference training run.
+No side effects."""
 import numpy as np
 from scipy.special import logsumexp
 from scipy.stats import norm
@@ -11,12 +11,12 @@ class Pop:
         Wreg = g.W + reg * np.trace(g.W) / 32 * np.eye(32)
         L = np.linalg.cholesky(Wreg); Li = np.linalg.inv(L); self.Li = Li
         w = lambda S: Li @ S @ Li.T
-        self.I = w(g.W)                                     # ~ identidade (ruido de frase, dentro do locutor)
+        self.I = w(g.W)                                     # ~ identity (utterance noise, within speaker)
         self.Plib = w(np.diag(g.s2lib)); self.Plj = w(np.diag(g.s2lj)); self.Wlj = w(g.Wlj)
         Sb = w(g.Sb); ev, V = np.linalg.eigh(Sb); ev = np.clip(ev, 0, None)
         self.Sb = (V * ev) @ V.T; self.Sb_half = V * np.sqrt(ev)
         self.mpop = (g.means @ Li.T).mean(0); self.v0 = Li @ g.mlj
-        self.C_ext = g.C @ Li.T                               # referencias reais (externas etc.) branqueadas
+        self.C_ext = g.C @ Li.T                               # real references (externals etc.), whitened
         self.grp = [x["grp"] for x in g.refs]
     def draw(self, n, rng):
         return self.mpop + rng.standard_normal((n, 32)) @ self.Sb_half.T
@@ -31,7 +31,7 @@ def _ll(X, mus, S):
     return -0.5 * d2 - 0.5 * ld
 
 def Lam(p, C, V, K, s2, logM, P=None, scale_c=1.0, post=True):
-    """C: codigos (n,32) ; V: vozes treinadas (N,32). P: projecao (k,32) opcional."""
+    """C: codes (n,32) ; V: trained voices (N,32). P: optional projection (k,32)."""
     Slib = p.I * (1 + 1.0 / K) + s2 * np.eye(32) + (p.Plib if post else 0)
     Slj = p.Wlj + s2 * np.eye(32) + (p.Plj if post else 0)
     v0 = p.v0

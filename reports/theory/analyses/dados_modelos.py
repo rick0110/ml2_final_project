@@ -1,5 +1,5 @@
-"""Motor de ajuste: leis lineares, separaveis (grade nos expoentes + minimos quadrados) e probit.
-Todas ajustadas por minimos quadrados nao ponderados no nivel do treino (como fit_law.py)."""
+"""Fitting engine: linear laws, separable laws (grid over the exponents + least squares) and probit.
+All fitted by unweighted least squares at the run level (like fit_law.py)."""
 import numpy as np
 from scipy.optimize import nnls, least_squares
 from scipy.stats import norm
@@ -38,7 +38,7 @@ class Model:
             sse = ((np.einsum("gni,gi->gn", X, b) - y) ** 2).sum(1)
             g = int(np.argmin(sse))
             return ("sep", b[g], self.grid[g])
-        if self.kind == "probit":   # q = Phi(-(a + b lnN + c lnK)) (ou sem K)
+        if self.kind == "probit":   # q = Phi(-(a + b lnN + c lnK)) (or without K)
             X = self.basis(N, K)
             yc = np.clip(y, 0.02, 0.98)
             b0 = np.linalg.lstsq(X, -norm.ppf(yc), rcond=None)[0]
@@ -72,7 +72,7 @@ def margin_models():
     ]
 AB = np.array([(a, b) for a in ALPHAS[ALPHAS <= 1.5] for b in BETAS])
 def frac_models(with_K=True):
-    """Leis para a fracao NAO copiada q."""
+    """Laws for the fraction NOT copied q."""
     ms = [
         Model("L1n: a + A/N", 2, "lin", lambda N, K: np.c_[one(N), 1 / N], nonneg=True),
         Model("L2n: a + A/sqrt(N)", 2, "lin", lambda N, K: np.c_[one(N), N ** -.5], nonneg=True),
@@ -106,7 +106,7 @@ def config_ids(N, K):
     return np.array([u.index(x) for x in keys]), u
 
 def loco(model, N, K, y, cfg):
-    """Leave-one-configuration-out: devolve predicoes fora da amostra por treino."""
+    """Leave-one-configuration-out: returns out-of-sample predictions per run."""
     pred = np.empty_like(y)
     for c in np.unique(cfg):
         tr = cfg != c
@@ -121,7 +121,7 @@ def summary(model, N, K, y, cfg):
     k = model.k + 1
     pred = loco(model, N, K, y, cfg)
     e = pred - y
-    # erro CV por configuracao (media das sementes) e por treino
+    # CV error per configuration (mean over seeds) and per run
     cv_run = float(np.sqrt(np.mean(e ** 2)))
     cv_cfg = float(np.sqrt(np.mean([np.mean(e[cfg == c]) ** 2 for c in np.unique(cfg)])))
     return dict(model=model.name, k=model.k, rmse=np.sqrt(sse / n), aic=n * np.log(sse / n) + 2 * k,

@@ -1,7 +1,7 @@
-"""b0: extrai, para cada treino, a geometria branqueada do latente (vozes treinadas, voz padrao LJ, referencias)
-e as estatisticas por referencia (copia, margem, WER, duracao) em R=1, R=4 e forca 0.6.
-Uso: python3 -I b0_extrai.py <latents_root> <results_root> <out.npz>
-Somente leitura dos dados; grava apenas <out.npz> (pickle desativado)."""
+"""b0: extracts, for each training run, the whitened latent geometry (trained voices, LJ default voice, references)
+and the per-reference statistics (copy, margin, WER, duration) at R=1, R=4 and strength 0.6.
+Usage: python3 -I b0_extrai.py <latents_root> <results_root> <out.npz>
+Data are only read; writes only <out.npz> (pickle disabled)."""
 import sys, os, re, csv, json
 import numpy as np
 

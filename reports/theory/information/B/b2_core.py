@@ -1,7 +1,7 @@
-"""b2: ajusta o decodificador por nucleo/posterior so nas vozes TREINADAS (seen) da grade e preve as novas e externas.
-Familias: covariancia de classe = W_c + Sigma_post,c + s2 * W_reg  (s2 = suavizacao isotropica no espaco branqueado),
-peso a priori: K por voz LibriTTS, M_eff = exp(logM) para LJ.  Ligacoes: 'mean' (media posterior + Lema 1) e 'samp'.
-Uso: python3 -I b2_ajuste.py out/b0.npz out/"""
+"""b2: fits the kernel/posterior decoder only on the TRAINED (seen) voices of the grid and predicts the new and external ones.
+Families: class covariance = W_c + Sigma_post,c + s2 * W_reg  (s2 = isotropic smoothing in the whitened space),
+prior weight: K per LibriTTS voice, M_eff = exp(logM) for LJ.  Links: 'mean' (posterior mean + Lemma 1) and 'samp'.
+Usage: python3 -I b2_ajuste.py out/b0.npz out/"""
 import sys, os, json; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from scipy.optimize import minimize

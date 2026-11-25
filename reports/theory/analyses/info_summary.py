@@ -29,8 +29,8 @@ for run, r in sp.items():
                  f"{r['I_plug_perm']:.2f} / {r['I_vc_perm']:.2f}",
                  f"{r['lda_acc']:.2f}", f"{r['I_ce']:.2f}", f"{r['I_fano']:.2f}", f"{r.get('I_ce_lr', np.nan):.2f}", f"{r['I_ce_perm']:.2f}",
                  f"{r['I_bin_ce']:.2f}/{r['Hbin']:.2f}", f"{r['d_lj_lib']:.1f}"])
-hdr = ["run", "S", "frases/loc.", "log2 S", "H(S)", "Gauss plug-in", "Gauss corr. (mu)", "Gauss corr. (z)", "perm. plug/vc", "acc LDA-LOO",
-       "I_CE (LDA)", "I_Fano", "I_CE (logreg 5-fold)", "I_CE perm.", "LJ×Libri I/H", "dist. LJ–Libri (dp)"]
+hdr = ["run", "S", "utts/spk.", "log2 S", "H(S)", "Gauss plug-in", "Gauss corr. (mu)", "Gauss corr. (z)", "perm. plug/vc", "acc LDA-LOO",
+       "I_CE (LDA)", "I_Fano", "I_CE (logreg 5-fold)", "I_CE perm.", "LJ×Libri I/H", "dist. LJ–Libri (sd)"]
 tab_sp = md_table(hdr, rows)
 # ---- directions
 rows = []
@@ -41,7 +41,7 @@ for run, q in sp2.items():
                  sum(1 for v in q["snr_chan"] if v > 1), q["k50_chan"], q["k90_chan"], q["k99_chan"], q["k90_mu"],
                  f"{r['alpha_raw']:.2f} [{r['alpha_raw_ci'][0]:.2f}, {r['alpha_raw_ci'][1]:.2f}]" if r.get("alpha_raw_ci") else f"{r['alpha_raw']:.2f}",
                  f"{q['gain_R4_mu']:.1f} / {q['gain_R4_chan']:.1f}"])
-hdr = ["run", "S", "PR(Σb)", "PR(W^-1/2 Σb W^-1/2)", "PR(SNR)", "dir. SNR>1 (mu)", "dir. SNR>1 (z)", "k 50% bits (z)", "k 90% (z)", "k 99% (z)", "k 90% (mu)", "α lei de potência (Σb, 16 dir.)", "ganho R=4 previsto (mu/z, bits)"]
+hdr = ["run", "S", "PR(Σb)", "PR(W^-1/2 Σb W^-1/2)", "PR(SNR)", "dir. SNR>1 (mu)", "dir. SNR>1 (z)", "k 50% bits (z)", "k 90% (z)", "k 99% (z)", "k 90% (mu)", "α power law (Σb, 16 dir.)", "predicted R=4 gain (mu/z, bits)"]
 tab_dir = md_table(hdr, rows)
 # ---- ID
 rows = []
@@ -53,7 +53,7 @@ for run, q in sp2.items():
                  f"{q['lb_denoised']:.1f} [{q['lb_denoised_ci'][0]:.1f}, {q['lb_denoised_ci'][1]:.1f}]", f"{q['lb_null']:.1f}",
                  (f"{q['cover_slope']:.3f} [{q['cover_slope_ci'][0]:.3f}, {q['cover_slope_ci'][1]:.3f}] → d≈{1/q['cover_slope']:.1f}" if "cover_slope" in q else "—"),
                  (f"{q['cover_slope_null']:.3f} ± {q['cover_slope_null_sd']:.3f}" if "cover_slope" in q else "—")])
-hdr = ["run", "S", "TwoNN médias brutas", "TwoNN só ruído", "TwoNN médias sem ruído [IC 80% subamostra]", "TwoNN nulo gaussiano [IC95]", "Levina–Bickel k=5 sem ruído", "LB nulo", "expoente de cobertura γ (r_NN ∝ m^-γ)", "γ nulo gaussiano"]
+hdr = ["run", "S", "TwoNN raw means", "TwoNN noise only", "TwoNN denoised means [80% CI subsample]", "TwoNN Gaussian null [95% CI]", "Levina–Bickel k=5 denoised", "LB null", "coverage exponent γ (r_NN ∝ m^-γ)", "γ Gaussian null"]
 tab_id = md_table(hdr, rows)
 # ---- cross-run NN distance of external references, noise-corrected
 rows = []; dd = {}
@@ -66,7 +66,7 @@ for run in ["n8_k32_s1-wide", "n32_k32_s1-wide", "n128_k32_s1-wide"]:
     dd[run] = (dnn, corr)
     rows.append([run, f"{dnn.mean():.2f}", f"{np.sqrt(floor):.2f}", f"{corr.mean():.2f} [{np.percentile(b,2.5):.2f}, {np.percentile(b,97.5):.2f}]",
                  f"{dlj.mean():.1f}", f"{at[run]['lj_center_to_lib_center_w']:.1f}", f"{at[run]['copy_mean']:.2f}"])
-tab_nn = md_table(["run", "d_NN (whitened)", "piso de ruído √E‖e‖²", "d_NN corrigida [IC95]", "d_LJ", "dist. centro LJ–centro Libri", "cópia média"], rows)
+tab_nn = md_table(["run", "d_NN (whitened)", "noise floor √E‖e‖²", "corrected d_NN [95% CI]", "d_LJ", "dist. LJ centre–Libri centre", "mean copy"], rows)
 N = np.array([8, 32, 128]); m = np.array([dd[r][1].mean() for r in dd]); mr = np.array([dd[r][0].mean() for r in dd])
 txt += f"cross-run slope of corrected d_NN vs N: {-np.polyfit(np.log(N), np.log(m), 1)[0]:.3f}; raw: {-np.polyfit(np.log(N), np.log(mr), 1)[0]:.3f}\n"
 # ---- attractor table
@@ -79,7 +79,7 @@ for run in ["n8_k32_s1-wide", "n32_k32_s1-wide", "n128_k32_s1-wide"]:
                  f"{ci['P(|rho_lj|>|rho_nn|)']:.2f}", f"{rho['copy~d_lj_w|f0']:.2f}", f"{rho['copy~d_nn_w|d_lj_w']:.2f}",
                  f"{rho['sim_ref~d_lj_w']:.2f} [{ci['sim_ref~d_lj_w'][0]:.2f}, {ci['sim_ref~d_lj_w'][1]:.2f}]",
                  f"{rho['sim_def~d_lj_w']:.2f} [{ci['sim_def~d_lj_w'][0]:.2f}, {ci['sim_def~d_lj_w'][1]:.2f}]"])
-tab_at = md_table(["run", "cópia", "ρ(cópia, d_LJ)", "ρ(cópia, d_NN)", "ρ(cópia, log F0)", "P(abs ρ_LJ > abs ρ_NN)", "ρ parcial d_LJ dado F0", "ρ parcial d_NN dado d_LJ", "ρ(sim_ref, d_LJ)", "ρ(sim_default, d_LJ)"], rows)
+tab_at = md_table(["run", "copy", "ρ(copy, d_LJ)", "ρ(copy, d_NN)", "ρ(copy, log F0)", "P(abs ρ_LJ > abs ρ_NN)", "partial ρ d_LJ given F0", "partial ρ d_NN given d_LJ", "ρ(sim_ref, d_LJ)", "ρ(sim_default, d_LJ)"], rows)
 rows = []
 for run in ["n8_k32_s1-wide", "n32_k32_s1-wide", "n128_k32_s1-wide"]:
     a = at[run]; lb = a["loo_bits"]
@@ -87,9 +87,9 @@ for run in ["n8_k32_s1-wide", "n32_k32_s1-wide", "n128_k32_s1-wide"]:
                 [f"{a['d50_w']:.1f} [{a['d50_ci'][0]:.1f}, {a['d50_ci'][1]:.1f}]", f"{a['width_w']:.1f} [{a['width_ci'][0]:.1f}, {a['width_ci'][1]:.1f}]",
                  f"{a['overdispersion']:.0f}", f"{a['frac_all_or_none']:.2f}"])
 p = at["pooled"]
-rows.append(["agrupado (efeito fixo de run, LOSO)", f"{p['run']['loso_bits']:.3f}", f"{p['d_lj']['loso_bits']:.3f}", f"{p['d_nn']['loso_bits']:.3f}", f"{p['f0']['loso_bits']:.3f}",
+rows.append(["pooled (run fixed effect, LOSO)", f"{p['run']['loso_bits']:.3f}", f"{p['d_lj']['loso_bits']:.3f}", f"{p['d_nn']['loso_bits']:.3f}", f"{p['f0']['loso_bits']:.3f}",
              f"{p['d_lj+d_nn']['loso_bits']:.3f}", "—", f"{p['d_lj+d_nn+f0']['loso_bits']:.3f}", "—", "—", "—", "—"])
-tab_lb = md_table(["run", "só intercepto", "d_LJ", "d_NN", "log F0", "d_LJ+d_NN", "d_LJ+F0", "d_LJ+d_NN+F0", "d50 (whitened)", "largura 1/β", "sobredispersão", "fração tudo-ou-nada"], rows)
+tab_lb = md_table(["run", "intercept only", "d_LJ", "d_NN", "log F0", "d_LJ+d_NN", "d_LJ+F0", "d_LJ+d_NN+F0", "d50 (whitened)", "width 1/β", "overdispersion", "all-or-none fraction"], rows)
 txt += "pooled coefs (z-scored, d_lj,d_nn,f0): " + json.dumps(p["d_lj+d_nn+f0"]["coef"]) + " CI " + json.dumps(p["coef_ci_d_lj+d_nn+f0"]) + "\n"
 txt += "pooled within-run spearman: " + json.dumps(p["spearman_within_run"]) + "\n"
 open(os.path.join(out, "summary_tables.md"), "w").write("\n## speaker\n" + tab_sp + "\n## dirs\n" + tab_dir + "\n## id\n" + tab_id + "\n## nn\n" + tab_nn + "\n## attractor\n" + tab_at + "\n## loo bits\n" + tab_lb + "\n## misc\n```\n" + txt + "```\n")

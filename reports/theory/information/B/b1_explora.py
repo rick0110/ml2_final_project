@@ -1,4 +1,4 @@
-"""b1: exploracao: Lambda com T=1 (sem parametro) por treino e grupo. Uso: python3 -I b1_explora.py out/b0.npz"""
+"""b1: exploration: Lambda with T=1 (no parameter) per run and group. Usage: python3 -I b1_explora.py out/b0.npz"""
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from bt_lib import *

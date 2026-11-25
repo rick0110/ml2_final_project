@@ -1,4 +1,4 @@
-"""a8: previsao com tau0 = ||mu_128 - v0||^2 (sem ajuste) no espaco comum N=128, T=1,2,3, livros-codigo reais.
+"""a8: prediction with tau0 = ||mu_128 - v0||^2 (no fitting) in the common N=128 space, T=1,2,3, real codebooks.
 python3 -I a8_tau0_comum.py <coverage2> <results> <out>"""
 import sys, os, json, csv
 import numpy as np

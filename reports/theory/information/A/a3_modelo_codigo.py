@@ -1,15 +1,15 @@
-"""a3: modelo 'livro-codigo + atrator' calibrado sem a curva de copia e teste de previsao.
+"""a3: 'codebook + attractor' model calibrated without the copy curve, and prediction test.
 
-Regra (limite de Poisson do canal de teste de Gibbs, ver relatorio sec. 3):
-    nao copiada  <=>  D_N(c) = min_i ||c - v_i||^2  >  t(c) = ||c - v0||^2 - tau,
+Rule (Poisson limit of the Gibbs test channel, see report sec. 3):
+    not copied  <=>  D_N(c) = min_i ||c - v_i||^2  >  t(c) = ||c - v0||^2 - tau,
     tau = 2 T ln(M_ef / K).
-Versao suave: canal de Gibbs com temperatura T e massa M_ef = K exp(tau/2T).
+Soft version: Gibbs channel with temperature T and mass M_ef = K exp(tau/2T).
 
-Calibracoes de tau (cada uma usa UMA quantidade):
-  (S) vozes treinadas (8 'seen', presentes em todos os livros-codigo) -> preve as 38 externas em N=8,32,128
-  (E128) externas em N=128 -> preve N=8, 32
-Modelo populacional: c ~ N(mu, Sb) + ruido de referencia Wx; codewords ~ N(mu, Sb + I/K);
-    q_pop(N) = E_c[(1 - F_c(t(c)))^N]   (F_c: qui-quadrado generalizado, Imhof)
+Calibrations of tau (each uses ONE quantity):
+  (S) trained voices (8 'seen', present in every codebook) -> predicts the 38 externals at N=8,32,128
+  (E128) externals at N=128 -> predicts N=8, 32
+Population model: c ~ N(mu, Sb) + reference noise Wx; codewords ~ N(mu, Sb + I/K);
+    q_pop(N) = E_c[(1 - F_c(t(c)))^N]   (F_c: generalised chi-square, Imhof)
 python3 -I a3_modelo_codigo.py <coverage2> <results> <out>
 """
 import sys, os, json, csv
@@ -38,7 +38,7 @@ def codebook(run):
 
 
 def pcopy_gibbs(X, cb, T, tau, Kk=K):
-    """canal de Gibbs; massa da LJ = K exp(tau/2T)."""
+    """Gibbs channel; LJ mass = K exp(tau/2T)."""
     V = np.vstack([v0[None], cb])
     lw = np.r_[np.log(Kk) + tau / (2 * T), np.full(len(cb), np.log(Kk))]
     d2 = ((X[:, None, :] - V[None]) ** 2).sum(-1)
@@ -66,7 +66,7 @@ qseen_pool = float(np.mean(list(qseen.values())))
 seen_in = [s in set(codebook(RUNS_WIDE[8])[3]) for s in seen_spk]
 rep = dict(q_obs_ext=qobs, q_obs_seen=qseen, seen_in_N8_codebook=int(sum(seen_in)))
 
-# estatistica de folga s(c) = ||c-v0||^2 - D_N(c)
+# slack statistic s(c) = ||c-v0||^2 - D_N(c)
 def slack(X, cb):
     return ((X - v0) ** 2).sum(1) - ((X[:, None] - cb[None]) ** 2).sum(-1).min(1)
 rep['slack_ext'] = {N: [float(np.percentile(slack(Xe, CB[N]), p)) for p in (10, 25, 50, 75, 90)] for N in CB}
@@ -76,7 +76,7 @@ rep['dist2_LJ_ext_pct'] = [float(np.percentile(((Xe - v0) ** 2).sum(1), p)) for 
 res_fit = {}
 for T in (1.0, 2.0, 3.0):
     o = {}
-    # (S) calibrado nas vozes treinadas (N=8 codebook contem as 8)
+    # (S) calibrated on the trained voices (the N=8 codebook contains all 8)
     tauS = fit_tau(Xs, CB[8], qseen_pool, T)
     o['tau_S'] = tauS
     o['pred_S'] = {N: float(1 - pcopy_gibbs(Xe, CB[N], T, tauS).mean()) for N in CB}
@@ -92,14 +92,14 @@ for T in (1.0, 2.0, 3.0):
     res_fit[T] = o
 rep['fits'] = res_fit
 
-# ---------- modelo populacional (livro-codigo aleatorio gaussiano) ----------
+# ---------- population model (Gaussian random codebook) ----------
 ev, U = np.linalg.eigh(G.Sb); ev = np.clip(ev, 0, None)
 mu = G.center
 Wx = G.Wx
 
 
 def q_pop_given_c(Xc, tau, Ns, Kk=K, cw_extra=0.0):
-    """para cada c: P(D_N > t) = (1-F_c(t))^N, codewords ~ N(mu, Sb + (1/K + cw_extra) I)."""
+    """for each c: P(D_N > t) = (1-F_c(t))^N, codewords ~ N(mu, Sb + (1/K + cw_extra) I)."""
     w = ev + 1.0 / Kk + cw_extra
     out_ = np.zeros((len(Xc), len(Ns)))
     for i, c in enumerate(Xc):
@@ -113,11 +113,11 @@ def q_pop_given_c(Xc, tau, Ns, Kk=K, cw_extra=0.0):
 Ns = [1, 2, 8, 32, 128, 247, 512, 1000, 2048, 2456, 10000, 100000]
 tauE = res_fit[1.0]['tau_E128']
 tauS = res_fit[1.0]['tau_S']
-# (i) c = as 38 referencias reais, codebook gaussiano
+# (i) c = the 38 real references, Gaussian codebook
 for name, tau in (('E128', tauE), ('S', tauS)):
     Q = q_pop_given_c(Xe, tau, Ns, cw_extra=np.trace(Wx) / 32 / 8)
     rep[f'pop_realc_tau{name}'] = dict(zip(map(str, Ns), Q.mean(0).round(4).tolist()))
-# (ii) c sorteado da populacao gaussiana
+# (ii) c drawn from the Gaussian population
 Sref = U @ np.diag(ev) @ U.T + Wx
 Lc = np.linalg.cholesky(Sref + 1e-9 * np.eye(32))
 Xc = mu + rng.standard_normal((1500, 32)) @ Lc.T
@@ -126,11 +126,11 @@ for name, tau in (('E128', tauE), ('S', tauS)):
     rep[f'pop_gaussc_tau{name}'] = dict(zip(map(str, Ns), Q.mean(0).round(4).tolist()))
     rep[f'pop_gaussc_tau{name}_floor'] = float(np.mean(((Xc - v0) ** 2).sum(1) < tau))
 rep['floor_realc_tauE'] = float(np.mean(((Xe - v0) ** 2).sum(1) < tauE))
-# variacoes: K, M
+# variations: K, M
 for lab, Kk, dtau in (('K8', 8, 2 * np.log(32 / 8)), ('K128', 128, -2 * np.log(4)), ('Mhalf', 32, -2 * np.log(2))):
     Q = q_pop_given_c(Xe, tauE + dtau, Ns, Kk=Kk, cw_extra=np.trace(Wx) / 32 / 8)
     rep[f'pop_realc_{lab}_T1'] = dict(zip(map(str, Ns), Q.mean(0).round(4).tolist()))
-# D_N real vs gaussiano (teste da hipotese gaussiana para a distorcao)
+# real vs Gaussian D_N (test of the Gaussian hypothesis for the distortion)
 dn = {}
 for N in CB:
     real = ((Xe[:, None] - CB[N][None]) ** 2).sum(-1).min(1)

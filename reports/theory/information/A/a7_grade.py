@@ -1,6 +1,6 @@
-"""a7: grade N x K (4 vozes novas, 8 treinadas) prevista no espaco comum do run N=128 com tau calibrado
-nas 38 externas em N=128 (a3) e a dependencia em K pela teoria: tau(K) = tau32 - 2T ln(K/32),
-ruido de codeword 1/K. Sem nenhum ajuste a grade.
+"""a7: N x K grid (4 new voices, 8 trained) predicted in the common space of the N=128 run with tau calibrated
+on the 38 externals at N=128 (a3) and the dependence on K from the theory: tau(K) = tau32 - 2T ln(K/32),
+codeword noise 1/K. No fitting to the grid at all.
 python3 -I a7_grade.py <coverage2> <results> <out>
 """
 import sys, os, json, csv
@@ -40,7 +40,7 @@ for r in runs:
     ss = sorted(set(x['speaker'] for x in man) - {'lj'})
     have = [s for s in ss if s in idx]
     cb = np.array([G.means[idx[s]] for s in have])
-    # locutores ausentes do espaco comum (n200): completar com sorteio gaussiano da populacao
+    # speakers missing from the common space (n200): fill in with Gaussian draws from the population
     miss = len(ss) - len(have)
     if miss > 0:
         ev, U = np.linalg.eigh(G.Sb); ev = np.clip(ev, 0, None)

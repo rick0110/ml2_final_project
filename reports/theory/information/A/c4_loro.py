@@ -1,5 +1,5 @@
-"""c4 (v3): previsao deixando o treino de fora, com forma T do proprio treino (largura por voz) ou T comum,
-e nivel lam extrapolado/interpolado em ln N a partir dos OUTROS dois treinos (ajustes por treino do c1).
+"""c4 (v3): leave-one-run-out prediction, with shape T from the run itself (per-voice width) or a common T,
+and level lam extrapolated/interpolated in ln N from the OTHER two runs (per-run fits from c1).
 python3 -I c4_loro.py <coverage2> <results> <out>"""
 import sys, os, json, csv
 import numpy as np

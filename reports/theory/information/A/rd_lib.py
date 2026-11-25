@@ -1,5 +1,5 @@
-"""Biblioteca comum (teoria2/A): leitura dos latentes e resultados salvos, geometria branqueada.
-Uso sempre com python3 -I; caminhos passados como argumento. Somente leitura dos dados."""
+"""Shared library (theory/information/A): reads the saved latents and results, whitened geometry.
+Always run with python3 -I; paths are passed as arguments. Data are only read."""
 import csv
 import numpy as np
 
@@ -12,8 +12,8 @@ def load_latents(path):
 
 
 def load_results(path):
-    """devolve dict speaker -> dict(copy=fracao copiada, margin=media, n, f0) para refs externas,
-    e o mesmo para seen/unseen."""
+    """returns dict speaker -> dict(copy=fraction copied, margin=mean, n, f0) for external refs,
+    and the same for seen/unseen."""
     rows = list(csv.DictReader(open(path)))
     out = {}
     for r in rows:
@@ -30,7 +30,7 @@ def load_results(path):
 
 
 class Geometry:
-    """Espaco branqueado pela covariancia dentro do locutor (LibriTTS de treino) de um run."""
+    """Space whitened by the within-speaker covariance (training LibriTTS) of one run."""
 
     def __init__(self, lat, add_post=True):
         mu, src, spk = lat['mu'].astype(float), lat['source'], lat['speaker']
@@ -47,9 +47,9 @@ class Geometry:
         self.post_var = np.exp(lat['logvar'][tr]).mean(0)
         Wc = W + (np.diag(self.post_var) if add_post else 0)
         ev, U = np.linalg.eigh(Wc)
-        self.T = U @ np.diag(ev ** -0.5) @ U.T  # branqueador simetrico
+        self.T = U @ np.diag(ev ** -0.5) @ U.T  # symmetric whitener
         self.Wc = Wc
-        x = mu @ self.T  # T simetrico
+        x = mu @ self.T  # T is symmetric
         self.x = x
         self.lat = lat
         self.n_s = np.array([(lib & (spk == s)).sum() for s in self.spk_ids])
@@ -58,14 +58,14 @@ class Geometry:
         self.lj = x[ljm].mean(0)
         self.lj_cov = np.cov(x[ljm].T)
         self.n_lj = ljm.sum()
-        # covariancia entre locutores por componentes de variancia (desbalanceado)
+        # between-speaker covariance from variance components (unbalanced)
         n = self.n_s.astype(float)
         S = len(n)
         gm = (n[:, None] * self.means).sum(0) / n.sum()
         dev = self.means - gm
         MSB = (n[:, None, None] * np.einsum('si,sj->sij', dev, dev)).sum(0) / (S - 1)
-        Wx = self.T @ W @ self.T  # dentro do locutor (sem ruido de amostragem do posterior) branqueado
-        Wx_all = np.eye(len(gm))  # com ruido do posterior (se add_post)
+        Wx = self.T @ W @ self.T  # within-speaker (without posterior sampling noise), whitened
+        Wx_all = np.eye(len(gm))  # with posterior noise (if add_post)
         n0 = (n.sum() - (n ** 2).sum() / n.sum()) / (S - 1)
         self.Sb = (MSB - (Wx if add_post else Wx_all)) / n0
         self.Sb_raw_means = np.cov(self.means.T)

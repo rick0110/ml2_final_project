@@ -1,5 +1,5 @@
-"""Leis para a fracao NAO copiada q(N,K) e versao mediada pela margem. Cada lei: fit(N,K,q,mu) -> funcao pred(N,K).
-mix = (u_s, sig) define q = media_s Phi(-(mu + u_s)/sig) (ligacao probit da margem com locutores fixos)."""
+"""Laws for the fraction NOT copied q(N,K) and a version mediated by the margin. Each law: fit(N,K,q,mu) -> function pred(N,K).
+mix = (u_s, sig) defines q = mean_s Phi(-(mu + u_s)/sig) (probit link of the margin with fixed speakers)."""
 import numpy as np
 from scipy.optimize import nnls, least_squares
 from scipy.stats import norm
@@ -37,7 +37,7 @@ def law_probit(cols):
     return fit
 
 def law_margin(cols, alpha_grid=None):
-    """ajusta lei linear (ou com expoente em grade) para mu, converte para q pela mistura probit."""
+    """fits a linear law (or one with a grid-searched exponent) for mu, converts it to q through the probit mixture."""
     def fit(N, K, q, mu, mix):
         u, sig = mix
         if alpha_grid is None:
@@ -73,8 +73,8 @@ LAWS_N = {
 }
 
 def mixture(Ym):
-    """Ym: treinos x locutores x frases. u_s = efeito fixo do locutor; sig^2 = var residual dentro do treino-locutor + var da interacao treino x locutor."""
-    run_m = Ym.mean((1, 2)); sm = Ym.mean(2)                        # treino x locutor
+    """Ym: runs x speakers x utterances. u_s = fixed speaker effect; sig^2 = residual var within run-speaker + var of the run x speaker interaction."""
+    run_m = Ym.mean((1, 2)); sm = Ym.mean(2)                        # run x speaker
     u = (sm - run_m[:, None]).mean(0)
     inter = sm - run_m[:, None] - u[None, :]
     a, b = sm.shape

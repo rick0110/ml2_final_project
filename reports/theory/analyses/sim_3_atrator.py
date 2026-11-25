@@ -1,13 +1,13 @@
-"""Modelo mecanistico: cobertura + atrator da voz padrao.
-Espaco de vozes R^d, v ~ N(0, diag(j^-alpha)) (alpha=0: isotropico); coordenada 0 = 'tom' (F0). Voz padrao v0 = delta*e0 (feminina, aguda).
-Dois decodificadores 'de cobertura' (renderizam o codigo c como uma media local das vozes treinadas):
- gp: regressao por processo gaussiano (RBF, escala ell, amplitude amp2) do residuo r(v)=g(v)-v0, g(v)=v,
-     media a priori v0 (ajuste fino a partir do checkpoint de um locutor) + ancora em v0 (M frases, residuo 0);
- nw: Nadaraya-Watson por FRASE: a voz padrao pesa M frases, cada locutor treinado pesa K frases:
+"""Mechanistic model: coverage + attractor of the default voice.
+Voice space R^d, v ~ N(0, diag(j^-alpha)) (alpha=0: isotropic); coordinate 0 = 'pitch' (F0). Default voice v0 = delta*e0 (female, high-pitched).
+Two 'coverage' decoders (they render the code c as a local average of the trained voices):
+ gp: Gaussian-process regression (RBF, scale ell, amplitude amp2) of the residual r(v)=g(v)-v0, g(v)=v,
+     prior mean v0 (fine-tuning from a single-speaker checkpoint) + anchor at v0 (M utterances, residual 0);
+ nw: Nadaraya-Watson per UTTERANCE: the default voice weighs M utterances, each trained speaker weighs K utterances:
      yhat(c) = [M k(c,v0) v0 + K sum_i k(c,v_i) ybar_i] / [M k(c,v0) + K sum_i k(c,v_i)].
-Locutor treinado: media de K frases, ruido s2_eff = sb2 + s2/K. Teste: c = v* + xi (sd sref) por frase,
-saida yhat(c) + eta (sd seta); 'copiada' se |saida - v*| < |saida - v0|.
-Uso: python sim_3_atrator.py grade gp|nw      ou   python sim_3_atrator.py run "dict(...)" """
+Trained speaker: mean of K utterances, noise s2_eff = sb2 + s2/K. Test: c = v* + xi (sd sref) per utterance,
+output yhat(c) + eta (sd seta); 'copied' if |output - v*| < |output - v0|.
+Usage: python sim_3_atrator.py grade gp|nw      or   python sim_3_atrator.py run "dict(...)" """
 import sys, itertools, numpy as np
 from scipy.stats import spearmanr
 from scipy.linalg import cho_factor, cho_solve
@@ -54,35 +54,35 @@ if __name__=='__main__' and sys.argv[1]=='grade':
         q,_,per=simulate(P,(8,32,128),seeds=2,ntest=200,nutt=15,ret_voice=True)
         qq=np.array([q[8],q[32],q[128]]); best.append((np.sqrt(np.mean((qq-obs)**2)),P,qq,icc_ratio(per[32])))
     best.sort(key=lambda t:t[0])
-    for b in best[:10]: print(round(b[0],4),{k:b[1][k] for k in ('dec','d','ell','delta','seta','alpha')},np.round(b[2],3),'sd_entre/sd_dentro=%.1f'%b[3])
+    for b in best[:10]: print(round(b[0],4),{k:b[1][k] for k in ('dec','d','ell','delta','seta','alpha')},np.round(b[2],3),'sd_between/sd_within=%.1f'%b[3])
     sys.exit()
 if __name__=='__main__' and sys.argv[1]=='run':
     P=dict(dec='nw',d=8,ell=1.0,amp2=4.0,delta=2.0,sb2=0.05,s2=0.5,K=32,sref=0.2,seta=0.1); P.update(eval(sys.argv[2]))
-    print('parametros:',P)
+    print('parameters:',P)
     Ns=(8,32,128,247,1000,2456,10000) if P['dec']=='nw' else (8,32,128,247,1000,2456)
     q,qs,per=simulate(P,Ns,seeds=6,ntest=300,ret_voice=True)
-    print('N     : '+' '.join(f'{N:6d}' for N in Ns)); print('q     : '+' '.join(f'{q[N]:6.3f}' for N in Ns)); print('sd sem: '+' '.join(f'{qs[N]:6.3f}' for N in Ns))
-    lN=np.log(Ns); lq=np.log([q[N] for N in Ns]); print('expoente local -dlnq/dlnN entre pontos:',np.round(-np.diff(lq)/np.diff(lN),3))
-    print('observado (38 vozes): q(8,32,128)=',obs,'; sd_entre/sd_dentro da margem ~ 2.5 (0.09/0.036)')
-    for N in (8,32,128): print(f'  N={N}: sd_entre/sd_dentro = {icc_ratio(per[N]):.2f}')
-    print('correlacoes de postos por voz (media sobre sementes), copia vs:')
+    print('N     : '+' '.join(f'{N:6d}' for N in Ns)); print('q     : '+' '.join(f'{q[N]:6.3f}' for N in Ns)); print('sd seed: '+' '.join(f'{qs[N]:6.3f}' for N in Ns))
+    lN=np.log(Ns); lq=np.log([q[N] for N in Ns]); print('local exponent -dlnq/dlnN between points:',np.round(-np.diff(lq)/np.diff(lN),3))
+    print('observed (38 voices): q(8,32,128)=',obs,'; margin sd_between/sd_within ~ 2.5 (0.09/0.036)')
+    for N in (8,32,128): print(f'  N={N}: sd_between/sd_within = {icc_ratio(per[N]):.2f}')
+    print('per-voice rank correlations (mean over seeds), copy vs:')
     for N in (8,32,128,1000):
         c=np.nanmean([(spearmanr(x['cop'],x['dist0'])[0],spearmanr(x['cop'],x['pitch'])[0],spearmanr(x['cop'],x['nn'])[0]) for x in per[N]],0)
-        print(f'  N={N:4d}: dist. voz padrao {c[0]:+.2f} | tom {c[1]:+.2f} | dist. vizinho treinado {c[2]:+.2f}')
-    print('  observado: dist.padrao +.47/+.58/+.53; F0 -.53/-.52/-.37; vizinho -.33/-.40/+.13 (N=8/32/128)')
+        print(f'  N={N:4d}: dist. default voice {c[0]:+.2f} | pitch {c[1]:+.2f} | dist. trained neighbour {c[2]:+.2f}')
+    print('  observed: dist.default +.47/+.58/+.53; F0 -.53/-.52/-.37; neighbour -.33/-.40/+.13 (N=8/32/128)')
     for N in (8,32,128):
-        cop=np.concatenate([x['cop'] for x in per[N]]); print(f'  N={N}: fracao de vozes com 10%<copia<90%: {np.mean((cop>.1)&(cop<.9)):.2f}; copia=0: {np.mean(cop==0):.2f}; copia=1: {np.mean(cop==1):.2f}')
+        cop=np.concatenate([x['cop'] for x in per[N]]); print(f'  N={N}: fraction of voices with 10%<copy<90%: {np.mean((cop>.1)&(cop<.9)):.2f}; copy=0: {np.mean(cop==0):.2f}; copy=1: {np.mean(cop==1):.2f}')
     for a,b in ((8,32),(32,128),(8,128)):
-        print(f'  corr. postos copia N={a} vs {b}: {np.nanmean([spearmanr(per[a][s]["cop"],per[b][s]["cop"])[0] for s in range(6)]):.2f}')
-    print('  corr(ganho de margem 8->128, margem em 8) = %.2f (observado -0.55)'%np.mean([np.corrcoef(per[128][s]['m']-per[8][s]['m'],per[8][s]['m'])[0,1] for s in range(6)]))
-    print('ruido de painel (mesmas vozes, sementes de treino diferentes):')
+        print(f'  rank corr. copy N={a} vs {b}: {np.nanmean([spearmanr(per[a][s]["cop"],per[b][s]["cop"])[0] for s in range(6)]):.2f}')
+    print('  corr(margin gain 8->128, margin at 8) = %.2f (observed -0.55)'%np.mean([np.corrcoef(per[128][s]['m']-per[8][s]['m'],per[8][s]['m'])[0,1] for s in range(6)]))
+    print('panel noise (same voices, different training seeds):')
     for N in (8,32,128):
         Cc=np.array([x['cop'] for x in per[N]])
         for nv in (4,38):
             blocks=range(0,Cc.shape[1]-nv,nv)
-            print(f'  N={N:3d} painel {nv:2d} vozes: sd entre sementes={np.mean([np.std(Cc[:,i:i+nv].mean(1)) for i in blocks]):.3f}  amplitude media={np.mean([np.ptp(Cc[:,i:i+nv].mean(1)) for i in blocks]):.3f}')
+            print(f'  N={N:3d} panel {nv:2d} voices: sd between seeds={np.mean([np.std(Cc[:,i:i+nv].mean(1)) for i in blocks]):.3f}  mean range={np.mean([np.ptp(Cc[:,i:i+nv].mean(1)) for i in blocks]):.3f}')
     if P['dec']=='nw':
-        # efeito do peso da voz padrao M e de K (previsoes para novos treinos)
-        print('efeito de K e de M (nw), q por N:')
+        # effect of the default-voice weight M and of K (predictions for new training runs)
+        print('effect of K and M (nw), q per N:')
         for K in (8,32,128):
             Q=dict(P); Q['K']=K; qq,_,_=simulate(Q,(8,32,128,1000),seeds=4,ntest=400); print(f'  K={K:3d}: '+' '.join(f'{qq[N]:.3f}' for N in (8,32,128,1000)))

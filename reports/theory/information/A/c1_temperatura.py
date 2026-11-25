@@ -1,9 +1,9 @@
-"""c1 (v3): temperatura por treino T(N) pelo FORMATO da resposta por voz no canal de Gibbs.
-Para cada treino r: P(copia | c) = 1 - pi_0(c),  pi_0 = M e^{-d0^2/2T} / (M e^{-d0^2/2T} + K sum_i e^{-di^2/2T}),
-parametros (T_r, lam_r = ln(M_ef/K)); verossimilhanca binomial (25 frases por voz). T_r = forma, lam_r = nivel.
-Capacidade usada: C(T) = 1/2 sum_j log2(1 + lam_j / T)  (Gibbs a temperatura T = Bayes com ruido T por direcao).
-Previsao deixando o treino de fora: T_r proprio (forma) + nivel (lam ou tau=2T lam) dos OUTROS treinos.
-Decomposicao cobertura x capacidade: q(cb_N, T_N') contrafactual.
+"""c1 (v3): per-run temperature T(N) from the SHAPE of the per-voice response in the Gibbs channel.
+For each run r: P(copy | c) = 1 - pi_0(c),  pi_0 = M e^{-d0^2/2T} / (M e^{-d0^2/2T} + K sum_i e^{-di^2/2T}),
+parameters (T_r, lam_r = ln(M_ef/K)); binomial likelihood (25 utterances per voice). T_r = shape, lam_r = level.
+Capacity used: C(T) = 1/2 sum_j log2(1 + lam_j / T)  (Gibbs at temperature T = Bayes with noise T per direction).
+Leave-one-run-out prediction: the run's own T_r (shape) + level (lam or tau=2T lam) from the OTHER runs.
+Coverage x capacity decomposition: counterfactual q(cb_N, T_N').
 python3 -I c1_temperatura.py <coverage2> <results> <out>
 """
 import sys, os, json, csv
@@ -24,7 +24,7 @@ C_bits = lambda T: float(0.5 * np.sum(np.log2(1 + ev / T)))
 
 
 def logit_copy(X, cb, T, lam, K):
-    """log-odds de copia = ln(K sum e^{-di^2/2T}) - ln(M e^{-d0^2/2T}),  lam = ln(M/K)."""
+    """log-odds of copy = ln(K sum e^{-di^2/2T}) - ln(M e^{-d0^2/2T}),  lam = ln(M/K)."""
     d0 = ((X - v0) ** 2).sum(1)
     di = ((X[:, None] - cb[None]) ** 2).sum(-1)
     return logsumexp(-di / (2 * T), axis=1) + d0 / (2 * T) - lam
@@ -52,7 +52,7 @@ def qpred(X, cb, T, lam, K):
     return float(1 - expit(logit_copy(X, cb, T, lam, K)).mean())
 
 
-# ---------- treinos -wide (38 externas) ----------
+# ---------- -wide runs (38 externals) ----------
 spk, X = G.refs('external')
 CB = {N: np.array([G.means[idx[s]] for s in man(r) if s in idx]) for N, r in RUNS_WIDE.items()}
 OBS = {N: np.array([load_results(f'{resd}/{r}/step_2500/strength_1.0/results.csv')[('external', s)]['copy'] for s in spk])
@@ -73,10 +73,10 @@ for N in (8, 32, 128):
                           frac_evidence=1 / T, q_obs=float(1 - OBS[N].mean()), q_fit=qpred(X, CB[N], T, lam, 32),
                           boot_T=bs[:, 0].tolist())
     print(N, {k: v for k, v in rep['wide'][N].items() if k != 'boot_T'}, flush=True)
-# tendencia: P(T8 > T128) no bootstrap
+# trend: P(T8 > T128) in the bootstrap
 b8, b128 = np.array(rep['wide'][8]['boot_T']), np.array(rep['wide'][128]['boot_T'])
 rep['P_T8_gt_T128'] = float(np.mean(b8[:, None] > b128[None, :]))
-# ajuste conjunto com T comum (para comparar verossimilhanca)
+# joint fit with a common T (to compare likelihoods)
 def nll_common(p, shareT=True):
     tot = 0
     for j, N in enumerate((8, 32, 128)):
@@ -93,8 +93,8 @@ for lT in np.log([3, 10, 30]):
             best = r
 nll_sep = sum(nll([np.log(fits[N][0]), fits[N][1]], X, CB[N], OBS[N], 32) for N in (8, 32, 128))
 rep['T_comum'] = dict(T=float(np.exp(best.x[0])), lams=best.x[1:].tolist(), nll_comum=float(best.fun), nll_sep=float(nll_sep),
-                      LR=float(2 * (best.fun - nll_sep)), nota='LR ~ chi2(2) sob T comum, mas binomial superdispersa (x15) => dividir por ~15')
-# ---------- previsao deixando o treino de fora ----------
+                      LR=float(2 * (best.fun - nll_sep)), nota='LR ~ chi2(2) under a common T, but the binomial is overdispersed (x15) => divide by ~15')
+# ---------- leave-one-run-out prediction ----------
 loro = {}
 for N in (8, 32, 128):
     others = [M for M in (8, 32, 128) if M != N]
@@ -103,7 +103,7 @@ for N in (8, 32, 128):
     tau_o = float(np.mean([2 * fits[M][0] * fits[M][1] for M in others]))
     loro[N] = dict(T_proprio=T, q_lam_outros=qpred(X, CB[N], T, lam_o, 32), q_tau_outros=qpred(X, CB[N], T, tau_o / (2 * T), 32),
                    q_obs=float(1 - OBS[N].mean()))
-    # T previsto pela tendencia log T ~ log N dos outros dois (sem nada do treino N)
+    # T predicted by the log T ~ log N trend of the other two (nothing from run N)
     lt = np.polyfit(np.log(others), np.log([fits[M][0] for M in others]), 1)
     Tx = float(np.exp(np.polyval(lt, np.log(N))))
     loro[N]['T_extrap_outros'] = Tx
@@ -111,7 +111,7 @@ for N in (8, 32, 128):
     loro[N]['q_tudo_dos_outros_tau'] = qpred(X, CB[N], Tx, tau_o / (2 * Tx), 32)
 rep['loro'] = loro
 print('loro', loro, flush=True)
-# ---------- decomposicao cobertura x capacidade (nivel lam fixo = media; e tau fixo) ----------
+# ---------- coverage x capacity decomposition (level lam fixed = mean; and tau fixed) ----------
 dec = {}
 for mode in ('lam', 'tau'):
     lam_bar = float(np.mean([fits[N][1] for N in fits])); tau_bar = float(np.mean([2 * fits[N][0] * fits[N][1] for N in fits]))
@@ -126,7 +126,7 @@ for mode in ('lam', 'tau'):
         cap = 0.5 * ((Q(a, b) - Q(a, a)) + (Q(b, b) - Q(b, a)))
         d[f'{a}->{b}'] = dict(total=tot, cobertura=cov_, capacidade=cap, q=[Q(a, a), Q(b, a), Q(a, b), Q(b, b)])
     dec[mode] = d
-# bootstrap da decomposicao 8->128 (modo lam), refazendo os ajustes
+# bootstrap of the 8->128 decomposition (lam mode), redoing the fits
 bd = []
 for b in range(60):
     ii = rng.integers(0, 38, 38)
@@ -142,7 +142,7 @@ dec['boot_8_128_lam'] = dict(total_ci=np.percentile(bd[:, 0], [5, 95]).tolist(),
                              frac_cap_median=float(np.median(bd[:, 1] / np.where(np.abs(bd[:, 0]) > 1e-3, bd[:, 0], np.nan))))
 rep['decomposicao'] = dec
 print('dec', json.dumps(dec)[:2000], flush=True)
-# ---------- grade (4 novas + 8 treinadas por treino) ----------
+# ---------- grid (4 new + 8 trained per run) ----------
 su, Xu = G.refs('unseen'); ss, Xs = G.refs('seen')
 Xg = np.vstack([Xu, Xs])
 grid = {}

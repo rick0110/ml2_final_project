@@ -1,5 +1,5 @@
-"""c3 (v3): extrapolacao com T comum (forma) e nivel lam(N) = a + b ln N ajustado nos 3 treinos -wide (T comum);
-livro-codigo gaussiano (espectro medido) e livro-codigo empirico (127 vozes; so N<=127).
+"""c3 (v3): extrapolation with a common T (shape) and level lam(N) = a + b ln N fitted on the 3 -wide runs (common T);
+Gaussian codebook (measured spectrum) and empirical codebook (127 voices; N<=127 only).
 python3 -I c3_extrap.py <coverage2> <out>"""
 import sys, os, json
 import numpy as np

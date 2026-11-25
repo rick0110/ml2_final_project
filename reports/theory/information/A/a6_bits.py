@@ -1,7 +1,7 @@
-"""a6: bits por voz. Para cada referencia externa: tolerancia t(c) = ||c-v0||^2 - tau (tau da regra dura, a5),
-L(c) = -log2 P_v(||c-V||^2 <= t) (livro-codigo aleatorio, cauda gaussiana; = log2 do N em que a voz passa a ser
-copiada com prob. 1-1/e), e R_wf(t) = taxa de agua reversa da fonte das referencias (espectro de Sb+Wx) em D=t
-(cota inferior: nenhum livro-codigo de 2^R vozes faz melhor em media). Tambem a decomposicao em direcoes.
+"""a6: bits per voice. For each external reference: tolerance t(c) = ||c-v0||^2 - tau (tau from the hard rule, a5),
+L(c) = -log2 P_v(||c-V||^2 <= t) (random codebook, Gaussian tail; = log2 of the N at which the voice starts being
+copied with prob. 1-1/e), and R_wf(t) = reverse water-filling rate of the reference source (spectrum of Sb+Wx) at D=t
+(lower bound: no codebook of 2^R voices does better on average). Also the decomposition into directions.
 python3 -I a6_bits.py <coverage2> <out>
 """
 import sys, os, json

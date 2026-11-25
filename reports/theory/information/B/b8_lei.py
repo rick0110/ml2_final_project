@@ -1,8 +1,8 @@
-"""b8: lei de razao de verossimilhanca 'atomo + cobertura' em unidades de log-contagem.
-Treinadas: Lambda = ln K - ln M_eff + (d0^2 - d_own^2)/(2 s^2)          (atomo proprio, sem emprestimo: K so)
-Novas:     Lambda = ln K - ln M_eff + d0^2/(2 s^2) + g * LSE_i(-d_i^2/(2 s^2))   (cobertura; g=1 NW; versao 'vizinho' usa min)
-s^2 = 12.1 (dispersao das treinadas, b5), tau = 0.83 (ICC), ln M_eff: UNICO parametro ajustado, nas treinadas.
-Uso: python3 -I b8_lei.py out/b0.npz"""
+"""b8: 'atom + coverage' likelihood-ratio law in log-count units.
+Trained: Lambda = ln K - ln M_eff + (d0^2 - d_own^2)/(2 s^2)          (own atom, no borrowing: K only)
+New:     Lambda = ln K - ln M_eff + d0^2/(2 s^2) + g * LSE_i(-d_i^2/(2 s^2))   (coverage; g=1 NW; the 'neighbour' version uses min)
+s^2 = 12.1 (spread of the trained voices, b5), tau = 0.83 (ICC), ln M_eff: the ONLY fitted parameter, on the trained voices.
+Usage: python3 -I b8_lei.py out/b0.npz"""
 import sys, os, json; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from scipy.stats import norm, spearmanr
@@ -35,7 +35,7 @@ def q_of(r, grp, lnM, mode="nw"):
 def loss(lnM):
     return sum((q_of(r, "seen", lnM)[1] - q_of(r, "seen", lnM)[0]) ** 2 for r in RUNS)
 o = minimize_scalar(loss, bounds=(0, 40), method="bounded"); lnM = o.x
-print(f"ln M_eff ajustado nas treinadas = {lnM:.2f}  (M_eff = {np.exp(lnM):.3g}; ln 2000 = {np.log(2000):.2f}; ln 15100 = {np.log(15100):.2f})")
+print(f"ln M_eff fitted on the trained voices = {lnM:.2f}  (M_eff = {np.exp(lnM):.3g}; ln 2000 = {np.log(2000):.2f}; ln 15100 = {np.log(15100):.2f})")
 res = dict(lnM=lnM, rows=[])
 for r in RUNS:
     g = G[r]["g"]; s = f"{r:18s} N={g.N:3d} K={g.K:3d}"; row = dict(run=r, N=g.N, K=g.K)
@@ -43,7 +43,7 @@ for r in RUNS:
         a = q_of(r, grp, lnM)
         if a is None: continue
         b = q_of(r, grp, lnM, mode="nn") if grp != "seen" else None
-        s += f" | {grp[:3]} obs {a[0]:.2f} prev {a[1]:.2f}" + (f" (viz {b[1]:.2f})" if b else "")
+        s += f" | {grp[:3]} obs {a[0]:.2f} pred {a[1]:.2f}" + (f" (nbr {b[1]:.2f})" if b else "")
         row[grp] = [a[0], a[1]] + ([b[1]] if b else [])
         if grp == "external" and len(a[3]) > 10: s += f" rho {spearmanr(a[2], a[3]).correlation:.2f}"
     res["rows"].append(row); print(s)
@@ -52,5 +52,5 @@ import collections
 agg = collections.defaultdict(list)
 for row in res["rows"]:
     if "seen" in row: agg[("K", row["K"])].append(row["seen"]); agg[("N", row["N"])].append(row["seen"])
-for key in sorted(agg): a = np.array(agg[key]); print(f"  treinadas {key}: obs {a[:,0].mean():.3f} prev {a[:,1].mean():.3f} (n={len(a)})")
+for key in sorted(agg): a = np.array(agg[key]); print(f"  trained {key}: obs {a[:,0].mean():.3f} pred {a[:,1].mean():.3f} (n={len(a)})")
 json.dump(res, open("out/b8.json", "w"), indent=1, default=float)

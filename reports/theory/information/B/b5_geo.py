@@ -1,6 +1,6 @@
-"""b5: grandezas geometricas medidas no latente (nao usam copia): eixo de decisao LJ-LibriTTS, ICC ao longo dele (=> K0 do efeito de desenho),
-dispersao de d^2 = ||v-v0||^2 entre vozes treinadas (=> escala s0^2 da evidencia), ruido de referencia projetado no gradiente.
-Uso: python3 -I b5_geo.py out/b0.npz"""
+"""b5: geometric quantities measured in the latent (copying not used): LJ-LibriTTS decision axis, ICC along it (=> K0 of the design effect),
+spread of d^2 = ||v-v0||^2 among trained voices (=> evidence scale s0^2), reference noise projected onto the gradient.
+Usage: python3 -I b5_geo.py out/b0.npz"""
 import sys, os, json; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from bt_lib import load, Geo
@@ -24,12 +24,12 @@ for r in RUNS:
     print(r, {k: round(v, 3) for k, v in out[r].items()})
 icc = np.array([o["icc_axis"] for o in out.values()]); K0 = np.array([o["K0"] for o in out.values()])
 sd = np.array([o["sd_d2"] for o in out.values()]); md = np.array([o["mean_d"] for o in out.values()])
-print("\nICC no eixo de decisao: mediana %.3f (min %.3f max %.3f) => K0 = (1-ICC)/ICC mediana %.1f" % (np.median(icc), icc.min(), icc.max(), np.median(K0)))
-print("DP de ||v-v0||^2 entre vozes treinadas (corrigido): mediana %.1f ; distancia media %.1f" % (np.median(sd), np.median(md)))
-SIG_TOT = 1 / 0.42   # 04_dados: probit de q_seen em ln K, b = 0.42 [0.35, 0.53]
+print("\nICC on the decision axis: median %.3f (min %.3f max %.3f) => K0 = (1-ICC)/ICC median %.1f" % (np.median(icc), icc.min(), icc.max(), np.median(K0)))
+print("SD of ||v-v0||^2 among trained voices (corrected): median %.1f ; mean distance %.1f" % (np.median(sd), np.median(md)))
+SIG_TOT = 1 / 0.42   # 04_dados: probit of q_seen on ln K, b = 0.42 [0.35, 0.53]
 for icc_lat in [0.83, 0.88, 0.94]:
     sigL = SIG_TOT * np.sqrt(icc_lat); tau = SIG_TOT * np.sqrt(1 - icc_lat)
     s0 = np.median(sd) / (2 * sigL)
-    print(f"ICC latente {icc_lat}: sigma_L={sigL:.2f} nats, tau_w={tau:.2f} nats  => s0^2 = sd(d2)/(2 sigma_L) = {s0:.1f}; "
+    print(f"latent ICC {icc_lat}: sigma_L={sigL:.2f} nats, tau_w={tau:.2f} nats  => s0^2 = sd(d2)/(2 sigma_L) = {s0:.1f}; "
           f"sigma_ref(R=1) = |v0-u|/s0^2 = {np.median([o['dist_LJ_pop'] for o in out.values()])/s0:.2f} nats")
 json.dump(out, open("out/b5.json", "w"), indent=1)

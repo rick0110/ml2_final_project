@@ -1,5 +1,5 @@
-"""b25: decomposicao nas 38 externas (wide): espalhamento das saidas (H(Y)) vs ruido por voz (proxy H(Y|S): R=1 x R=4 da mesma referencia),
-e vs distancia ao centroide real (erro). Gaussiano em base PCA comum + escalar. Uso: python3 -I b25_decomp38.py out/b0.npz out/b12_emb.npz [B]"""
+"""b25: decomposition on the 38 externals (wide): spread of the outputs (H(Y)) vs per-voice noise (proxy H(Y|S): R=1 x R=4 of the same reference),
+and vs distance to the real centroid (error). Gaussian in a common PCA basis + scalar. Usage: python3 -I b25_decomp38.py out/b0.npz out/b12_emb.npz [B]"""
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from bt_lib import load
@@ -24,10 +24,10 @@ def stats(A, Bm, Cr, idx):
         out += [0.5 * np.log2(np.linalg.det(St) / np.linalg.det(Sw))]
         out += [0.5 * np.log2(np.linalg.det(2*np.pi*np.e*St)), 0.5 * np.log2(np.linalg.det(2*np.pi*np.e*Sw))]
     return np.array(out)
-names = ["espalhamento entre vozes D_tot", "ruido por voz D_w (R1 x R4)", "erro saida-centroide real", "espalhamento das vozes reais",
+names = ["spread between voices D_tot", "per-voice noise D_w (R1 x R4)", "output-real centroid error", "spread of the real voices",
          "I_G k=3", "H(Y) k=3", "H(Y|S) k=3", "I_G k=6", "H(Y) k=6", "H(Y|S) k=6"]
 st = {N: stats(*Y[N], Cr, np.arange(38)) for N in [8, 128]}
 bs = np.array([stats(*Y[128], Cr, ii) - stats(*Y[8], Cr, ii) for ii in (rng.integers(0, 38, 38) for _ in range(B))])
-print("38 vozes externas, forca 1.0 (frase s0). Distancias quadradas em embeddings unitarios; entropias gaussianas em bits.")
+print("38 external voices, strength 1.0 (utterance s0). Squared distances on unit embeddings; Gaussian entropies in bits.")
 for j, nm in enumerate(names):
-    print(f"  {nm:34s}: N=8 {st[8][j]:7.3f}  N=128 {st[128][j]:7.3f}  dif {st[128][j]-st[8][j]:+.3f} [IC95 {np.percentile(bs[:,j],2.5):+.3f}, {np.percentile(bs[:,j],97.5):+.3f}]")
+    print(f"  {nm:34s}: N=8 {st[8][j]:7.3f}  N=128 {st[128][j]:7.3f}  diff {st[128][j]-st[8][j]:+.3f} [95% CI {np.percentile(bs[:,j],2.5):+.3f}, {np.percentile(bs[:,j],97.5):+.3f}]")

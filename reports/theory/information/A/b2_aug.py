@@ -1,5 +1,5 @@
-"""b2 (ponto 6): pseudo-locutores por velocidade (runs -aug). Onde caem no espaco latente do proprio run?
-Codewords reais vs reais+pseudo (LibriTTS) vs pseudo da LJ; efeito na distorcao D_N e na folga das referencias.
+"""b2 (point 6): speed-perturbed pseudo-speakers (-aug runs). Where do they land in the run's own latent space?
+Real codewords vs real+pseudo (LibriTTS) vs LJ pseudo; effect on the distortion D_N and on the references' slack.
 python3 -I b2_aug.py <coverage2> <results> <out>
 """
 import sys, os, json
@@ -14,7 +14,7 @@ for run in ('n8_k8_s1-aug', 'n8_k128_s1-aug'):
     mu, src, spk = lat['mu'].astype(float), lat['source'], lat['speaker']
     tr = src != 'refs'
     real = tr & np.array([('_v' not in s) and s != 'lj' for s in spk])
-    # branqueamento pelo W dos locutores REAIS + ruido do posterior
+    # whitening by the W of the REAL speakers + posterior noise
     ids = sorted(set(spk[real]))
     res_ = np.concatenate([mu[real & (spk == s)] - mu[real & (spk == s)].mean(0) for s in ids])
     W = res_.T @ res_ / (len(res_) - len(ids)) + np.diag(np.exp(lat['logvar'][tr]).mean(0))
@@ -40,12 +40,12 @@ for run in ('n8_k8_s1-aug', 'n8_k128_s1-aug'):
                 real_to_nearest_real_median=float(np.median(real_nn)), lj_pseudo_to_lj=ljp_d,
                 lj_to_real_center=float(np.linalg.norm(v0 - np.mean([M[s] for s in realv], 0))),
                 utts_per_pseudo_median=float(np.median([n[p] for p in pseu])))
-    # projecao no eixo de tom: os pseudo se movem ao longo de uma direcao comum?
+    # projection onto the pitch axis: do the pseudo-speakers move along a common direction?
     shifts = np.array([M[p] - M[p.split('_v')[0]] for p in pseu if p.split('_v')[0] in M])
     sv = np.linalg.svd(shifts - 0, compute_uv=False)
     out_['shift_PR'] = float(sv.sum() ** 2 / (sv ** 2).sum()) if len(sv) else None
     out_['shift_top1_frac'] = float(sv[0] ** 2 / (sv ** 2).sum())
-    # referencias
+    # references
     rr = load_results(f'{resd}/{run}/step_2500/strength_1.0/results.csv')
     refs = {}
     for kind in ('unseen', 'seen'):

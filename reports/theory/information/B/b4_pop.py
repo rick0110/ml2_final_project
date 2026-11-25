@@ -1,5 +1,5 @@
-"""b4: modelo populacional. Calibra s2 (e opcionalmente M_eff) SO nas vozes treinadas q_seen(K) e preve vozes novas.
-Uso: python3 -I b4_pop.py out/b0.npz out/ <run_ref> [nrep]"""
+"""b4: population model. Calibrates s2 (and optionally M_eff) ONLY on the trained voices q_seen(K) and predicts new voices.
+Usage: python3 -I b4_pop.py out/b0.npz out/ <run_ref> [nrep]"""
 import sys, os, json; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from scipy.optimize import minimize_scalar, minimize
@@ -7,7 +7,7 @@ from bt_lib import load
 from bt_pop import *
 S = load(sys.argv[1]); OUT = sys.argv[2]; RUN = sys.argv[3]; NREP = int(sys.argv[4]) if len(sys.argv) > 4 else 30
 p = Pop(S[RUN]); rng0 = np.random.default_rng(0)
-# observado (media dos treinos plain/wide N>=8): q_seen por K; q externo por N (K=32)
+# observed (mean over plain/wide runs N>=8): q_seen per K; external q per N (K=32)
 Q_SEEN = {8: np.mean([.55, .55, .42, .49, .48]), 32: np.mean([.26, .22, .20, .24, .24, .22, .34, .33]), 128: np.mean([.09, .12, .14, .15])}
 Q_EXT = {8: .434, 32: .302, 128: .211}
 
@@ -20,7 +20,7 @@ def sim(N, K, s2, logM, n_test=400, reps=NREP, seed=1, link="mean", R=1, kind="u
         else:
             vs = V[rng.integers(0, N, n_test)]
         C = vs + p.noise(n_test, rng, R)
-        Vhat = V + p.noise(N, rng, K)                        # centro de classe estimado com K frases
+        Vhat = V + p.noise(N, rng, K)                        # class centre estimated from K utterances
         L = Lam(p, C, Vhat, K, s2, logM + np.log(Mscale), P=P, post=post)
         pr = pc(L, link); out.append(1 - pr.mean()); pv.append(pr)
     if per_voice: return float(np.mean(out)), np.concatenate(pv)
@@ -54,7 +54,7 @@ for link in ["mean", "samp"]:
         r["unseen_halfM"] = {N: sim(N, 32, s2, lm, link=link, Mscale=0.5) for N in [32, 128]}
         r["unseen_2K"] = {N: sim(N, 64, s2, lm, link=link) for N in [32, 128]}
         r["unseen_R4"] = {N: sim(N, 32, s2, lm, link=link, R=4) for N in [8, 32, 128]}
-        # per-voice distribution at N=8,32,128: fraction of voices with 0.1<p<0.9 (25 frases: binomial nao incluida)
+        # per-voice distribution at N=8,32,128: fraction of voices with 0.1<p<0.9 (25 utterances: binomial not included)
         r["frac_mid"] = {}
         for N in [8, 32, 128]:
             _, pv = sim(N, 32, s2, lm, link=link, per_voice=True, reps=10)

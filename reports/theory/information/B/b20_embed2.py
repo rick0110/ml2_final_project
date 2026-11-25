@@ -1,6 +1,6 @@
-"""b20: embeddings Resemblyzer de saidas (pasta de wavs) ou de referencias LibriTTS de uma lista de locutores.
-Uso: python3 -I b20_embed2.py outs <wav_dir> <out.npz>
-     python3 -I b20_embed2.py refs <libritts_dir> <out.npz> <ids_ref.txt> [max_por_locutor]"""
+"""b20: Resemblyzer embeddings of outputs (folder of wavs) or of LibriTTS references for a list of speakers.
+Usage: python3 -I b20_embed2.py outs <wav_dir> <out.npz>
+       python3 -I b20_embed2.py refs <libritts_dir> <out.npz> <ids_ref.txt> [max_per_speaker]"""
 import sys, os, glob
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, os.path.join(HERE, "pylib"))
 import numpy as np
@@ -9,7 +9,7 @@ mode, src, out = sys.argv[1:4]; enc = VoiceEncoder("cpu", verbose=False); rng = 
 keys, embs = [], []
 def add(k, p):
     try: embs.append(enc.embed_utterance(preprocess_wav(p))); keys.append(k)
-    except Exception as ex: print("falhou", p, ex)
+    except Exception as ex: print("failed", p, ex)
 if mode == "outs":
     for p in sorted(glob.glob(os.path.join(src, "*", "step_2500", "*", "*.wav"))):
         q = p.split(os.sep); add("out|" + q[-4] + "|" + q[-2] + "|" + q[-1][:-4], p)

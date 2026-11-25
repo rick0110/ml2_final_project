@@ -1,11 +1,11 @@
-"""a2: decodificador de Gibbs (canal de teste de Blahut-Arimoto restrito ao livro-codigo de treino)
-aplicado as 38 referencias externas com os livros-codigo REAIS aninhados (N=8 c 32 c 128),
-todos no espaco branqueado do run N=128.
+"""a2: Gibbs decoder (Blahut-Arimoto test channel restricted to the training codebook)
+applied to the 38 external references with the REAL nested codebooks (N=8 c 32 c 128),
+all in the whitened space of the N=128 run.
 
-  pi_s(c) ∝ n_s exp(-||c - v_s||^2 / 2T),  n_s = K (LibriTTS) ou M_ef (LJ)
+  pi_s(c) ∝ n_s exp(-||c - v_s||^2 / 2T),  n_s = K (LibriTTS) or M_ef (LJ)
   y(c)    = sum_s pi_s v_s
-  rho(c)  = 1 - <y - v0, c - v0>/||c - v0||^2        (Lema 1 no espaco latente)
-  P(copia | c) = Phi( kappa (1/2 - rho) ),  kappa = ||Delta||^2/sigma_w
+  rho(c)  = 1 - <y - v0, c - v0>/||c - v0||^2        (Lemma 1 in the latent space)
+  P(copy | c) = Phi( kappa (1/2 - rho) ),  kappa = ||Delta||^2/sigma_w
 
 python3 -I a2_gibbs_dados.py <coverage2> <results> <out>
 """
@@ -29,7 +29,7 @@ for N, r in RUNS_WIDE.items():
     OBS[N] = np.array([res[('external', s)]['copy'] for s in spk])
 K = 32
 SIGW = 0.036
-DELTA2 = 0.65   # ||Delta||^2 tipico no espaco da metrica (02_derivacao, cos ~0.68); entra so na suavidade
+DELTA2 = 0.65   # typical ||Delta||^2 in the metric space (02_derivacao, cos ~0.68); only affects the smoothness
 KAPPA = DELTA2 / SIGW
 
 
@@ -67,7 +67,7 @@ import pandas as pd
 df = pd.DataFrame(rows)
 df.to_csv(f'{out}/a2_grade.csv', index=False)
 rep = {'q_obs': {N: float(1 - OBS[N].mean()) for N in OBS}}
-# (a) zero parametros: T=1 (Bayes), M nominal
+# (a) zero parameters: T=1 (Bayes), nominal M
 def at(T, lnM):
     o = {}
     for N in (8, 32, 128):
@@ -76,21 +76,21 @@ def at(T, lnM):
                     rmse_voice=float(np.sqrt(((p - OBS[N]) ** 2).mean())))
     return o
 rep['a_T1_Mnom'] = at(1.0, lnM_nom)
-# (b) M nominal, T ajustado so em N=128 (sse por voz)
+# (b) nominal M, T fitted only at N=128 (per-voice sse)
 sub = df[np.isclose(df.lnM, lnMs[np.argmin(abs(lnMs - lnM_nom))])]
 b = sub.loc[sub.sse128.idxmin()]
 rep['b_fitT_on128_Mnom'] = dict(T=float(b['T']), lnM=float(b.lnM), pred=at(b['T'], b.lnM))
-# (c) T e lnM ajustados so em N=128
+# (c) T and lnM fitted only at N=128
 c = df.loc[df.sse128.idxmin()]
 rep['c_fitTM_on128'] = dict(T=float(c['T']), lnM=float(c.lnM), pred=at(c['T'], c.lnM))
-# (d) T e lnM ajustados so em N=8, prevendo 32 e 128
+# (d) T and lnM fitted only at N=8, predicting 32 and 128
 d = df.loc[df.sse8.idxmin()]
 rep['d_fitTM_on8'] = dict(T=float(d['T']), lnM=float(d.lnM), pred=at(d['T'], d.lnM))
-# (e) ajuste conjunto nos 3 (descricao, nao teste)
+# (e) joint fit on all 3 (description, not a test)
 df['sse_all'] = df.sse8 + df.sse32 + df.sse128
 e = df.loc[df.sse_all.idxmin()]
 rep['e_fit_all'] = dict(T=float(e['T']), lnM=float(e.lnM), pred=at(e['T'], e.lnM))
-# perfil: para cada T, lnM que reproduz q128; o que preve em 8
+# profile: for each T, the lnM that reproduces q128; what it predicts at 8
 prof = []
 for T in Ts[::5]:
     s = df[np.isclose(df['T'], T)]

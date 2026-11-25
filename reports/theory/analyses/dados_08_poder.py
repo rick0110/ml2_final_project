@@ -1,13 +1,13 @@
-"""Tarefa 8: poder por simulacao com componentes de variancia medidos.
-Modelo por amostra (escala da margem): m = mu(N) + u_s + v_rs + w_rt + x_st + z_t + e + semente_r ; copiado = m > 0.
-Componentes (DP): locutor, locutor x frase, frase, residuo e treino x frase da ANOVA de 3 vias das 38 externas (out/02.txt);
-treino x locutor: 0.046 (conservador; inclui interacao locutor x N real) ou 0.0148 (so semente); efeito principal de semente 0.0127.
-mu(N) calibrado para que a fracao nao copiada da populacao siga cada hipotese:
-  H026: q = 0.744 N^-0.26      H05: q = a + A N^-0.5      Hpiso: q = a + A/N      (as tres ajustadas aos 3 pontos medidos nas 38 vozes)
-Analise de cada experimento simulado: q_hat por N (media das sementes), ajuste das 3 formas de 2 parametros (c N^-alpha com alpha livre;
-a + A/sqrtN; a + A/N), escolha por menor SSE; IC de alpha por bootstrap nao e feito: reporta-se a dispersao de alpha_hat entre simulacoes.
-Teste de piso: diferenca q(512) - q(2048) com EP por bootstrap de locutores; 'ganho detectado' se IC95 exclui 0.
-Uso: python3 -I dados_08_poder.py <out_dir> [nsim]"""
+"""Task 8: power by simulation with measured variance components.
+Per-sample model (margin scale): m = mu(N) + u_s + v_rs + w_rt + x_st + z_t + e + seed_r ; copied = m > 0.
+Components (SD): speaker, speaker x utterance, utterance, residual and run x utterance from the 3-way ANOVA of the 38 externals (out/02.txt);
+run x speaker: 0.046 (conservative; includes the real speaker x N interaction) or 0.0148 (seed only); main seed effect 0.0127.
+mu(N) calibrated so that the population's not-copied fraction follows each hypothesis:
+  H026: q = 0.744 N^-0.26      H05: q = a + A N^-0.5      Hpiso: q = a + A/N      (all three fitted to the 3 points measured on the 38 voices)
+Analysis of each simulated experiment: q_hat per N (mean over seeds), fit of the 3 two-parameter forms (c N^-alpha with alpha free;
+a + A/sqrtN; a + A/N), choice by lowest SSE; no bootstrap CI for alpha: the spread of alpha_hat across simulations is reported.
+Floor test: difference q(512) - q(2048) with SE from speaker bootstrap; 'gain detected' if the 95% CI excludes 0.
+Usage: python3 -I dados_08_poder.py <out_dir> [nsim]"""
 import sys, os, itertools
 import numpy as np, pandas as pd
 from scipy.stats import norm
@@ -21,7 +21,7 @@ b05 = fitlin(lambda N: N ** -.5, Nobs, qobs); b1 = fitlin(lambda N: 1 / N, Nobs,
 H = {"H026: 0.744 N^-0.26": lambda N: 0.744 * N ** -0.26,
      f"H05: {b05[0]:.3f} + {b05[1]:.3f}/sqrtN": lambda N: b05[0] + b05[1] * N ** -.5,
      f"Hpiso: {b1[0]:.3f} + {b1[1]:.3f}/N": lambda N: b1[0] + b1[1] / N}
-print("q verdadeiro (fracao NAO copiada) por hipotese em N =", NS.astype(int))
+print("true q (fraction NOT copied) per hypothesis at N =", NS.astype(int))
 for k, f in H.items(): print(f"  {k:28s}", np.round(f(NS), 3))
 def fits(N, q):
     lq = np.log(np.clip(q, 1e-3, None)); bA = np.polyfit(np.log(N), lq, 1); sA = ((np.exp(np.polyval(bA, np.log(N))) - q) ** 2).sum()
@@ -45,12 +45,12 @@ def simulate(hyp, S, T, seeds, sd_rs, nsim, NS=NS):
                 ms = m.mean(1); sw = np.sqrt(m.var(1, ddof=1).mean()); qm[j, i] = norm.cdf(-ms / sw).mean()
         qbar = qh.mean(0); sse, a = fits(NS, qbar); pick[np.argmin(sse)] += 1; alphas.append(a)
         sse2, _ = fits(NS, qm.mean(0)); pick_mix[np.argmin(sse2)] += 1
-        # teste de ganho entre 512 e 2048 (pareado por locutor, media das sementes)
+        # test of gain between 512 and 2048 (paired by speaker, mean over seeds)
         if len(NS) == 5:
             dq = spkq[:, 3].mean(0) - spkq[:, 4].mean(0)
             v_spk = np.var([dq[rng.integers(0, S, S)].mean() for _ in range(200)])
             slope = norm.pdf(norm.ppf(np.clip(qbar[3:], .01, .99))) / tot      # dq/dmu
-            v_seed = ((SD["seed"] * slope) ** 2).sum() / seeds                  # variancia de semente (suposta conhecida do piloto)
+            v_seed = ((SD["seed"] * slope) ** 2).sum() / seeds                  # seed variance (assumed known from the pilot)
             floor_det += (dq.mean() - 1.96 * np.sqrt(v_spk + v_seed)) > 0
     a = np.array(alphas)
     return dict(P_escolhe=pick / nsim, P_escolhe_mix=pick_mix / nsim, alpha_med=np.median(a), alpha_lo=np.percentile(a, 2.5), alpha_hi=np.percentile(a, 97.5),

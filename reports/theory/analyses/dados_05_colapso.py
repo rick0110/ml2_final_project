@@ -1,8 +1,8 @@
-"""Tarefa 5: colapso dos dados em x = N^a K^b, para vozes novas (unseen) e treinadas (seen).
-(i) potencia q = c N^-a K^-b (q = fracao nao copiada); (ii) probit: Phi^-1(1-q) = c0 + a lnN + b lnK; (iii) margem media = c0 + a lnN + b lnK;
-(iv) colapso nao parametrico: direcao theta em (lnN, lnK) que minimiza o SSE de uma regressao isotonica (crescente) de y em x; b/a = tan(theta).
-Intervalos: bootstrap de frases (locutores fixos) + ruido de semente N(0, sd_semente^2) por treino; tambem com reamostragem de locutores.
-Uso: python3 -I dados_05_colapso.py <results_dir> <out_dir> [B]"""
+"""Task 5: collapse of the data onto x = N^a K^b, for new (unseen) and trained (seen) voices.
+(i) power law q = c N^-a K^-b (q = fraction not copied); (ii) probit: Phi^-1(1-q) = c0 + a lnN + b lnK; (iii) mean margin = c0 + a lnN + b lnK;
+(iv) nonparametric collapse: direction theta in (lnN, lnK) that minimises the SSE of an isotonic (increasing) regression of y on x; b/a = tan(theta).
+Intervals: utterance bootstrap (speakers fixed) + seed noise N(0, sd_seed^2) per run; also with speaker resampling.
+Usage: python3 -I dados_05_colapso.py <results_dir> <out_dir> [B]"""
 import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np, pandas as pd
@@ -19,7 +19,7 @@ TH = np.deg2rad(np.arange(-89.5, 90, 0.5))
 def estimates(N, K, q, mu):
     lN, lK = np.log(N), np.log(K); X = np.c_[np.ones_like(lN), lN, lK]
     r = {}
-    # (i) potencia
+    # (i) power law
     best = (np.inf, None)
     for a in np.arange(-0.5, 1.5001, 0.01):
         x = N[None, :] ** -a * K[None, :] ** -np.arange(-0.5, 2.0001, 0.01)[:, None]
@@ -55,6 +55,6 @@ for grp in ["unseen", "seen"]:
             bs = pd.DataFrame(bs)
             for k, v in e0.items():
                 rows.append(dict(grupo=grp, sem_N2=excl2, modo=mode, est=k, valor=v, lo=bs[k].quantile(.025), hi=bs[k].quantile(.975)))
-        # razao b/a e angulo para os parametricos
+        # ratio b/a and angle for the parametric fits
 R = pd.DataFrame(rows); R.to_csv(os.path.join(out, "colapso.csv"), index=False)
 print(R.round(3).to_string())

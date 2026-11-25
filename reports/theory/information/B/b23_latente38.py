@@ -1,6 +1,6 @@
-"""b23: elo latente para 38 vozes (mesmo estimador: identificacao + Fano), com as covariancias medidas de cada treino:
-voz v ~ N(0, Sigma_b); uma frase da referencia: mu = v + w, w ~ N(0, W); z = mu + ruido posterior. Centroides = vozes verdadeiras.
-Uso: python3 -I b23_latente38.py out/b0.npz"""
+"""b23: latent link for 38 voices (same estimator: identification + Fano), with the covariances measured in each run:
+voice v ~ N(0, Sigma_b); one reference utterance: mu = v + w, w ~ N(0, W); z = mu + posterior noise. Centroids = true voices.
+Usage: python3 -I b23_latente38.py out/b0.npz"""
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from bt_lib import load, Geo
@@ -17,5 +17,5 @@ for run in ["n8_k32_s1-wide", "n32_k32_s1-wide", "n128_k32_s1-wide"]:
         for _ in range(300):
             v = rng.standard_normal((38, 32)) @ Hb.T; x = v + rng.standard_normal((38, 32)) @ Ln.T
             d = ((((x[:, None] - v[None]) @ Lw.T)) ** 2).sum(-1); acc.append(np.mean(d.argmin(1) == np.arange(38)))
-        out.append(f"{kind}: acerto {np.mean(acc):.3f} Fano {fano(np.mean(acc), 38):.2f}")
+        out.append(f"{kind}: accuracy {np.mean(acc):.3f} Fano {fano(np.mean(acc), 38):.2f}")
     print(f"{run}: " + " | ".join(out))

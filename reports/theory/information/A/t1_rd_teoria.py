@@ -1,10 +1,10 @@
-"""t1: taxa-distorcao para fonte gaussiana de espectro em lei de potencia (parte 1 do relatorio).
-Compara, para R = log2 N:
-  (i)  D_wf(R): agua reversa (livro-codigo otimo; cota inferior one-shot: E d >= D(log2 N))
-  (ii) D_rand(N): livro-codigo aleatorio, N codewords iid da propria fonte (Monte Carlo exato)
-  (iii) aproximacao de ponto de sela / Chernoff para a distribuicao de D_N
-  (iv) alta resolucao (vizinho mais proximo): Gamma(1+2/d) (N V_d)^(-2/d) E[f^(-2/d)]
-e verifica Imhof vs ponto de sela vs Monte Carlo para a probabilidade de bola pequena.
+"""t1: rate-distortion for a Gaussian source with a power-law spectrum (part 1 of the report).
+Compares, for R = log2 N:
+  (i)  D_wf(R): reverse water-filling (optimal codebook; one-shot lower bound: E d >= D(log2 N))
+  (ii) D_rand(N): random codebook, N iid codewords from the source itself (exact Monte Carlo)
+  (iii) saddle-point / Chernoff approximation for the distribution of D_N
+  (iv) high resolution (nearest neighbour): Gamma(1+2/d) (N V_d)^(-2/d) E[f^(-2/d)]
+and checks Imhof vs saddle point vs Monte Carlo for the small-ball probability.
 python3 -I t1_rd_teoria.py <out_dir> <Sb_eig.npy>
 """
 import sys, os, json
@@ -39,13 +39,13 @@ for name, lam in spectra.items():
             Y = rng.standard_normal((N, d)) * np.sqrt(lam)
             vals.append(((Y - X[i]) ** 2).sum(1).min())
         drand.append(float(np.mean(vals)))
-    # alta resolucao: d_eff = numero de dims com lam > 1e-4*lam1
+    # high resolution: d_eff = number of dims with lam > 1e-4*lam1
     lam_hr = lam[lam > 1e-6]
     de = len(lam_hr)
     lnVd = (de / 2) * np.log(np.pi) - gammaln(de / 2 + 1)
     lnEf = np.log(2 * np.pi) + np.sum(np.log(lam_hr)) / de - (de / 2) * np.log(1 - 2 / de)
     dhr = [float(np.exp(gammaln(1 + 2 / de) - (2 / de) * (np.log(N) + lnVd) + lnEf)) for N in Ns]
-    # ponto de sela: D_N mediana para c tipico: resolver N p(t) = ln 2, media sobre 60 c's
+    # saddle point: median D_N for a typical c: solve N p(t) = ln 2, mean over 60 c's
     dsad = []
     for N in Ns:
         meds = []
@@ -64,7 +64,7 @@ for name, lam in spectra.items():
     sl = lambda D: [float(-(np.log(D[i + 1]) - np.log(D[i])) / (np.log(Ns[i + 1]) - np.log(Ns[i]))) for i in range(len(D) - 1)]
     row['slope_wf'] = sl(dwf); row['slope_rand'] = sl(drand)
     row['ratio_rand_wf'] = [float(a / b) for a, b in zip(drand, dwf)]
-    # taxa extra do livro-codigo aleatorio: R_rand(D) - R_wf(D) em bits, em D = D_rand(N)
+    # extra rate of the random codebook: R_rand(D) - R_wf(D) in bits, at D = D_rand(N)
     extra = []
     for N, Dr in zip(Ns, drand):
         lo, hi = 0.0, 200.0
@@ -79,7 +79,7 @@ for name, lam in spectra.items():
           '\n  highres', np.round(dhr, 2), '\n  slope_rand', np.round(row['slope_rand'], 3),
           '\n  slope_wf', np.round(row['slope_wf'], 3), '\n  penalty bits', np.round(extra, 2), flush=True)
 
-# verificacao Imhof / sela / MC para bolas pequenas (espectro medido)
+# Imhof / saddle / MC check for small balls (measured spectrum)
 lam = np.sort(spectra['medido'])[::-1]
 chk = []
 for i in range(4):

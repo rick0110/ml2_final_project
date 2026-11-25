@@ -1,5 +1,5 @@
-"""b2b: diagnostico (NAO e previsao): varre s2 e M_eff e mostra a curva externa prevista; e ajuste com M_eff fixo = 13100 (LJSpeech inteiro).
-Uso: python3 -I b2b_diag.py out/b0.npz"""
+"""b2b: diagnostic (NOT a prediction): sweeps s2 and M_eff and shows the predicted external curve; and a fit with M_eff fixed = 13100 (all of LJSpeech).
+Usage: python3 -I b2b_diag.py out/b0.npz"""
 import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from scipy.optimize import minimize_scalar

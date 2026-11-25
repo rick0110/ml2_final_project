@@ -1,7 +1,7 @@
-"""a4: teste do limiar sem parametro livre tau = ||mu_N - v0||^2 em CADA run, no espaco do proprio run.
-Para cada run: branqueia pelo W do proprio run, livro-codigo = medias dos locutores treinados presentes nos
-latentes, v0 = media LJ, mu_N = media das medias treinadas. Preve q para as referencias 'unseen' (4),
-'external' (38 nos -wide, 4 nos demais) e 'seen' (8); compara com o observado. Tambem ajusta tau por run.
+"""a4: test of the threshold with no free parameter tau = ||mu_N - v0||^2 in EACH run, in the run's own space.
+For each run: whiten by the run's own W, codebook = means of the trained speakers present in the
+latents, v0 = LJ mean, mu_N = mean of the trained means. Predicts q for the 'unseen' (4),
+'external' (38 in the -wide runs, 4 in the others) and 'seen' (8) references; compares with the observed. Also fits tau per run.
 python3 -I a4_tau_zero_param.py <coverage2> <results> <out>
 """
 import sys, os, json, glob
@@ -63,7 +63,7 @@ for r in runs:
 import pandas as pd
 df = pd.DataFrame(rows)
 df.to_csv(f'{out}/a4.csv', index=False)
-# resumo: unseen nos 14 runs base (4 vozes), RMSE e correlacao
+# summary: unseen in the 14 base runs (4 voices), RMSE and correlation
 base = df[~df.run.str.contains('wide')]
 for T in (1, 2, 3):
     e = base[f'unseen_qpred_T{T}'] - base['unseen_qobs']

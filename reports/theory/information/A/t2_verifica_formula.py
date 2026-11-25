@@ -1,8 +1,8 @@
-"""t2: verificacao por simulacao da formula
+"""t2: simulation check of the formula
    q(N,K,M) = E_c[ (1 - F_c(t(c)))^N ],  t(c) = ||c - v0||^2 - 2T ln(M/K),
-contra (a) o canal de Gibbs simulado diretamente (livros-codigo aleatorios, temperatura T, massas M e K),
-e (b) a aproximacao de espectro de informacao q ~ P_c[ L(c) > log2 N ], L(c) = -log2 F_c(t(c)).
-Geometria gaussiana calibrada no run N=128 (Sb, centro, v0, ruido de referencia Wx).
+against (a) the Gibbs channel simulated directly (random codebooks, temperature T, masses M and K),
+and (b) the information-spectrum approximation q ~ P_c[ L(c) > log2 N ], L(c) = -log2 F_c(t(c)).
+Gaussian geometry calibrated on the N=128 run (Sb, centre, v0, reference noise Wx).
 python3 -I t2_verifica_formula.py <coverage2> <out>
 """
 import sys, os, json
@@ -42,7 +42,7 @@ for (T, K, lnM) in [(1.0, 32, np.log(32) + 116.5 / 2), (1.0, 8, np.log(32) + 116
         with np.errstate(divide='ignore'):
             Lc = -np.log2(F)
         qis = float(np.mean(Lc > np.log2(N)))
-        # simulacao direta do canal de Gibbs (decisao: massa da LJ > 1/2 -> nao copiada)
+        # direct simulation of the Gibbs channel (decision: LJ mass > 1/2 -> not copied)
         nfail = 0; ntot = 0
         for rep_ in range(4):
             cb = mu + rng.standard_normal((N, 32)) @ Lv.T + rng.standard_normal((N, 32)) / np.sqrt(K)

@@ -1,7 +1,7 @@
-"""b3 (pontos 5b-bis, 7, 9): (i) regime de massa T~20 (largura por voz) contra vozes treinadas e curva em N;
-(ii) expoente previsto para medidas continuas (sim_ref/sim_spk) via distancia saida-referencia;
-(iii) extrapolacao em N sob tres modelos de P_v (empirico reamostrado, gaussiano, mistura gaussiana) com IC;
-(iv) expoente local de q(N) de 8 a 1e6 no modelo gaussiano (cruzamento de regimes).
+"""b3 (points 5b-bis, 7, 9): (i) mass regime T~20 (per-voice width) against trained voices and the curve in N;
+(ii) predicted exponent for continuous measures (sim_ref/sim_spk) via the output-reference distance;
+(iii) extrapolation in N under three models of P_v (resampled empirical, Gaussian, Gaussian mixture) with CI;
+(iv) local exponent of q(N) from 8 to 1e6 in the Gaussian model (regime crossover).
 python3 -I b3_regimes_extrap.py <coverage2> <results> <out>
 """
 import sys, os, json, csv
@@ -29,7 +29,7 @@ rep = {}
 
 
 def gibbs(X, cb, T, tau, K=32, gamma=1.0, Ntot=None):
-    """massa por codeword K * N^(gamma-1) (massa total K N^gamma)."""
+    """mass per codeword K * N^(gamma-1) (total mass K N^gamma)."""
     N = len(cb) if Ntot is None else Ntot
     V = np.vstack([v0[None], cb])
     lw = np.r_[np.log(K) + tau / (2 * T), np.full(len(cb), np.log(K) + (gamma - 1) * np.log(N))]
@@ -42,7 +42,7 @@ def gibbs(X, cb, T, tau, K=32, gamma=1.0, Ntot=None):
     return norm.cdf(KAPPA * (0.5 - rho)), Y
 
 
-# (i) regime de massa
+# (i) mass regime
 mass = {}
 for T in (1.0, 5.0, 10.0, 21.0):
     for gamma in (1.0, 0.5, 0.25):
@@ -54,7 +54,7 @@ for T in (1.0, 5.0, 10.0, 21.0):
         r = dict(tau=tau, Mef=float(32 * 128 ** gamma / 128 * np.exp(tau / (2 * T))) if gamma == 1 else None)
         for N in (8, 32):
             r[f'q{N}'] = float(1 - gibbs(X, CB[N], T, tau, gamma=gamma)[0].mean())
-        # vozes treinadas, N=8, K=8/32/128 (massa do proprio codeword muda com K)
+        # trained voices, N=8, K=8/32/128 (the mass of the voice's own codeword changes with K)
         for K in (8, 32, 128):
             r[f'seen_K{K}'] = float(1 - gibbs(Xs, CB[8], T, tau - 2 * T * np.log(K / 32), K=K, gamma=gamma)[0].mean())
         r['Mhalf_dq128'] = float((1 - gibbs(X, CB[128], T, tau - 2 * T * np.log(2), gamma=gamma)[0].mean()) - qobs[128])
@@ -63,7 +63,7 @@ for T in (1.0, 5.0, 10.0, 21.0):
 rep['regime_massa'] = mass
 rep['seen_obs_N8'] = {8: 0.5525, 32: 0.26, 128: 0.1075}
 
-# (ii) medida continua: E||y - c||^2 (saida do Gibbs vs referencia), T=1 e T=21
+# (ii) continuous measure: E||y - c||^2 (Gibbs output vs reference), T=1 and T=21
 cont = {}
 for T, tau in ((1.0, None), (21.0, None)):
     f = lambda t: (1 - gibbs(X, CB[128], T, t)[0].mean()) - qobs[128]
@@ -83,13 +83,13 @@ for T, tau in ((1.0, None), (21.0, None)):
     m = y.mean(1)
     cont[T] = dict(mean_dist2=m.tolist(), alpha_g=float(a_g(m)), ci90=np.percentile(bs, [5, 95]).tolist(),
                    frac_monotone=len(bs) / 1000)
-    # tambem so a parte das vozes copiadas (D_N), sem o binario
+    # also only the copied-voices part (D_N), without the binary step
     dn = np.array([((X[:, None] - CB[N][None]) ** 2).sum(-1).min(1) for N in (8, 32, 128)])
     cont[f'DN_only_alpha_g'] = float(a_g(dn.mean(1)))
 rep['continua'] = cont
-print('continua', cont, flush=True)
+print('continuous', cont, flush=True)
 
-# (iii) extrapolacao com tres modelos de P_v; tau da regra dura (q128 real)
+# (iii) extrapolation with three models of P_v; tau from the hard rule (real q128)
 dLJ2 = ((X - v0) ** 2).sum(1)
 D128 = ((X[:, None] - CB[128][None]) ** 2).sum(-1).min(1)
 sl = np.sort(dLJ2 - D128); nf = int(round(qobs[128] * 38)); tau_h = (sl[nf - 1] + sl[nf]) / 2
@@ -101,7 +101,7 @@ bics = {k: GaussianMixture(k, covariance_type='full', reg_covar=0.05, random_sta
 kbest = int(min(bics, key=bics.get))
 kmix = max(kbest, 2)
 gm = GaussianMixture(kmix, covariance_type='full', reg_covar=0.05, random_state=0, n_init=5).fit(means)
-# componentes: descontar o ruido de estimacao das medias (W_x/8) da covariancia ajustada
+# components: subtract the estimation noise of the means (W_x/8) from the fitted covariance
 comps = []
 for k in range(kmix):
     C = gm.covariances_[k] - G.Wx / 8
@@ -140,7 +140,7 @@ def curve(pfun, Xc, tau):
 ext = {}
 for name, pf in (('empirico', F_emp), ('gaussiano', F_gauss), ('mistura', F_mix)):
     qN, fl, p = curve(pf, X, tau_h)
-    # ancorado: q_obs(128) + (q_model(N) - q_model(128))
+    # anchored: q_obs(128) + (q_model(N) - q_model(128))
     anch = qobs[128] + qN - qN[2]
     bs = []
     for b in range(60):
@@ -153,11 +153,11 @@ for name, pf in (('empirico', F_emp), ('gaussiano', F_gauss), ('mistura', F_mix)
     ext[name] = dict(raw=dict(zip(map(str, Ns), qN.round(4).tolist())), anchored=dict(zip(map(str, Ns), anch.round(4).tolist())),
                      floor=fl, ci90_lo=dict(zip(map(str, Ns + ['floor']), np.percentile(bs, 5, axis=0).round(3).tolist())),
                      ci90_hi=dict(zip(map(str, Ns + ['floor']), np.percentile(bs, 95, axis=0).round(3).tolist())),
-                     note_emp='empirico: p = fracao das 127 vozes (resolucao 1/127; cauda nao representada)' if name == 'empirico' else '')
+                     note_emp='empirical: p = fraction of the 127 voices (resolution 1/127; tail not represented)' if name == 'empirico' else '')
     print(name, ext[name], flush=True)
 rep['extrapolacao'] = ext
 rep['mistura'] = dict(bic=bics, k=kmix, weights=gm.weights_.round(3).tolist())
-# DN real vs mistura (como no a3 para gaussiano)
+# real DN vs mixture (as in a3 for the Gaussian)
 dn = {}
 for N in (8, 32, 128):
     sims = []
@@ -167,9 +167,9 @@ for N in (8, 32, 128):
         sims.append(np.median(((X[:, None] - cb[None]) ** 2).sum(-1).min(1)))
     dn[N] = [float(np.mean(sims)), float(np.std(sims))]
 rep['DN_mistura'] = dn
-print('DN mistura', dn)
+print('DN mixture', dn)
 
-# (iv) expoente local de q - q_inf, modelo gaussiano, N de 8 a 1e6
+# (iv) local exponent of q - q_inf, Gaussian model, N from 8 to 1e6
 NsL = [8, 32, 128, 512, 2048, 8192, 32768, 131072, 1048576]
 t = ((X - v0) ** 2).sum(1) - tau_h
 p = np.array([F_gauss(c, ti) for c, ti in zip(X, t)])

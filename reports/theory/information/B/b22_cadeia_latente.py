@@ -1,6 +1,6 @@
-"""b22: elos latentes da cadeia de informacao sobre as 8 vozes treinadas comuns: mu e z = mu + sigma*eps.
-Identificacao por centroide mais proximo (Euclides branqueado por W), deixando a frase de fora; Fano com 8 classes.
-Uso: python3 -I b22_cadeia_latente.py <coverage2_root> out/b0.npz"""
+"""b22: latent links of the information chain over the 8 common trained voices: mu and z = mu + sigma*eps.
+Identification by nearest centroid (Euclidean whitened by W), leaving the utterance out; Fano with 8 classes.
+Usage: python3 -I b22_cadeia_latente.py <coverage2_root> out/b0.npz"""
 import sys, os, json; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np
 from bt_lib import load
@@ -35,5 +35,5 @@ for run in ["n8_k32_s1-wide", "n32_k32_s1-wide", "n128_k32_s1-wide", "n8_k8_s1",
         cents = np.array([mu[tr & (spk == s2)].mean(0) for s2 in SPK]); d = (((cents - mu[i[0]]) @ Li.T) ** 2).sum(1); hits.append(d.argmin() == j)
     out["ref_mu_acc"] = float(np.mean(hits)) if hits else None
     res[run] = out
-    print(f"{run:18s}: mu acc {out['mu']['acc']:.3f} Fano {out['mu']['fano']:.2f} (n={out['mu']['n']}) | z acc {out['z']['acc']:.3f} Fano {out['z']['fano']:.2f} | latente das 8 referencias: acerto {out['ref_mu_acc']}")
+    print(f"{run:18s}: mu acc {out['mu']['acc']:.3f} Fano {out['mu']['fano']:.2f} (n={out['mu']['n']}) | z acc {out['z']['acc']:.3f} Fano {out['z']['fano']:.2f} | latent of the 8 references: accuracy {out['ref_mu_acc']}")
 json.dump(res, open("out/b22.json", "w"), indent=1)

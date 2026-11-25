@@ -1,7 +1,7 @@
-"""a1: geometria medida no espaco branqueado do run N=128 (-wide) e calibracao do modelo.
+"""a1: geometry measured in the whitened space of the N=128 (-wide) run and model calibration.
 python3 -I a1_geometria.py <coverage2_dir> <results_dir> <out_dir>
-Mede: espectro entre-locutores (corrigido de ruido), posicao da voz padrao, ruido da referencia,
-distancias das 38 referencias externas a LJ e aos livros-codigo aninhados N=8,32,128."""
+Measures: between-speaker spectrum (noise-corrected), position of the default voice, reference noise,
+distances of the 38 external references to LJ and to the nested codebooks N=8,32,128."""
 import sys, os, json
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -16,7 +16,7 @@ rep = {}
 rep['Sb_eig'] = ev.round(3).tolist()
 rep['tr_Sb'] = float(evp.sum())
 rep['PR_Sb'] = float(evp.sum() ** 2 / (evp ** 2).sum())
-# ajuste de lei de potencia nas 16 primeiras
+# power-law fit on the first 16
 j = np.arange(1, 17)
 a, b = np.polyfit(np.log(j), np.log(evp[:16]), 1)
 rep['alpha_16'] = float(-a); rep['logc_16'] = float(b)
@@ -29,7 +29,7 @@ rep['LJ_offset_in_Sb_span_frac'] = float((proj[evp > 0.05] ** 2).sum() / (dlj @ 
 rep['LJ_offset_mahal_Sb_top8'] = float(np.sqrt((proj[:8] ** 2 / evp[:8]).sum()))
 rep['lj_within_trace'] = float(np.trace(G.lj_cov)); rep['libri_within_trace(Wx)'] = float(np.trace(G.Wx))
 rep['dim'] = int(G.x.shape[1])
-# ruido da referencia: uma frase -> covariancia Wx (mu, sem amostragem); tr
+# reference noise: one utterance -> covariance Wx (mu, no sampling); tr
 spk, X = G.refs('external')
 rep['n_ext'] = int(len(spk))
 dL = np.linalg.norm(X - G.lj, axis=1)
@@ -38,7 +38,7 @@ rep['ref_dLJ_mean_sd'] = [float(dL.mean()), float(dL.std())]
 rep['ref_dCenter_mean_sd'] = [float(dC.mean()), float(dC.std())]
 # typical distance between 2 libri voices (noise-free) sqrt(2 tr Sb)
 rep['typical_voice_dist'] = float(np.sqrt(2 * evp.sum()))
-# codebooks aninhados
+# nested codebooks
 import csv
 sets = {}
 for N, r in RUNS_WIDE.items():

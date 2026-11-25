@@ -1,8 +1,8 @@
-"""Funcoes teoricas (teoria2/A).
+"""Theoretical functions (theory/information/A).
 - gchisq_cdf_imhof: P(sum_j w_j (Z_j + a_j)^2 <= t)  (Imhof 1961)
-- smallball_saddle: mesma probabilidade pela aproximacao de ponto de sela (Lugannani-Rice);
-  o expoente de Chernoff e a 'taxa do livro-codigo aleatorio' R_c(t) = -log2 P.
-- waterfill: D(R) da agua reversa para fonte gaussiana de espectro lam.
+- smallball_saddle: the same probability via the saddle-point approximation (Lugannani-Rice);
+  the Chernoff exponent is the 'random-codebook rate' R_c(t) = -log2 P.
+- waterfill: reverse water-filling D(R) for a Gaussian source with spectrum lam.
 """
 import numpy as np
 from scipy.integrate import quad
@@ -11,7 +11,7 @@ from scipy.stats import norm
 
 
 def gchisq_cdf_imhof(t, w, a2):
-    """w: pesos (variancias), a2: nao-centralidades a_j^2 (em unidades de desvio). t escalar."""
+    """w: weights (variances), a2: non-centralities a_j^2 (in SD units). t scalar."""
     w = np.asarray(w, float); a2 = np.asarray(a2, float)
     if t <= 0:
         return 0.0
@@ -26,7 +26,7 @@ def gchisq_cdf_imhof(t, w, a2):
 
 
 def cgf(s, w, a2):
-    """K(s) = log E exp(s Q), Q = sum w (Z+a)^2, valido para s < 1/(2 max w)."""
+    """K(s) = log E exp(s Q), Q = sum w (Z+a)^2, valid for s < 1/(2 max w)."""
     d = 1 - 2 * s * w
     return np.sum(-0.5 * np.log(d) + a2 * w * s / d)
 
@@ -42,17 +42,17 @@ def cgf2(s, w, a2):
 
 
 def smallball_saddle(t, w, a2, return_chernoff=False):
-    """P(Q <= t) para t abaixo da media (cauda inferior) por Lugannani-Rice.
-    Retorna (P, chernoff_nats) onde chernoff = s t - K(s) >= 0 e' o expoente: P <= exp(-chernoff)."""
+    """P(Q <= t) for t below the mean (lower tail) via Lugannani-Rice.
+    Returns (P, chernoff_nats) where chernoff = s t - K(s) >= 0 is the exponent: P <= exp(-chernoff)."""
     w = np.asarray(w, float); a2 = np.asarray(a2, float)
     mean = np.sum(w * (1 + a2))
     if t <= 0:
         return (0.0, np.inf) if return_chernoff else 0.0
     if t >= mean:
-        # usar Imhof fora da cauda inferior
+        # use Imhof outside the lower tail
         p = gchisq_cdf_imhof(t, w, a2)
         return (p, 0.0) if return_chernoff else p
-    # resolver K'(s) = t, s<0
+    # solve K'(s) = t, s<0
     lo = -1.0
     while cgf1(lo, w, a2) > t:
         lo *= 2
@@ -66,7 +66,7 @@ def smallball_saddle(t, w, a2, return_chernoff=False):
 
 
 def waterfill(lam, R_bits):
-    """D(R) para fonte gaussiana de variancias lam (soma em todas as componentes)."""
+    """D(R) for a Gaussian source with variances lam (summed over all components)."""
     lam = np.sort(np.asarray(lam, float))[::-1]
     lam = lam[lam > 0]
 

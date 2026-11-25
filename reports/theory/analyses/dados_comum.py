@@ -1,4 +1,4 @@
-"""Carregador comum. Uso: importado pelos scripts dados_*.py (que recebem o diretorio de resultados como argumento)."""
+"""Shared loader. Usage: imported by the dados_*.py scripts (which take the results directory as an argument)."""
 import re, glob, os
 import numpy as np, pandas as pd
 

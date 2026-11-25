@@ -1,18 +1,18 @@
-"""Biblioteca do decodificador bayesiano (estimador de voz por posterior sobre as vozes de treino).
-Sem efeitos colaterais. Importada pelos scripts b*.py (que inserem este diretorio em sys.path)."""
+"""Library for the Bayesian decoder (voice estimator via a posterior over the training voices).
+No side effects. Imported by the b*.py scripts (which insert this directory into sys.path)."""
 import json
 import numpy as np
 from scipy.special import logsumexp
 from scipy.stats import norm
 
-M_LJ = 2000.0          # frases da voz padrao em todo treino de cobertura
-A_LINK = 0.75 / 0.036  # ||Delta||^2 / sigma_w : 0.75 = 2(1-0.626) (4 vozes com forca 0, 04_dados 6.1); 0.036 = sigma_w (02, 1.2)
+M_LJ = 2000.0          # utterances of the default voice in every coverage training run
+A_LINK = 0.75 / 0.036  # ||Delta||^2 / sigma_w : 0.75 = 2(1-0.626) (4 voices at strength 0, 04_dados 6.1); 0.036 = sigma_w (02, 1.2)
 
 def load(path):
     return json.loads(str(np.load(path, allow_pickle=False)["data"]))
 
 class Geo:
-    """geometria de um treino em coordenadas cruas do latente mu (32-d)."""
+    """geometry of a training run in raw coordinates of the latent mu (32-d)."""
     def __init__(self, r, rank=None, proj=None):
         g = r["raw"]
         self.N, self.K = r["N"], r["K"]
@@ -22,23 +22,23 @@ class Geo:
         self.ids = list(r["spk_ids"]); self.mlj = np.array(g["m_lj"]); self.Sb = np.array(g["Sb"])
         self.refs = r["refs"]
         self.C = np.array([x["c_raw"] for x in self.refs])
-        self.P = proj  # opcional: matriz (k x 32) de projecao
+        self.P = proj  # optional: (k x 32) projection matrix
     def covs(self, noise_scale=1.0, post_scale=1.0):
         nbar = np.mean(self.n)
-        Slib = noise_scale * self.W + post_scale * np.diag(self.s2lib) + self.W / nbar  # media estimada com n_i frases
+        Slib = noise_scale * self.W + post_scale * np.diag(self.s2lib) + self.W / nbar  # mean estimated from n_i utterances
         Slj = noise_scale * self.Wlj + post_scale * np.diag(self.s2lj)
         return Slib, Slj
 
 def gauss_ll(X, mus, S):
-    """log N(x; mu_j, S) para todos x (n,p) e mu_j (m,p) -> (n,m)"""
+    """log N(x; mu_j, S) for all x (n,p) and mu_j (m,p) -> (n,m)"""
     L = np.linalg.cholesky(S); ld = 2 * np.log(np.diag(L)).sum()
     Xi = np.linalg.solve(L, X.T).T; Mi = np.linalg.solve(L, mus.T).T
     d2 = (Xi ** 2).sum(1)[:, None] + (Mi ** 2).sum(1)[None, :] - 2 * Xi @ Mi.T
     return -0.5 * d2 - 0.5 * ld - 0.5 * X.shape[1] * np.log(2 * np.pi), d2
 
 def lam(geo, C=None, T=1.0, logM=np.log(M_LJ), K=None, means=None, Slib=None, Slj=None, P=None, return_parts=False):
-    """log-razao de posterior (nats): Lambda = log sum_i K N(c;v_i) - log M N(c;v0), verossimilhanca temperada por 1/T.
-    copia (estimador de media posterior) <=> Lambda > 0.  P: projecao opcional (k x 32) aplicada a tudo."""
+    """posterior log-ratio (nats): Lambda = log sum_i K N(c;v_i) - log M N(c;v0), likelihood tempered by 1/T.
+    copy (posterior-mean estimator) <=> Lambda > 0.  P: optional projection (k x 32) applied to everything."""
     C = geo.C if C is None else C; K = geo.K if K is None else K
     means = geo.means if means is None else means
     if Slib is None or Slj is None: Slib, Slj = geo.covs()
@@ -56,14 +56,14 @@ def rho_of(L):
 
 def p_copy(L, link="mean", a=A_LINK):
     r = rho_of(L)
-    if link == "mean":   # media posterior + ruido de frase na margem (Lema 1)
+    if link == "mean":   # posterior mean + utterance noise on the margin (Lemma 1)
         return norm.cdf(a * (0.5 - r))
-    if link == "samp":   # amostragem da posterior: cada frase escolhe uma voz
+    if link == "samp":   # posterior sampling: each utterance picks one voice
         return 1 - r
     raise ValueError(link)
 
 def obs(geo, grp, key="r1", spk=False):
-    """(k, n) por referencia do grupo"""
+    """(k, n) per reference of the group"""
     k = []; n = []; idx = []
     for j, x in enumerate(geo.refs):
         if x["grp"] != grp or key not in x: continue
