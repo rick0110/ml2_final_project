@@ -1,55 +1,55 @@
 # Remote Access via SSH with Paramiko
 
-Acesso remoto seguro ao PC usando SSH com Paramiko, **sem necessidade de permissão de administrador**.
+Secure remote access to the PC using SSH with Paramiko, **with no need for administrator permission**.
 
-## 📋 Características
+## 📋 Features
 
-- ✅ Autenticação baseada em chaves (sem senha)
-- ✅ Sem necessidade de permissão de admin (porta > 1024)
-- ✅ Encriptação RSA 4096-bit
-- ✅ Conexões seguras via SSH
-- ✅ Interface Python usando Paramiko
+- ✅ Key-based authentication (no password)
+- ✅ No admin permission needed (port > 1024)
+- ✅ RSA 4096-bit encryption
+- ✅ Secure connections over SSH
+- ✅ Python interface using Paramiko
 
-## 🚀 Setup Inicial
+## 🚀 Initial Setup
 
-### Passo 1: Executar o setup
+### Step 1: Run the setup
 ```bash
 cd remote_access
 python setup.py
 ```
 
-Isso irá:
-1. Gerar chaves SSH RSA 4096-bit
-2. Criar arquivo `authorized_keys`
-3. Configurar host key
-4. Adicionar sua chave pública automaticamente
+This will:
+1. Generate RSA 4096-bit SSH keys
+2. Create the `authorized_keys` file
+3. Configure the host key
+4. Add your public key automatically
 
-### Passo 2: Iniciar o servidor (na máquina a ser acessada)
+### Step 2: Start the server (on the machine to be accessed)
 ```bash
 python ssh_server.py
 ```
 
-O servidor ficará escutando na porta `2222` em todas as interfaces de rede.
+The server will listen on port `2222` on all network interfaces.
 
-### Passo 3: Conectar do outro PC
+### Step 3: Connect from the other PC
 
-#### Opção A: Via cliente interativo
+#### Option A: With the interactive client
 ```bash
 python ssh_client.py
 ```
 
-Ele vai pedir:
-- Hostname ou IP do servidor
-- Usuário (padrão: `user`)
-- Porta (padrão: `2222`)
-- Caminho da chave privada
+It will ask for:
+- Hostname or IP of the server
+- User (default: `user`)
+- Port (default: `2222`)
+- Path to the private key
 
-#### Opção B: Via SSH padrão do sistema
+#### Option B: With the system's standard SSH
 ```bash
-ssh -i ~/.ssh/ml2_project -p 2222 user@SERVIDOR_IP
+ssh -i ~/.ssh/ml2_project -p 2222 user@SERVER_IP
 ```
 
-#### Opção C: Via Python programaticamente
+#### Option C: From Python, programmatically
 ```python
 from ssh_client import connect_to_server, execute_command
 
@@ -64,52 +64,52 @@ print(stdout)
 ssh.close()
 ```
 
-## 📁 Arquivos
+## 📁 Files
 
-| Arquivo | Descrição |
+| File | Description |
 |---------|-----------|
-| `setup.py` | Script de setup inicial |
-| `ssh_server.py` | Servidor SSH |
-| `ssh_client.py` | Cliente SSH com interface |
-| `generate_keys.py` | Gerador de chaves SSH |
-| `config.py` | Configurações |
-| `.ssh/` | Diretório com chaves (gerado automaticamente) |
+| `setup.py` | Initial setup script |
+| `ssh_server.py` | SSH server |
+| `ssh_client.py` | SSH client with an interface |
+| `generate_keys.py` | SSH key generator |
+| `config.py` | Settings |
+| `.ssh/` | Directory with the keys (generated automatically) |
 
-## 🔑 Detalhes de Segurança
+## 🔑 Security Details
 
-### Chaves Geradas
-- **Tipo**: RSA 4096-bit
-- **Localização**:
-  - Chave privada: `~/.ssh/ml2_project` (permissões 600)
-  - Chave pública: `~/.ssh/ml2_project.pub` (permissões 644)
+### Generated Keys
+- **Type**: RSA 4096-bit
+- **Location**:
+  - Private key: `~/.ssh/ml2_project` (permissions 600)
+  - Public key: `~/.ssh/ml2_project.pub` (permissions 644)
   - Host key: `remote_access/.ssh/host_key`
   - Authorized keys: `remote_access/.ssh/authorized_keys`
 
-### Porta
-- **Padrão**: 2222 (não requer admin)
-- **Pode ser alterada** em `config.py`
+### Port
+- **Default**: 2222 (does not require admin)
+- **Can be changed** in `config.py`
 
-## 📝 Exemplos de Uso
+## 📝 Usage Examples
 
-### Executar comando remoto
+### Run a remote command
 ```bash
 python ssh_client.py
-# Selecionar opção 1 e digitar comando
+# Select option 1 and type the command
 ```
 
-### Shell interativo
+### Interactive shell
 ```bash
 python ssh_client.py
-# Selecionar opção 2
+# Select option 2
 ```
 
-### Via Python
+### From Python
 ```python
 from ssh_client import connect_to_server, execute_command
 
 ssh = connect_to_server("192.168.1.100", "~/.ssh/ml2_project")
 
-# Executar múltiplos comandos
+# Run several commands
 stdout, _ = execute_command(ssh, "pwd")
 print("Working directory:", stdout)
 
@@ -119,57 +119,57 @@ print("Files:", stdout)
 ssh.close()
 ```
 
-## ⚙️ Configuração
+## ⚙️ Configuration
 
-Editar `config.py` para customizar:
+Edit `config.py` to customize:
 ```python
-SSH_PORT = 2222              # Porta (> 1024 não requer admin)
-TIMEOUT = 300                # Timeout da conexão
-KEY_SIZE = 4096              # Tamanho da chave RSA
+SSH_PORT = 2222              # Port (> 1024 does not require admin)
+TIMEOUT = 300                # Connection timeout
+KEY_SIZE = 4096              # RSA key size
 ```
 
 ## 🛠️ Troubleshooting
 
 ### "Permission denied (publickey)"
-- Verifique se a chave pública está em `authorized_keys`
-- Verifique permissões: `chmod 600 authorized_keys`
+- Check that the public key is in `authorized_keys`
+- Check the permissions: `chmod 600 authorized_keys`
 
 ### "Address already in use"
-- Outra instância do servidor está rodando
-- Mude a porta em `config.py`
+- Another server instance is running
+- Change the port in `config.py`
 
 ### "Connection refused"
-- Servidor não está rodando
-- Verifique a porta correta
-- Verifique firewall
+- The server is not running
+- Check that the port is correct
+- Check the firewall
 
 ### "Connection timeout"
-- Servidor não está respondendo
-- Verifique IP/hostname
-- Verifique conectividade de rede
+- The server is not responding
+- Check the IP/hostname
+- Check network connectivity
 
-## 🔐 Considerações de Segurança
+## 🔐 Security Considerations
 
-✅ **Faça**
-- Guarde a chave privada em local seguro
-- Use senhas fortes se necessário
-- Revise `authorized_keys` regularmente
-- Use SSH com senhas apenas em rede privada
+✅ **Do**
+- Keep the private key in a safe place
+- Use strong passwords if needed
+- Review `authorized_keys` regularly
+- Use SSH with passwords only on a private network
 
-❌ **Não faça**
-- Nunca compartilhe sua chave privada
-- Não use portas conhecidas (< 1024)
-- Não exponha o servidor diretamente na internet sem firewall
-- Não faça commit de chaves privadas no git
+❌ **Don't**
+- Never share your private key
+- Don't use well-known ports (< 1024)
+- Don't expose the server directly to the internet without a firewall
+- Don't commit private keys to git
 
-## 📞 Suporte
+## 📞 Support
 
-Para problemas:
-1. Verifique logs do servidor
-2. Teste conectividade com `ping`
-3. Verifique se Paramiko está instalado: `pip install paramiko`
-4. Revise configurações em `config.py`
+For problems:
+1. Check the server logs
+2. Test connectivity with `ping`
+3. Check that Paramiko is installed: `pip install paramiko`
+4. Review the settings in `config.py`
 
-## 📜 Licença
+## 📜 License
 
-Este código é fornecido como parte do projeto ml2_final_project.
+This code is provided as part of the ml2_final_project project.
