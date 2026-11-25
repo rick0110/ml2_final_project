@@ -29,3 +29,7 @@
 ## When it ends
 
 Write the result (next free number in `results/`), add a note to R16 if the mean changes, and move this file to `../done/`.
+
+## Outcome so far (2026-11-25)
+
+See [R21](../../../results/R21_seeds_at_10k_and_20k_steps.md): the 10,000-step seeds all fell within ±0.15 bit (hit). At N = 128, 20,000 steps added only +0.03 (the 2.90–3.05 band for seed 2 missed). The decision on the flattening waits for `n241_k32_s1-nokl` and `n241_k32_s2-nokl` at 20,000 steps (running/queued). A fourth seed at 10,000 steps was queued for every N (`n*_k32_s4-nokl`).

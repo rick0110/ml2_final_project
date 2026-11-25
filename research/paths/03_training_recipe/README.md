@@ -17,6 +17,7 @@ The KL ramp compressed the latent and threw the voice away ([R15](../../results/
 | 2026-11-23 | Training for 5,000 steps lowered the bits (1.75 → 1.42) | [R15](../../results/R15_kl_ramp.md) |
 | 2026-11-24 | The cause is the KL ramp; without it, 1.81 → 2.44 → 2.84 bits (2,500 → 5,000 → 10,000) | [R15](../../results/R15_kl_ramp.md) |
 | 2026-11-25 | 20,000 steps at N = 128: 2.96 (+0.12 over 10,000) | [R18](../../results/R18_training_length.md) |
+| 2026-11-25 | With a second seed, 10k → 20k at N = 128 adds only +0.03: saturated by 10,000 steps | [R21](../../results/R21_seeds_at_10k_and_20k_steps.md) |
 
 ## In progress
 

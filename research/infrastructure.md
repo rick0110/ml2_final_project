@@ -4,7 +4,7 @@ This file describes the structure without addresses. The machines' addresses and
 
 ## Machines
 
-- **Lab cluster:** 10 machines, each with one RTX A4500 (20 GB), 32 threads and about 430 GB of free disk. SSH access over the Tailscale network, no sudo. In the data they are numbered 1 to 10, in the order of `~/ml2_backup/hosts.txt` on the control PC.
+- **Lab cluster:** 12 machines (two added on 2026-11-25), each with one RTX A4500 (20 GB), 32 threads and about 430 GB of free disk. SSH access over the Tailscale network, no sudo. In the data they are numbered 1 to 12, in the order of `~/ml2_backup/hosts.txt` on the control PC.
 - **Control PC:** coordination only (queues, health checks, inventory page). **It keeps no experiment data.**
 
 Typical times per run: about 1.3 s per step, roughly 55 minutes for 2,500 steps and 30 to 60 minutes of evaluation; about 9 GB of GPU memory.

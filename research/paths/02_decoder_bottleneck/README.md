@@ -17,6 +17,7 @@ The decoder is the bottleneck: the reference and the latent carry 4–5 bits, th
 | Colab | Encoder and latent are not the problem; the decoder loses ~4 bits | [R10](../../results/R10_voice_bits_decoder_bottleneck.md) |
 | 2026-11-23/24 | FiLM: no gain at N = 8, +0.31 at 128, +0.44 at 241 (2,500 steps) | [R12](../../results/R12_film.md) |
 | 2026-11-24/25 | FiLM without KL: 3.08 bits at 241 with 10,000 steps (best result); at 10,000 steps the edge over "no KL" shrinks | [R17](../../results/R17_film_without_kl.md) |
+| 2026-11-25 | With 2–3 seeds at 10,000 steps FiLM is about even (+0.04 at N ≥ 64); FiLM at 241 with 20,000 steps: 3.18 bits | [R23](../../results/R23_film_vs_nokl_at_10k.md) |
 
 ## In progress
 

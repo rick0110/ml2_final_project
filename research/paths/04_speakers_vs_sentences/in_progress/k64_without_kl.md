@@ -24,3 +24,9 @@ Note: `coverage_manifest.py` warns when a speaker lacks K sentences and uses the
 - **If the flattening is too few sentences:** `n241_k64` at 10,000 steps ends at least 0.2 bit above `n241_k32` (≥ 3.1), and the gap between 128 and 241 widens.
 - **If it is not:** `n241_k64` lands between 2.9 and 3.05.
 - **At fixed N:** the gain from K = 32 to 64 is smaller than that from N = 128 to 256 at fixed K. The latter can only be measured in [path 01](../../01_scaling_law/in_progress/beyond_241_speakers.md); until then, compare with the slope per doubling of N (0.38–0.41 bit).
+
+## Outcome so far (2026-11-25)
+
+See [R20](../../../results/R20_more_sentences_per_speaker.md): the "too few sentences" threshold was hit (3.17 at N = 241, K = 64), but the 128→241 gap did not widen. The corpus has only 150 speakers with ≥ 64 sentences and 74 with ≥ 128, so K = 128 is only possible up to N = 64.
+
+Added runs (queued 2026-11-25), to finish seeds and test K = 128 where it is possible: `n8/n16_k64_s2/s3-nokl`, `n32/n64_k64_s3-nokl` (10,000); `n16/n64_k128_s1`, `n64_k128_s2`, `n32_k128_s3` (no KL, 10,000); FiLM at K = 64: `n64/n128/n241_k64_s1-filmnokl`, `n128/n241_k64_s2-filmnokl` (10,000); `n241_k64_s1-nokl` to 20,000 steps.

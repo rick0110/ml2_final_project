@@ -1,6 +1,6 @@
 # Path 05 — Voice representation (encoder, latent, reference)
 
-**Status:** nearly closed
+**Status:** closed
 
 ## Question
 
@@ -19,7 +19,8 @@ No. Changing the representation does not reduce the need for speakers: the voice
 | Colab | Style dropout: vector used, no gain | [R04](../../results/R04_style_dropout.md) |
 | Colab | Averaging several references: does not help on the 38 voices; lowers WER | [R07](../../results/R07_multiple_references.md) |
 | 2026-11-23/24 | 8-dimensional latent: −0.40 bit (discounting re-initialization); a 2-dimensional latent zeroes the bits | [R13](../../results/R13_smaller_latent_and_control.md) |
+| 2026-11-25 | Re-init cost 0.35–0.78 bit at every N; z8 below the control everywhere, its cost growing with N | [R22](../../results/R22_reinit_control_across_N.md) |
 
 ## In progress
 
-- [`in_progress/reinit_control.md`](in_progress/reinit_control.md): the cost of re-initializing the VAE heads at other N.
+Nothing. The last exploration is in [`done/reinit_control.md`](done/reinit_control.md).

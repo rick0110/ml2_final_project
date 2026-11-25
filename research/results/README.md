@@ -32,6 +32,10 @@ One file per result, in the order they were obtained. Each file has the question
 | [R17](R17_film_without_kl.md) | FiLM without KL | 02 | 3.08 bits at 241 (best) | promising |
 | [R18](R18_training_length.md) | Training length: saturating near 10–20k steps | 03 | +0.63, +0.40, +0.12 per doubling | indication |
 | [R19](R19_speakers_vs_sentences.md) | With the same data, speakers yield more than sentences | 04 | 1,024 sentences: 0.74 (8 spk.) vs 1.36 (128 spk.) | confirmed |
+| [R20](R20_more_sentences_per_speaker.md) | 64 sentences per speaker raise the curve; the 128→241 gap stays small | 04, 01 | 241 speakers × 64: 3.17 bits | mixed |
+| [R21](R21_seeds_at_10k_and_20k_steps.md) | No-KL curve holds with 3 seeds; 20k steps add little at N = 128 | 01, 03 | 2.83 → 2.86 (10k → 20k) | confirmed / missed |
+| [R22](R22_reinit_control_across_N.md) | Re-init cost 0.35–0.78 bit at every N; z8 below the control everywhere | 05 | — | mostly hit |
+| [R23](R23_film_vs_nokl_at_10k.md) | At 10k steps FiLM ≈ no KL; FiLM at 241, 20k steps: 3.18 bits | 02 | +0.04 mean advantage (N ≥ 64) | hit; main test pending |
 
 ## Data
 

@@ -14,13 +14,13 @@ One row per evaluation done on the cluster (one run evaluated at one number of s
 | `bits_fano` | voice bits, Fano bound (more conservative) |
 | `copied` | share of external samples with `sim_ref > sim_default` |
 | `wer` | word error rate (Whisper) on the external samples |
-| `machine` | cluster machine holding the run (1–10) |
+| `machine` | cluster machine holding the run (1–12) |
 
 The full files of each evaluation (per-sample `results.csv`, `voice_bits.json` with intervals, `embeddings.npz`, audio) and the checkpoints live on the machines and on Google Drive ([infrastructure](../../infrastructure.md)).
 
 **Updating:** the CSV is produced on the control PC by reading the machines (script `collect_csv.py` in `~/ml2_backup/tools/`, kept outside the repository because it uses the addresses). After updating, regenerate the tables of the affected results with `scripts/coverage/results_table.py`.
 
-Last update: 2026-11-25, 122 evaluations.
+Last update: 2026-11-25, 165 evaluations.
 
 ## Colab phase
 

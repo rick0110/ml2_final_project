@@ -20,6 +20,7 @@ Bits grow linearly in log2 N (each doubling of speakers adds a fixed number of b
 | Colab | In bits: 0.31 bit per doubling, from two points | [R10](../../results/R10_voice_bits_decoder_bottleneck.md) |
 | 2026-11-23 | With 3 seeds: 0.27 ± 0.03 bit per doubling up to 128; no gain from 128 to 241 | [R11](../../results/R11_N_curve_original_recipe.md) |
 | 2026-11-24/25 | Without the KL ramp and with 10,000 steps: 0.41 ± 0.06 per doubling; 2.90 bits at 241, still flattening | [R16](../../results/R16_N_curve_without_kl.md) |
+| 2026-11-25 | The curve holds with 3 seeds; the 241 point mixes in speakers with fewer sentences; K = 64 lifts the curve but the 128→241 gap stays | [R20](../../results/R20_more_sentences_per_speaker.md), [R21](../../results/R21_seeds_at_10k_and_20k_steps.md) |
 
 ## In progress
 
