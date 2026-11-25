@@ -1,4 +1,4 @@
-"""Grouped results table (markdown) from research/resultados/dados/execucoes_cluster.csv.
+"""Grouped results table (markdown) from research/results/data/cluster_runs.csv.
 
 One row per (variant, N, K, step): mean ± standard deviation over seeds of the voice bits
 (cross-entropy bound, 38 external voices), the share of copied samples and the WER.
@@ -9,7 +9,7 @@ import argparse, csv, statistics as st
 from collections import defaultdict
 from pathlib import Path
 
-CSV = Path(__file__).resolve().parents[2] / "research/resultados/dados/execucoes_cluster.csv"
+CSV = Path(__file__).resolve().parents[2] / "research/results/data/cluster_runs.csv"
 
 
 def fmt(vals, d=2, pct=False):
@@ -34,7 +34,7 @@ def main():
         if a.K and key[2] not in a.K: continue
         if a.step and key[3] not in a.step: continue
         groups[key].append(r)
-    print("| Variante | N | K | Passos | Seeds | Bits de voz | Copiadas (%) | WER (%) |")
+    print("| Variant | N | K | Steps | Seeds | Voice bits | Copied (%) | WER (%) |")
     print("|---|---|---|---|---|---|---|---|")
     for k in sorted(groups, key=lambda k: (k[0] != "base", k[0], k[3], k[2], k[1])):
         g = groups[k]
